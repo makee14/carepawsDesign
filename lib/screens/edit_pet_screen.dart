@@ -1,0 +1,507 @@
+import 'dart:typed_data';
+
+import 'package:flutter/cupertino.dart';
+import 'package:image_picker/image_picker.dart';
+
+import '../app.dart';
+import '../data/models.dart';
+import '../design/icons.dart';
+import '../design/theme.dart';
+import '../design/tokens.dart';
+import '../services/photo_store.dart';
+import '../state/app_store.dart';
+import '../widgets/common.dart';
+
+/// Edit an existing pet: portrait, identity, breed, sex, weight and allergies.
+///
+/// Timeline entries and documents belong to the clinic record, so they are
+/// carried over untouched rather than edited here.
+class EditPetScreen extends StatefulWidget {
+  const EditPetScreen({super.key, required this.petId});
+
+  final String petId;
+
+  @override
+  State<EditPetScreen> createState() => _EditPetScreenState();
+}
+
+class _EditPetScreenState extends State<EditPetScreen> {
+  final _name = TextEditingController();
+  final _breed = TextEditingController();
+  final _weight = TextEditingController();
+  final _allergies = TextEditingController();
+  String? _sex;
+  DateTime? _birthDate;
+  Uint8List? _photo;
+  bool _picking = false;
+  bool _initialised = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_initialised) return;
+    final pet = AppScope.of(context).pet(widget.petId);
+    if (pet == null) return;
+    _initialised = true;
+    _name.text = pet.name;
+    _breed.text = pet.breed;
+    _weight.text = pet.weightKg.toStringAsFixed(1);
+    _allergies.text = pet.allergies.join(', ');
+    _sex = pet.sex;
+    _birthDate = pet.birthDate;
+    _photo = pet.photo;
+  }
+
+  @override
+  void dispose() {
+    _name.dispose();
+    _breed.dispose();
+    _weight.dispose();
+    _allergies.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pick(ImageSource source) async {
+    if (_picking) return;
+    setState(() => _picking = true);
+    try {
+      final bytes = await PhotoStore.pick(source);
+      if (bytes == null || !mounted) return;
+      setState(() => _photo = bytes);
+    } finally {
+      if (mounted) setState(() => _picking = false);
+    }
+  }
+
+  /// Weight must be a real number in a plausible pet range. The old code
+  /// silently fell back to the previous weight on bad input, so typing "4.."
+  /// or "abc" looked like the field was stuck. Now it shows why.
+  double? get _parsedWeight {
+    final w = double.tryParse(_weight.text.trim().replaceAll(',', '.'));
+    if (w == null || !w.isFinite) return null;
+    if (w < 0.2 || w > 120) return null;
+    return w;
+  }
+
+  String? get _weightError {
+    if (_weight.text.trim().isEmpty) return 'Enter a weight so the clinic can dose correctly.';
+    if (_parsedWeight == null) {
+      return 'Use a number like 4.6 — between 0.2 and 120 kg.';
+    }
+    return null;
+  }
+
+  Future<void> _pickBirthDate(DateTime current) async {
+    final now = DateTime.now();
+    var temp = _birthDate ?? current;
+    await showCupertinoModalPopup<void>(
+      context: context,
+      builder: (ctx) => Container(
+        height: 300,
+        color: context.p.surface,
+        child: SafeArea(
+          top: false,
+          child: Column(
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  CupertinoButton(
+                    onPressed: () => dismissSheet(ctx),
+                    child: const Text('Cancel'),
+                  ),
+                  CupertinoButton(
+                    onPressed: () {
+                      setState(() => _birthDate = temp);
+                      dismissSheet(ctx);
+                    },
+                    child: const Text('Done'),
+                  ),
+                ],
+              ),
+              Expanded(
+                child: CupertinoDatePicker(
+                  mode: CupertinoDatePickerMode.date,
+                  initialDateTime: temp,
+                  minimumDate: DateTime(now.year - 30),
+                  maximumDate: now,
+                  onDateTimeChanged: (d) => temp = d,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _save(Pet pet) {
+    final n = _name.text.trim();
+    if (n.isEmpty) return;
+    final w = _parsedWeight;
+    if (w == null) return;
+    final allergies = _allergies.text
+        .split(',')
+        .map((s) => s.trim())
+        .where((s) => s.isNotEmpty)
+        .toList();
+
+    // Keep the weight vital in step with the number in the form.
+    final vitals = pet.vitals
+        .map(
+          (v) => v.label == 'Weight'
+              ? Vital(label: v.label, value: w.toStringAsFixed(1), unit: v.unit, icon: v.icon)
+              : v,
+        )
+        .toList();
+
+    AppScope.read(context).updatePet(
+      Pet(
+        id: pet.id,
+        name: n,
+        species: pet.species,
+        breed: _breed.text.trim().isEmpty ? pet.breed : _breed.text.trim(),
+        sex: _sex ?? pet.sex,
+        birthDate: _birthDate ?? pet.birthDate,
+        weightKg: w,
+        color: pet.color,
+        microchip: pet.microchip,
+        allergies: allergies,
+        vitals: vitals,
+        timeline: pet.timeline,
+        docs: pet.docs,
+        photo: _photo,
+      ),
+    );
+    successHaptic();
+    dismissSheet(context);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.p;
+    final store = AppScope.of(context);
+    final pet = store.pet(widget.petId);
+
+    if (pet == null) {
+      return CupertinoPageScaffold(
+        backgroundColor: p.background,
+        navigationBar: const DetailNavBar(title: 'Edit pet'),
+        child: EmptyState(
+          icon: Ic.paw,
+          title: 'Pet not found',
+          body: 'This pet is no longer on the account.',
+        ),
+      );
+    }
+
+    final canSave = _name.text.trim().isNotEmpty && _parsedWeight != null;
+    final preview = _photo ?? pet.photo;
+    final birthDate = _birthDate ?? pet.birthDate;
+
+    return CupertinoPageScaffold(
+      backgroundColor: p.background,
+      navigationBar: const DetailNavBar(title: 'Edit pet'),
+      child: SafeArea(
+        child: Column(
+          children: [
+            Expanded(
+              child: ListView(
+                padding: EdgeInsets.fromLTRB(
+                  20,
+                  16,
+                  20,
+                  24 + MediaQuery.paddingOf(context).bottom,
+                ),
+                children: [
+                  // ---------------------------------------------------- photo
+                  Center(
+                    child: Column(
+                      children: [
+                        SizedBox.square(
+                          dimension: 132,
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(T.rCard),
+                            child: preview != null && preview.isNotEmpty
+                                ? Image.memory(preview, fit: BoxFit.cover, gaplessPlayback: true)
+                                : PetArt(
+                                    seed: pet.id.hashCode.abs() % 4,
+                                    species: pet.species,
+                                    iconSize: 76,
+                                  ),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            _PhotoAction(
+                              icon: Ic.camera,
+                              label: 'Take photo',
+                              onTap: _picking ? null : () => _pick(ImageSource.camera),
+                            ),
+                            const SizedBox(width: 10),
+                            _PhotoAction(
+                              icon: Ic.image,
+                              label: 'Choose photo',
+                              onTap: _picking ? null : () => _pick(ImageSource.gallery),
+                            ),
+                            if (preview != null && preview.isNotEmpty) ...[
+                              const SizedBox(width: 10),
+                              _PhotoAction(
+                                icon: Ic.trash,
+                                label: 'Remove photo',
+                                onTap: _picking
+                                    ? null
+                                    : () => setState(() => _photo = Uint8List(0)),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: T.s24),
+
+                  // ---------------------------------------------------- fields
+                  _Labeled(
+                    label: 'Name',
+                    child: CupertinoTextField(
+                      controller: _name,
+                      onChanged: (_) => setState(() {}),
+                      placeholder: pet.name,
+                      textCapitalization: TextCapitalization.words,
+                      padding: const EdgeInsets.all(14),
+                      cursorColor: p.primaryFill,
+                      decoration: _dec(p),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  _Labeled(
+                    label: 'Breed',
+                    hint: 'Type any breed',
+                    child: CupertinoTextField(
+                      controller: _breed,
+                      placeholder: pet.breed,
+                      textCapitalization: TextCapitalization.words,
+                      padding: const EdgeInsets.all(14),
+                      cursorColor: p.primaryFill,
+                      decoration: _dec(p),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  _Labeled(
+                    label: 'Birthdate',
+                    hint: _ageLabel(birthDate),
+                    child: PressScale(
+                      onTap: () => _pickBirthDate(pet.birthDate),
+                      child: Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: _dec(p),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                '${birthDate.month}/${birthDate.day}/${birthDate.year}',
+                                style: Type.body(p),
+                              ),
+                            ),
+                            Ic.svg(Ic.calendar, color: p.textSecondary, size: 18),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  _Labeled(
+                    label: 'Sex',
+                    child: _Segmented(
+                      value: _sex ?? pet.sex,
+                      options: const ['Male', 'Female'],
+                      onChanged: (v) => setState(() => _sex = v),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  _Labeled(
+                    label: 'Weight (kg)',
+                    hint: '0.2 – 120 kg',
+                    child: CupertinoTextField(
+                      controller: _weight,
+                      onChanged: (_) => setState(() {}),
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      placeholder: pet.weightKg.toStringAsFixed(1),
+                      padding: const EdgeInsets.all(14),
+                      cursorColor: p.primaryFill,
+                      decoration: _dec(p).copyWith(
+                        border: Border.all(
+                          color: _weightError == null ? p.divider : p.destructive,
+                        ),
+                      ),
+                    ),
+                  ),
+                  if (_weightError != null) ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      _weightError!,
+                      style: Type.footnote(p).copyWith(color: p.destructive),
+                    ),
+                  ],
+                  const SizedBox(height: 14),
+                  _Labeled(
+                    label: 'Allergies',
+                    hint: 'Separate with commas',
+                    child: CupertinoTextField(
+                      controller: _allergies,
+                      placeholder: 'None known',
+                      padding: const EdgeInsets.all(14),
+                      cursorColor: p.primaryFill,
+                      decoration: _dec(p),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Vitals, visits and documents belong to the clinic record and are '
+                    'not changed here.',
+                    style: Type.footnote(p).copyWith(color: p.textSecondary),
+                  ),
+                ],
+              ),
+            ),
+            StickyCta(
+              child: PrimaryButton(
+                label: 'Save changes',
+                icon: Ic.check,
+                onPressed: canSave ? () => _save(pet) : null,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  BoxDecoration _dec(AppPalette p) => BoxDecoration(
+    color: p.surface,
+    borderRadius: BorderRadius.circular(T.rCard),
+    border: Border.all(color: p.divider),
+  );
+}
+
+String _ageLabel(DateTime birth) {
+  final now = DateTime.now();
+  int y = now.year - birth.year;
+  int m = now.month - birth.month;
+  if (now.day < birth.day) m--;
+  if (m < 0) { y--; m += 12; }
+  if (y <= 0) return '$m mo old';
+  return '$y yr old';
+}
+
+class _Labeled extends StatelessWidget {
+  const _Labeled({required this.label, required this.child, this.hint});
+
+  final String label;
+  final String? hint;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.p;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(child: Text(label, style: Type.footnoteEmph(p))),
+            if (hint != null)
+              Text(hint!, style: Type.caption(p).copyWith(color: p.textSecondary)),
+          ],
+        ),
+        const SizedBox(height: 6),
+        child,
+      ],
+    );
+  }
+}
+
+class _PhotoAction extends StatelessWidget {
+  const _PhotoAction({required this.icon, required this.label, required this.onTap});
+
+  final String icon;
+  final String label;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.p;
+    return Semantics(
+      button: true,
+      enabled: onTap != null,
+      label: label,
+      child: ExcludeSemantics(
+        child: PressScale(
+          onTap: onTap,
+          child: Opacity(
+            opacity: onTap == null ? 0.4 : 1,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+              decoration: BoxDecoration(
+                color: p.surface,
+                borderRadius: BorderRadius.circular(T.rControl),
+                border: Border.all(color: p.divider, width: 1.4),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Ic.svg(icon, color: p.accent, size: 16),
+                  const SizedBox(width: 7),
+                  Text(label, style: Type.footnoteEmph(p)),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _Segmented extends StatelessWidget {
+  const _Segmented({required this.value, required this.options, required this.onChanged});
+
+  final String value;
+  final List<String> options;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.p;
+    return Row(
+      children: [
+        for (final o in options) ...[
+          Expanded(
+            child: PressScale(
+              onTap: () => onChanged(o),
+              child: Container(
+                height: 44,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: o == value ? p.accent : p.surface,
+                  borderRadius: BorderRadius.circular(T.rControl),
+                  border: Border.all(color: o == value ? p.accent : p.divider, width: 1.4),
+                ),
+                child: Text(
+                  o,
+                  style: Type.footnoteEmph(
+                    p,
+                  ).copyWith(color: o == value ? p.onPrimaryFill : p.text),
+                ),
+              ),
+            ),
+          ),
+          if (o != options.last) const SizedBox(width: 10),
+        ],
+      ],
+    );
+  }
+}

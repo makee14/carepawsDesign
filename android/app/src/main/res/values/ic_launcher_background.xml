@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- T.terracotta #D4621A, from lib/design/tokens.dart -->
+    <color name="ic_launcher_background">#D4621A</color>
+</resources>

@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- PetCare launcher icon.
+       Brand: terracotta/orange gradient squircle, brush ring, cream paw.
+       The paw is the app's own Ic.paw glyph (lib/design/icons.dart), scaled
+       from its 24x24 viewBox, so the icon and the in-app mark stay in step. -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0.35" y2="1">
+      <stop offset="0" stop-color="#E4843E"/>
+      <stop offset="1" stop-color="#D4621A"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1024" height="1024" rx="228" ry="228" fill="url(#bg)"/>
+
+  <!-- Brush ring, echoing LogoMark in lib/app.dart. -->
+  <circle cx="512" cy="512" r="386" fill="none"
+          stroke="#FEF3E2" stroke-opacity="0.30" stroke-width="26"/>
+
+  <!-- Ic.paw, 24x24 viewBox scaled up and centred. -->
+  <g transform="translate(196 236) scale(26.4)" fill="#FEF3E2">
+    <path d="M12 20.4c3.4 0 5.6-1.8 5.6-4.2 0-2.2-1.8-3.2-2.6-4.8-.7-1.4-1.2-3.4-3-3.4s-2.3 2-3 3.4c-.8 1.6-2.6 2.6-2.6 4.8 0 2.4 2.2 4.2 5.6 4.2ZM6.4 9.6a1.9 1.9 0 1 0 0-3.8 1.9 1.9 0 0 0 0 3.8ZM17.6 9.6a1.9 1.9 0 1 0 0-3.8 1.9 1.9 0 0 0 0 3.8ZM10.4 4.6a1.9 1.9 0 1 0 0-3.8 1.9 1.9 0 0 0 0 3.8ZM13.6 4.6a1.9 1.9 0 1 0 0-3.8 1.9 1.9 0 0 0 0 3.8Z"/>
+  </g>
+</svg>

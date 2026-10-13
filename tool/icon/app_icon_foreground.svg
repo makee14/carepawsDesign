@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- Adaptive-icon FOREGROUND layer.
+       Android only guarantees the central 72/108 (66.7%) of this canvas, so
+       everything is kept inside that safe zone. The squircle background is
+       omitted here: it is supplied by the background colour layer. -->
+  <g transform="translate(512 512) scale(0.60) translate(-512 -512)">
+    <circle cx="512" cy="512" r="386" fill="none"
+            stroke="#FEF3E2" stroke-opacity="0.42" stroke-width="30"/>
+    <g transform="translate(196 236) scale(26.4)" fill="#FEF3E2">
+      <path d="M12 20.4c3.4 0 5.6-1.8 5.6-4.2 0-2.2-1.8-3.2-2.6-4.8-.7-1.4-1.2-3.4-3-3.4s-2.3 2-3 3.4c-.8 1.6-2.6 2.6-2.6 4.8 0 2.4 2.2 4.2 5.6 4.2ZM6.4 9.6a1.9 1.9 0 1 0 0-3.8 1.9 1.9 0 0 0 0 3.8ZM17.6 9.6a1.9 1.9 0 1 0 0-3.8 1.9 1.9 0 0 0 0 3.8ZM10.4 4.6a1.9 1.9 0 1 0 0-3.8 1.9 1.9 0 0 0 0 3.8ZM13.6 4.6a1.9 1.9 0 1 0 0-3.8 1.9 1.9 0 0 0 0 3.8Z"/>
+    </g>
+  </g>
+</svg>

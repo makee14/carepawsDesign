@@ -1,0 +1,7 @@
+tags:
+  # Golden-image regression pass. Run with --update-goldens to refresh
+  # test/goldens after an intentional visual change.
+  screenshots:
+    description: "Renders every screen at iPhone dimensions and diffs the images."
+  live:
+    description: "Exercises the real Gemini API. Needs GEMINI_API_KEY."
