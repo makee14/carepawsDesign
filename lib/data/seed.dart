@@ -64,6 +64,7 @@ class Seed {
         kind: 'Certificate',
         date: DateTime(2026, 3, 2),
         size: 284,
+        previewAsset: 'assets/docs/rabies_certificate.png',
       ),
       PetDoc(
         name: 'Vaccination record 2026',

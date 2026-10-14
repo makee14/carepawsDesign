@@ -50,11 +50,16 @@ class PetDoc {
     required this.kind,
     required this.date,
     required this.size,
+    this.previewAsset,
   });
   final String name;
   final String kind;
   final DateTime date;
   final int size;
+
+  /// Bundled image asset shown as the real document preview (B18). Null for
+  /// documents with no scanned copy — those keep the placeholder tile.
+  final String? previewAsset;
 }
 
 @immutable

@@ -356,28 +356,7 @@ class _PetProfileScreenState extends State<PetProfileScreen> {
               style: Type.footnote(context.p),
             ),
             const SizedBox(height: T.s16),
-            Container(
-              height: 190,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: context.p.fieldBg,
-                borderRadius: BorderRadius.circular(T.rCard),
-                border: Border.all(color: context.p.divider),
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Ic.svg(
-                    Ic.doc,
-                    color: context.p.accent,
-                    size: 42,
-                    stroke: 1.7,
-                  ),
-                  const SizedBox(height: 10),
-                  Text('Preview', style: Type.footnote(context.p)),
-                ],
-              ),
-            ),
+            _DocPreview(doc: d),
             const SizedBox(height: T.s20),
             PrimaryButton(
               label: 'Download',
@@ -393,6 +372,106 @@ class _PetProfileScreenState extends State<PetProfileScreen> {
               onPressed: () => dismissSheet(context),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Document preview tile: the real scanned image when the doc has one,
+/// tappable to a full-screen zoom viewer; otherwise the placeholder.
+class _DocPreview extends StatelessWidget {
+  const _DocPreview({required this.doc});
+
+  final PetDoc doc;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.p;
+    final asset = doc.previewAsset;
+    return Container(
+      height: 260,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: p.fieldBg,
+        borderRadius: BorderRadius.circular(T.rCard),
+        border: Border.all(color: p.divider),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: asset == null
+          ? Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Ic.svg(Ic.doc, color: p.accent, size: 42, stroke: 1.7),
+                const SizedBox(height: 10),
+                Text('Preview', style: Type.footnote(p)),
+              ],
+            )
+          : Semantics(
+              button: true,
+              label: 'Preview of ${doc.name}. Activate to enlarge.',
+              child: ExcludeSemantics(
+                child: PressScale(
+                  onTap: () =>
+                      Navigator.of(context)
+                          .push(appRoute(_DocViewerScreen(doc: doc))),
+                  child: AspectRatio(
+                    aspectRatio: 3 / 4,
+                    child: Image.asset(
+                      asset,
+                      fit: BoxFit.cover,
+                      semanticLabel: 'Preview of ${doc.name}',
+                    ),
+                  ),
+                ),
+              ),
+            ),
+    );
+  }
+}
+
+/// Full-screen document viewer: pinch-zoom the scanned page, Close to
+/// return to the document sheet.
+class _DocViewerScreen extends StatelessWidget {
+  const _DocViewerScreen({required this.doc});
+
+  final PetDoc doc;
+
+  @override
+  Widget build(BuildContext context) {
+    return CupertinoPageScaffold(
+      backgroundColor: const Color(0xFF000000),
+      navigationBar: CupertinoNavigationBar(
+        backgroundColor: const Color(0xFF000000).withValues(alpha: 0.7),
+        brightness: Brightness.dark,
+        middle: Text(
+          doc.name,
+          style: const TextStyle(color: Color(0xFFFFFFFF)),
+        ),
+        leading: CupertinoButton(
+          padding: EdgeInsets.zero,
+          onPressed: () => Navigator.of(context).pop(),
+          child: Semantics(
+            button: true,
+            label: 'Close document viewer',
+            child: const Text(
+              'Close',
+              style: TextStyle(color: Color(0xFFFFFFFF)),
+            ),
+          ),
+        ),
+      ),
+      child: SafeArea(
+        child: InteractiveViewer(
+          minScale: 1.0,
+          maxScale: 5.0,
+          child: Center(
+            child: Image.asset(
+              doc.previewAsset!,
+              fit: BoxFit.contain,
+              semanticLabel: 'Enlarged preview of ${doc.name}',
+            ),
+          ),
         ),
       ),
     );
