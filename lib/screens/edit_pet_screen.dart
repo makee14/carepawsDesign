@@ -11,6 +11,7 @@ import '../design/tokens.dart';
 import '../services/photo_store.dart';
 import '../state/app_store.dart';
 import '../widgets/common.dart';
+import 'photo_crop_screen.dart';
 
 /// Edit an existing pet: portrait, identity, breed, sex, weight and allergies.
 ///
@@ -67,7 +68,12 @@ class _EditPetScreenState extends State<EditPetScreen> {
     try {
       final bytes = await PhotoStore.pick(source);
       if (bytes == null || !mounted) return;
-      setState(() => _photo = bytes);
+      // Crop/edit step before the photo becomes the portrait.
+      final cropped = await Navigator.of(
+        context,
+      ).push<Uint8List?>(appRouteT<Uint8List?>(PhotoCropScreen(bytes: bytes)));
+      if (cropped == null || !mounted) return;
+      setState(() => _photo = cropped);
     } finally {
       if (mounted) setState(() => _picking = false);
     }

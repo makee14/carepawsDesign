@@ -11,6 +11,7 @@ import '../../state/app_store.dart';
 import '../../state/profile_store.dart';
 import '../../widgets/common.dart';
 import '../onboarding_screen.dart';
+import '../photo_crop_screen.dart';
 import 'privacy_screen.dart';
 import '../../services/ai_service.dart'
     show AiFailure, AiProvider, AiProviderInfo, AiStatus;
@@ -659,7 +660,12 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     try {
       final bytes = await PhotoStore.pick(ImageSource.gallery);
       if (bytes == null || !mounted) return;
-      await AppScope.read(context).setOwnerPhoto(bytes);
+      // Crop/edit step before the photo becomes the owner portrait.
+      final cropped = await Navigator.of(
+        context,
+      ).push<Uint8List?>(appRouteT<Uint8List?>(PhotoCropScreen(bytes: bytes)));
+      if (cropped == null || !mounted) return;
+      await AppScope.read(context).setOwnerPhoto(cropped);
       if (mounted) successHaptic();
     } finally {
       if (mounted) setState(() => _picking = false);
