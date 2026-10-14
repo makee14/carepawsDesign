@@ -246,11 +246,11 @@ class _NextAppointmentHeroState extends State<_NextAppointmentHero> {
     final scaler = MediaQuery.textScalerOf(context).scale(1);
     double line(TextStyle s) => s.fontSize! * (s.height ?? 1.0) * scaler;
     final row = math.max(
-      42.0,
-      line(Type.headline(p)) * 2 + 2 + line(Type.footnote(p)),
+      44.0,
+      line(Type.headline(p)) * 2 + 4 + line(Type.footnote(p)),
     );
     final chips = math.max(line(Type.caption(p)), 11.0) + 8;
-    final gap = Layout.needsTallLayout(context) ? 12.0 : 10.0;
+    const gap = 12.0;
     return T.s16 * 2 + row + gap + chips + 6;
   }
 
@@ -528,8 +528,8 @@ class _HeroBody extends StatelessWidget {
         Row(
           children: [
             Container(
-              width: 42,
-              height: 42,
+              width: 44,
+              height: 44,
               alignment: Alignment.center,
               decoration: BoxDecoration(
                 color: pet.color.withValues(alpha: 0.22),
@@ -538,11 +538,11 @@ class _HeroBody extends StatelessWidget {
               child: Ic.svg(
                 pet.species == Species.dog ? Ic.dog : Ic.cat,
                 color: p.primaryFill,
-                size: 22,
+                size: 24,
                 stroke: 2,
               ),
             ),
-            const SizedBox(width: 10),
+            const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -554,28 +554,30 @@ class _HeroBody extends StatelessWidget {
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
-                  const SizedBox(height: 2),
+                  const SizedBox(height: 4),
                   // Single line, always: at AX5 this used to wrap and push
                   // the card — and the page — taller than its siblings.
                   Text(
                     '${mediumDate(a.start)} · $staffName',
-                    style: Type.footnote(p),
+                    style: Type.footnote(p).copyWith(
+                      color: p.textSecondary,
+                    ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
                 ],
               ),
             ),
-            const SizedBox(width: 6),
+            const SizedBox(width: 8),
             Ic.svg(
               Ic.chevronRight,
               color: p.primaryFill,
-              size: 18,
+              size: 20,
               stroke: 2.4,
             ),
           ],
         ),
-        SizedBox(height: compact ? 12 : 10),
+        const SizedBox(height: 12),
         // One horizontal row, never a Wrap: the chip set is fixed, so a scroll
         // row keeps the card height identical across states instead of jumping
         // when the chips reflow to two rows on narrow screens.
