@@ -856,8 +856,11 @@ class _PetRow extends StatelessWidget {
                                 end: Alignment.bottomCenter,
                                 colors: [
                                   const Color(0xFF000000).withValues(alpha: 0),
+                                  // 0.72: script-verified ≥4.5:1 for the cream
+                                  // name AND the 75%-cream subtitle over the
+                                  // worst case (a white photo).
                                   const Color(0xFF000000)
-                                      .withValues(alpha: 0.55),
+                                      .withValues(alpha: 0.72),
                                 ],
                               ),
                             ),

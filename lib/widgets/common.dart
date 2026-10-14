@@ -290,6 +290,11 @@ class _Slot extends StatelessWidget {
                     label,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
+                    // Tab labels are fixed chrome in a 64pt slot: cap the
+                    // scale so AX5 (3.2) still fits instead of overflowing
+                    // the slot by 4px. 1× rendering is untouched.
+                    textScaler: MediaQuery.textScalerOf(context)
+                        .clamp(maxScaleFactor: 2.5),
                     style: Type.caption(p).copyWith(
                       color: fg,
                       fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
@@ -654,7 +659,10 @@ class GlassPill extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
           decoration: BoxDecoration(
-            color: const Color(0xFFFFFFFF).withValues(alpha: 0.14),
+            // Dark glass: the pill floats over pet photos, so the tint has
+            // to carry the contrast itself — script-verified 5.23:1 for the
+            // cream label over the worst case (a white photo).
+            color: const Color(0xFF000000).withValues(alpha: 0.60),
             borderRadius: BorderRadius.circular(T.rPill),
             border: Border.all(
               color: const Color(0xFFFFFFFF).withValues(alpha: 0.25),
@@ -1187,7 +1195,9 @@ class ProductArt extends StatelessWidget {
         child: Center(
           child: Ic.svg(
             _icons[art % _icons.length],
-            color: p.isDark ? T.amber : p.accent,
+            // Dark mode: the tiles stay light, so the icon needs the deep
+            // terracotta (4.43:1 worst tint, was 1.19:1 with amber).
+            color: p.isDark ? T.terracottaDeep : p.accent,
             size: (size ?? 80) * 0.42,
             stroke: 1.7,
           ),
