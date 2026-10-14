@@ -65,7 +65,8 @@ bool reduceMotionOf(BuildContext context) {
   return AppScope.maybeOf(context)?.reduceMotionOverride ?? false;
 }
 
-/// One-shot fade, optionally with a slight upward rise.
+/// One-shot fade, optionally with a slight upward rise or a gentle scale
+/// settle.
 ///
 /// Wrap a card, a section or a list row and pass its [index] to stagger a group
 /// in left to right, top to bottom. With motion reduced it paints the final
@@ -83,6 +84,7 @@ class FadeIn extends StatefulWidget {
     this.index = 0,
     this.duration = Motion.base,
     this.rise = 0,
+    this.settleFrom = 1.0,
   });
 
   final Widget child;
@@ -94,6 +96,12 @@ class FadeIn extends StatefulWidget {
 
   /// Upward travel in logical pixels during the entrance. 0 = opacity only.
   final double rise;
+
+  /// Gentle scale settle paired with the fade: the child starts at
+  /// [settleFrom]× and eases to 1× on the house curve — a soft settle, never
+  /// a spring. 1.0 (the default) keeps the pure-fade behaviour everywhere
+  /// else.
+  final double settleFrom;
 
   @override
   State<FadeIn> createState() => _FadeInState();
@@ -140,12 +148,18 @@ class _FadeInState extends State<FadeIn> with SingleTickerProviderStateMixin {
       child: widget.child,
       builder: (context, child) {
         final eased = Motion.enter.transform(_c.value);
-        final opacity = Opacity(opacity: eased, child: child);
-        if (widget.rise == 0) return opacity;
-        return Transform.translate(
-          offset: Offset(0, (1 - eased) * widget.rise),
-          child: opacity,
-        );
+        Widget out = Opacity(opacity: eased, child: child);
+        if (widget.rise != 0) {
+          out = Transform.translate(
+            offset: Offset(0, (1 - eased) * widget.rise),
+            child: out,
+          );
+        }
+        if (widget.settleFrom != 1.0) {
+          final s = widget.settleFrom + (1.0 - widget.settleFrom) * eased;
+          out = Transform.scale(scale: s, child: out);
+        }
+        return out;
       },
     );
   }

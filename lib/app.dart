@@ -19,6 +19,7 @@ import 'screens/profile_screen.dart';
 import 'screens/shops_screen.dart';
 import 'state/app_store.dart';
 import 'widgets/common.dart';
+import 'widgets/splash_ambient.dart';
 
 /// Splash + auth. The CarePaws logo mark appears here (and only here).
 class SplashScreen extends StatefulWidget {
@@ -130,16 +131,10 @@ class _SplashScreenState extends State<SplashScreen>
       backgroundColor: p.background,
       child: Stack(
         children: [
-          Positioned(
-            top: -60,
-            right: -50,
-            child: _Glow(size: 230, color: T.amber.withValues(alpha: 0.30)),
-          ),
-          Positioned(
-            bottom: -40,
-            left: -60,
-            child: _Glow(size: 210, color: T.orange.withValues(alpha: 0.22)),
-          ),
+          // Splash v2 ambient scene: the living backdrop. The badge itself is
+          // the animated subject; the aurora stays dim, drifts slowly, and
+          // keeps clear of the bottom CTA zone.
+          const Positioned.fill(child: SplashAmbient()),
           SafeArea(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(T.s24, T.s16, T.s24, T.s16),
@@ -149,16 +144,18 @@ class _SplashScreenState extends State<SplashScreen>
                   // more air below it than above, so the CTA block reads as
                   // anchored rather than the top reading as a dead zone.
                   const Spacer(flex: 4),
-                  // Staggered arrival: mark fades in, then the wordmark and
-                  // tagline fade + rise gently, Apple-style. Each piece waits
-                  // on the one before it so the screen assembles instead of
-                  // appearing all at once.
+                  // The badge is the animated subject: cinematic settle
+                  // entrance, the approved rock + breathe loop, a slow sheen
+                  // sweep and soft motes emitted from the mark. The wordmark
+                  // and tagline keep their staggered fade + rise exactly as
+                  // before.
                   Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      FadeIn(
-                        duration: Motion.slow,
-                        child: _LoopingLogo(loop: _loop, size: 152),
+                      BadgeHero(
+                        loop: _loop,
+                        size: 152,
+                        child: const LogoMark(size: 152),
                       ),
                       const SizedBox(height: T.s20),
                       FadeIn(
@@ -244,55 +241,6 @@ class LogoMark extends StatelessWidget {
       ),
     );
   }
-}
-
-/// Splash-only wrapper: the logo mark itself animates on a calm continuous
-/// loop — a gentle rock (±4°) plus a soft breathing scale, phase-offset so
-/// the two never read as mechanical. There is deliberately no halo ring or
-/// other decoration around the mark: the mark is the animation. Under
-/// reduced motion the controller never starts and the mark renders at rest.
-class _LoopingLogo extends StatelessWidget {
-  const _LoopingLogo({required this.loop, required this.size});
-  final Animation<double> loop;
-  final double size;
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: loop,
-      builder: (context, _) {
-        final t = loop.value;
-        // One full rock + breathe per 2.6s cycle.
-        final rock = 0.07 * math.sin(t * math.pi * 2);
-        final scale = 1.0 + 0.028 * math.sin(t * math.pi * 2 + 0.9);
-        return Transform.rotate(
-          angle: rock,
-          child: Transform.scale(
-            scale: scale,
-            child: LogoMark(size: size),
-          ),
-        );
-      },
-    );
-  }
-}
-
-class _Glow extends StatelessWidget {
-  const _Glow({required this.size, required this.color});
-  final double size;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) => IgnorePointer(
-    child: Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        gradient: RadialGradient(colors: [color, color.withValues(alpha: 0)]),
-      ),
-    ),
-  );
 }
 
 /// Bottom tab scaffold: HOME · CHATS · APPOINTMENTS · SHOPS · PROFILE.
