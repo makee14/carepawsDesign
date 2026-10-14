@@ -26,7 +26,7 @@ class AboutScreen extends StatelessWidget {
           children: [
             const Center(child: LogoMark(size: 104)),
             const SizedBox(height: T.s20),
-            Text('PETCARE', style: Type.largeTitle(p).copyWith(letterSpacing: 4)),
+            Text('CAREPAWS', style: Type.largeTitle(p).copyWith(letterSpacing: 4)),
             const SizedBox(height: 4),
             Text(
               'Veterinary Clinic',
@@ -65,7 +65,7 @@ class AboutScreen extends StatelessWidget {
                   const SizedBox(height: 10),
                   _BuildRow(
                     icon: Ic.sparkle,
-                    label: 'PetCare AI',
+                    label: 'CarePaws AI',
                     value: store.ai.isLive
                         ? 'Live · ${store.ai.modelLabel ?? 'auto-selected model'}'
                         : 'Unavailable · no API key',

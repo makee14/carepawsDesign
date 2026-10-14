@@ -3,23 +3,23 @@ library;
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:petcare_artifact/app.dart';
-import 'package:petcare_artifact/data/models.dart';
-import 'package:petcare_artifact/design/theme.dart';
-import 'package:petcare_artifact/screens/appointments/book_flow.dart';
-import 'package:petcare_artifact/screens/chat_thread_screen.dart';
-import 'package:petcare_artifact/screens/onboarding_screen.dart';
-import 'package:petcare_artifact/screens/pets/pet_profile_screen.dart';
-import 'package:petcare_artifact/screens/profile/about_screen.dart';
-import 'package:petcare_artifact/screens/profile/privacy_screen.dart';
-import 'package:petcare_artifact/screens/profile/settings_screens.dart';
-import 'package:petcare_artifact/screens/shop/cart_screen.dart';
-import 'package:petcare_artifact/screens/shop/checkout_screen.dart';
-import 'package:petcare_artifact/screens/shop/order_success_screen.dart';
-import 'package:petcare_artifact/screens/shop/orders_screen.dart';
-import 'package:petcare_artifact/screens/shop/product_detail_screen.dart';
-import 'package:petcare_artifact/screens/triage_screen.dart';
-import 'package:petcare_artifact/state/app_store.dart';
+import 'package:carepaws/app.dart';
+import 'package:carepaws/data/models.dart';
+import 'package:carepaws/design/theme.dart';
+import 'package:carepaws/screens/appointments/book_flow.dart';
+import 'package:carepaws/screens/chat_thread_screen.dart';
+import 'package:carepaws/screens/onboarding_screen.dart';
+import 'package:carepaws/screens/pets/pet_profile_screen.dart';
+import 'package:carepaws/screens/profile/about_screen.dart';
+import 'package:carepaws/screens/profile/privacy_screen.dart';
+import 'package:carepaws/screens/profile/settings_screens.dart';
+import 'package:carepaws/screens/shop/cart_screen.dart';
+import 'package:carepaws/screens/shop/checkout_screen.dart';
+import 'package:carepaws/screens/shop/order_success_screen.dart';
+import 'package:carepaws/screens/shop/orders_screen.dart';
+import 'package:carepaws/screens/shop/product_detail_screen.dart';
+import 'package:carepaws/screens/triage_screen.dart';
+import 'package:carepaws/state/app_store.dart';
 
 /// Visual regression pass. Run with:
 ///

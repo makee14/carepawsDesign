@@ -964,7 +964,7 @@ Future<void> toggleReminderWithSheet(
             content: const Padding(
               padding: EdgeInsets.only(top: 6),
               child: Text(
-                'Notifications are turned off for PetCare, so reminders cannot reach you. '
+                'Notifications are turned off for CarePaws, so reminders cannot reach you. '
                 'You can enable them later in Settings › Notifications.',
               ),
             ),
@@ -991,7 +991,7 @@ Future<bool> showNotificationPermissionSheet(BuildContext context) async {
     builder: (ctx) => CupertinoActionSheet(
       title: const Text('Turn on reminders?'),
       message: Text(
-        'PetCare will remind you about medications, vaccine dates, appointments and grooming rebooks. '
+        'CarePaws will remind you about medications, vaccine dates, appointments and grooming rebooks. '
         'You can change this any time in Profile › Notifications.',
       ),
       actions: [
@@ -1199,7 +1199,7 @@ class ChatLandingScreen extends StatelessWidget {
               ),
               const SizedBox(height: 10),
               Text(
-                'PetCare AI answers instantly; the clinic team replies during clinic hours.',
+                'CarePaws AI answers instantly; the clinic team replies during clinic hours.',
                 style: Type.body(context.p)
                     .copyWith(color: context.p.textSecondary),
                 textAlign: TextAlign.center,

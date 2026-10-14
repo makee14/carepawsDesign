@@ -16,7 +16,7 @@ import 'chats_screen.dart';
 import 'profile/settings_screens.dart';
 import 'triage_screen.dart';
 
-/// A conversation thread. The PetCare AI thread also carries the
+/// A conversation thread. The CarePaws AI thread also carries the
 /// "Start health check" entry point into the triage engine.
 class ChatThreadScreen extends StatefulWidget {
   const ChatThreadScreen({
@@ -226,7 +226,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
                   children: [
                     CupertinoActivityIndicator(color: p.textSecondary),
                     const SizedBox(width: 10),
-                    Text(_isAi ? 'PetCare AI is typing…' : 'Clinic team is typing…', style: Type.caption(p)),
+                    Text(_isAi ? 'CarePaws AI is typing…' : 'Clinic team is typing…', style: Type.caption(p)),
                   ],
                 ),
               ),
@@ -479,14 +479,14 @@ class _Bubble extends StatelessWidget {
                     Ic.svg(Ic.chat, color: p.textSecondary, size: 13),
                   const SizedBox(width: 5),
                   Text(
-                    fromAi ? 'PetCare AI' : _roleName(message.author),
+                    fromAi ? 'CarePaws AI' : _roleName(message.author),
                     style: Type.caption(p).copyWith(fontWeight: FontWeight.w700),
                   ),
                 ],
               ),
             ),
           Semantics(
-            label: '${mine ? 'You' : fromAi ? 'PetCare AI' : _roleName(message.author)} said: ${message.text}',
+            label: '${mine ? 'You' : fromAi ? 'CarePaws AI' : _roleName(message.author)} said: ${message.text}',
             child: ExcludeSemantics(
               child: Container(
                 constraints: const BoxConstraints(maxWidth: 320),
@@ -516,7 +516,7 @@ class _Bubble extends StatelessWidget {
     ChatAuthor.vet => 'Dr. Alvarez · Veterinarian',
     ChatAuthor.vetAssistant => 'Miguel · Vet Assistant',
     ChatAuthor.groomer => 'Ana · Groomer',
-    ChatAuthor.ai => 'PetCare AI',
+    ChatAuthor.ai => 'CarePaws AI',
   };
 }
 

@@ -125,7 +125,7 @@ class OrderSuccessScreen extends StatelessWidget {
                           ],
                         ),
                         const SizedBox(height: 8),
-                        Text('PetCare Veterinary Clinic', style: Type.body(p)),
+                        Text('CarePaws Veterinary Clinic', style: Type.body(p)),
                         const SizedBox(height: 4),
                         Text(
                           'Unit 12, Greenhills Shopping Centre, Shaw Blvd, Mandaluyong City',

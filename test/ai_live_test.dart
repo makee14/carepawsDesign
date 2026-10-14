@@ -4,8 +4,8 @@ library;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:petcare_artifact/data/models.dart';
-import 'package:petcare_artifact/services/ai_service.dart';
+import 'package:carepaws/data/models.dart';
+import 'package:carepaws/services/ai_service.dart';
 
 /// Live Gemini API checks. Skipped unless a key is supplied at build time:
 ///

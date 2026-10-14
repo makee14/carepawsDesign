@@ -79,7 +79,7 @@ class ChatsScreen extends StatelessWidget {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        'PetCare AI is the clinic\'s in-app assistant — feeding, health, vaccines, '
+                        'CarePaws AI is the clinic\'s in-app assistant — feeding, health, vaccines, '
                         'grooming and health checks. It gives guidance, never a diagnosis. Anything '
                         'outside veterinary care it will turn back to your pet. Anything clinical goes '
                         'to Miguel the vet assistant, who loops in Dr. Alvarez or Ana when needed. '

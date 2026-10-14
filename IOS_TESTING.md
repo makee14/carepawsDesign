@@ -63,7 +63,7 @@ For a real release, the app needs proper signing with an Apple Developer
 account ($99/year). On a Mac with Xcode:
 
 1. Enroll in the Apple Developer Program and open the project in Xcode.
-2. Set the Team on the Runner target (bundle ID `com.petcare.petcareArtifact`).
+2. Set the Team on the Runner target (bundle ID `com.carepaws.carepaws`).
 3. `flutter build ipa` (with codesigning) or use Xcode's Product → Archive,
    then Distribute App to the App Store or TestFlight.
 

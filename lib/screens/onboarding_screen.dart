@@ -33,7 +33,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     'Biscuit, Mochi and every visit, vaccine and document — together in one app, so the clinic always sees the full picture.',
     'Run a 30-second AI health check any time. Tell us what you see, add a photo if you like, and we point you to home care, a chat, a booking — or straight to the phone when it is urgent.',
     'Pick a pet, a service and a time. Routine visits confirm instantly; if your pet seems unwell the vet reviews the health check first.',
-    'PetCare AI answers instantly, day or night. The clinic team replies during hours, usually within 10 minutes.',
+    'CarePaws AI answers instantly, day or night. The clinic team replies during hours, usually within 10 minutes.',
     'Order from the clinic shop and collect at the counter with a pickup code. Prescription items unlock once the vet signs.',
   ];
   static const _illustrations = [

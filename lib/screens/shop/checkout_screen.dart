@@ -238,7 +238,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                     onPressed: _paying
                         ? null
                         : () async {
-                            // Cancelled → back to checkout with the cart intact.
+                            // Cancel discards the checkout attempt; the cart stays intact.
                             dismissSheet(context);
                           },
                   ),

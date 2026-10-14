@@ -1,8 +1,9 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
-  <!-- PetCare launcher icon.
-       Brand: terracotta/orange gradient squircle, brush ring, cream paw.
-       The paw is the app's own Ic.paw glyph (lib/design/icons.dart), scaled
-       from its 24x24 viewBox, so the icon and the in-app mark stay in step. -->
+  <!-- CarePaws launcher icon.
+       Brand: orange gradient squircle, cream paw-with-heart mark.
+       The mark is the app's own Ic.pawHeart glyph (lib/design/icons.dart),
+       so the icon and the in-app logo stay in step. Bolder and larger than
+       the previous paw: it fills the canvas with confidence. -->
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="0.35" y2="1">
       <stop offset="0" stop-color="#E4843E"/>
@@ -12,12 +13,12 @@
 
   <rect width="1024" height="1024" rx="228" ry="228" fill="url(#bg)"/>
 
-  <!-- Brush ring, echoing LogoMark in lib/app.dart. -->
-  <circle cx="512" cy="512" r="386" fill="none"
-          stroke="#FEF3E2" stroke-opacity="0.30" stroke-width="26"/>
-
-  <!-- Ic.paw, 24x24 viewBox scaled up and centred. -->
-  <g transform="translate(196 236) scale(26.4)" fill="#FEF3E2">
-    <path d="M12 20.4c3.4 0 5.6-1.8 5.6-4.2 0-2.2-1.8-3.2-2.6-4.8-.7-1.4-1.2-3.4-3-3.4s-2.3 2-3 3.4c-.8 1.6-2.6 2.6-2.6 4.8 0 2.4 2.2 4.2 5.6 4.2ZM6.4 9.6a1.9 1.9 0 1 0 0-3.8 1.9 1.9 0 0 0 0 3.8ZM17.6 9.6a1.9 1.9 0 1 0 0-3.8 1.9 1.9 0 0 0 0 3.8ZM10.4 4.6a1.9 1.9 0 1 0 0-3.8 1.9 1.9 0 0 0 0 3.8ZM13.6 4.6a1.9 1.9 0 1 0 0-3.8 1.9 1.9 0 0 0 0 3.8Z"/>
+  <!-- Ic.pawHeart, 24x24 viewBox scaled up and centred. -->
+  <g transform="translate(212 212) scale(25)" fill="#FEFBF4">
+    <path d="M12 20.5C9.5 18.5 5.2 15.2 5.2 11.8C5.2 9.9 6.7 8.5 8.5 8.5C9.9 8.5 11.1 9.3 12 10.6C12.9 9.3 14.1 8.5 15.5 8.5C17.3 8.5 18.8 9.9 18.8 11.8C18.8 15.2 14.5 18.5 12 20.5Z"/>
+    <path d="M6.5 9.8a1.9 1.9 0 1 0 0-3.8 1.9 1.9 0 0 0 0 3.8Z"/>
+    <path d="M17.5 9.8a1.9 1.9 0 1 0 0-3.8 1.9 1.9 0 0 0 0 3.8Z"/>
+    <path d="M10.3 6.8a1.9 1.9 0 1 0 0-3.8 1.9 1.9 0 0 0 0 3.8Z"/>
+    <path d="M13.7 6.8a1.9 1.9 0 1 0 0-3.8 1.9 1.9 0 0 0 0 3.8Z"/>
   </g>
 </svg>

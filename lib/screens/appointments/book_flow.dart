@@ -197,21 +197,33 @@ class _BookFlowState extends State<BookFlow> {
             // Keyed per step: otherwise the step ListViews share one
             // ScrollableState and a new step would open scrolled down.
             Expanded(child: KeyedSubtree(key: ValueKey(_step), child: _body(store))),
-            if (_step < 5)
-              StickyCta(
-                extra: (_step > 0)
-                    ? SecondaryButton(
-                        label: 'Back',
-                        icon: Ic.chevronLeft,
-                        onPressed: () => setState(() => _step--),
-                      )
-                    : null,
-                child: PrimaryButton(
-                  label: _step == 4 ? 'Confirm booking' : 'Continue',
-                  icon: _step == 4 ? Ic.check : Ic.arrowRight,
-                  busy: _confirming,
-                  onPressed: _canContinue() ? _next : null,
-                )),
+            StickyCta(
+              extra: (_step > 0 && _step < 5)
+                  ? SecondaryButton(
+                      label: 'Back',
+                      icon: Ic.chevronLeft,
+                      onPressed: () => setState(() => _step--),
+                    )
+                  : null,
+              child: PrimaryButton(
+                label: switch (_step) {
+                  5 => 'Done',
+                  4 => 'Confirm booking',
+                  _ => 'Continue',
+                },
+                icon: switch (_step) {
+                  5 => Ic.check,
+                  4 => Ic.check,
+                  _ => Ic.arrowRight,
+                },
+                busy: _confirming,
+                // Step 6 (index 5) is the confirmation: Done dismisses the
+                // flow. Previously there was no button and no back affordance
+                // here, trapping the user on the confirmation screen.
+                onPressed: _step == 5
+                    ? () => dismissSheet(context)
+                    : (_canContinue() ? _next : null),
+              )),
           ],
         ),
       ),
@@ -330,7 +342,7 @@ class _BookFlowState extends State<BookFlow> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Describe the symptoms or attach a photo. PetCare AI sorts ${pet?.name ?? 'your pet'} '
+                  'Describe the symptoms or attach a photo. CarePaws AI sorts ${pet?.name ?? 'your pet'} '
                   'into booking, chat or home care — and flags anything urgent.',
                   style: Type.body(p).copyWith(color: p.textSecondary),
                 ),

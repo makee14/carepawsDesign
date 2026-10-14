@@ -1,11 +1,11 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <!-- PetCare AI calls the Gemini API over HTTPS. The debug and profile
+    <!-- CarePaws AI calls the Gemini API over HTTPS. The debug and profile
          manifests declare this too, but Flutter only adds it there for the
          tooling - without it in main, a release build has no network access at
          all and silently falls back to demo-AI mode. -->
     <uses-permission android:name="android.permission.INTERNET"/>
     <application
-        android:label="PetCare"
+        android:label="CarePaws"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

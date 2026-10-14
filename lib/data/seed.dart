@@ -498,7 +498,7 @@ class Seed {
   // ------------------------------------------------------------------ chat
   static const aiThread = Thread(
     id: 'th_ai',
-    title: 'PetCare AI',
+    title: 'CarePaws AI',
     subtitle: 'Always available · answers general pet-care questions',
     icon: 'sparkle',
     pinned: true,
@@ -555,6 +555,6 @@ class Seed {
   static const afterHoursName = Clinic.afterHoursName;
   static const afterHoursPhone = Clinic.afterHoursPhone;
   static const ownerName = 'Marco Dela Cruz';
-  static const ownerContact = '0917 555 0142 · marco.delacruz@petcare.ph';
+  static const ownerContact = '0917 555 0142 · marco.delacruz@carepaws.ph';
   static const appVersion = '1.4.0 (204)';
 }

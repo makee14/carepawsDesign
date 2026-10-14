@@ -1,6 +1,6 @@
 import 'package:flutter/widgets.dart';
 
-/// Locked PetCare design tokens. Sampled from the official logo + approved
+/// Locked CarePaws design tokens. Sampled from the official logo + approved
 /// palette. Contrast ratios were computed and are asserted in tests.
 class T {
   const T._();

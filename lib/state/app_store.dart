@@ -460,8 +460,8 @@ class AppStore extends ChangeNotifier {
   /// Demo credentials. Real ones would live behind a server; for this
   /// prototype they are checked in the client, which is why the flow is a
   /// design demonstration rather than actual security.
-  static const demoEmail = 'petcare@test.com';
-  static const demoPassword = 'petcarecustomer1';
+  static const demoEmail = 'carepaws@test.com';
+  static const demoPassword = 'carepawscustomer1';
 
   bool signedIn = false;
 

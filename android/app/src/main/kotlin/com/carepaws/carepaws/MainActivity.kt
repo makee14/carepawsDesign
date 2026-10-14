@@ -1,4 +1,4 @@
-package com.petcare.petcare_artifact
+package com.carepaws.carepaws
 
 import io.flutter.embedding.android.FlutterActivity
 

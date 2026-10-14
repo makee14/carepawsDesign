@@ -26,7 +26,7 @@ class Ic {
     double stroke = 1.8,
   }) => SvgPicture.string(
     '<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">'
-    '<path d="$d" stroke="${_hex(color)}" stroke-width="$stroke" '
+    '<path d="$d" stroke="${hex(color)}" stroke-width="$stroke" '
     'stroke-linecap="round" stroke-linejoin="round"/></svg>',
     width: size,
     height: size,
@@ -34,7 +34,7 @@ class Ic {
     semanticsLabel: null,
   );
 
-  static String _hex(Color c) =>
+  static String hex(Color c) =>
       '#${(c.r * 255).round().toRadixString(16).padLeft(2, '0')}'
       '${(c.g * 255).round().toRadixString(16).padLeft(2, '0')}'
       '${(c.b * 255).round().toRadixString(16).padLeft(2, '0')}';
@@ -130,6 +130,8 @@ class Ic {
         return settings;
       case 'paw':
         return paw;
+      case 'pawHeart':
+        return pawHeart;
       case 'qr':
         return qr;
       case 'wallet':
@@ -263,6 +265,16 @@ class Ic {
       'M3.5 8h6M14.5 8h6M3.5 16h4.5M13 16h7.5M12.5 10a2 2 0 1 0 0-4 2 2 0 0 0 0 4ZM11 18a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z';
   static const paw =
       'M12 20.5c3.4 0 5.6-1.9 5.6-4.3 0-2.1-1.7-3.1-2.5-4.7-.7-1.4-1.2-3.3-3.1-3.3s-2.4 1.9-3.1 3.3c-.8 1.6-2.5 2.6-2.5 4.7 0 2.4 2.2 4.3 5.6 4.3Z'
+      'M6.5 9.8a1.9 1.9 0 1 0 0-3.8 1.9 1.9 0 0 0 0 3.8Z'
+      'M17.5 9.8a1.9 1.9 0 1 0 0-3.8 1.9 1.9 0 0 0 0 3.8Z'
+      'M10.3 6.8a1.9 1.9 0 1 0 0-3.8 1.9 1.9 0 0 0 0 3.8Z'
+      'M13.7 6.8a1.9 1.9 0 1 0 0-3.8 1.9 1.9 0 0 0 0 3.8Z';
+
+  /// The CarePaws mark: a paw print whose main pad is a heart — paws for the
+  /// patients, a heart for the care. Used for the launcher icon and the
+  /// in-app logo so the brand reads as one mark everywhere.
+  static const pawHeart =
+      'M12 20.5C9.5 18.5 5.2 15.2 5.2 11.8C5.2 9.9 6.7 8.5 8.5 8.5C9.9 8.5 11.1 9.3 12 10.6C12.9 9.3 14.1 8.5 15.5 8.5C17.3 8.5 18.8 9.9 18.8 11.8C18.8 15.2 14.5 18.5 12 20.5Z'
       'M6.5 9.8a1.9 1.9 0 1 0 0-3.8 1.9 1.9 0 0 0 0 3.8Z'
       'M17.5 9.8a1.9 1.9 0 1 0 0-3.8 1.9 1.9 0 0 0 0 3.8Z'
       'M10.3 6.8a1.9 1.9 0 1 0 0-3.8 1.9 1.9 0 0 0 0 3.8Z'

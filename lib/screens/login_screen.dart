@@ -52,13 +52,6 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  void _useDemo() {
-    _email.text = AppStore.demoEmail;
-    _password.text = AppStore.demoPassword;
-    setState(() {});
-    _submit();
-  }
-
   @override
   Widget build(BuildContext context) {
     final p = context.p;
@@ -143,12 +136,6 @@ class _LoginScreenState extends State<LoginScreen> {
                     busy: busy,
                     onPressed: canSubmit ? _submit : null,
                   ),
-                  const SizedBox(height: 10),
-                  SecondaryButton(
-                    label: 'Use the demo account',
-                    icon: Ic.sparkle,
-                    onPressed: busy ? null : _useDemo,
-                  ),
                 ],
               ),
             ),
@@ -156,7 +143,7 @@ class _LoginScreenState extends State<LoginScreen> {
             FadeIn(
               index: 3,
               child: Text(
-                'Demo sign-in — ${AppStore.demoEmail}. Anything else is rejected.',
+                'Use the account your clinic set up for you.',
                 style: Type.footnote(p).copyWith(color: p.textSecondary),
                 textAlign: TextAlign.center,
               ),

@@ -196,7 +196,7 @@ class ExportScreen extends StatelessWidget {
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          'A machine-readable copy of everything PetCare holds for ${Seed.ownerName}. '
+                          'A machine-readable copy of everything CarePaws holds for ${Seed.ownerName}. '
                           'Generated ${shortDate(store.now)}.',
                           style: Type.body(p).copyWith(color: p.textSecondary),
                         ),
@@ -334,8 +334,8 @@ class LegalScreen extends StatelessWidget {
     final sections = kind == LegalKind.terms
         ? const [
             (
-              'Using PetCare',
-              'PetCare is a veterinary clinic app. Bookings, health checks and chat are provided by '
+              'Using CarePaws',
+              'CarePaws is a veterinary clinic app. Bookings, health checks and chat are provided by '
                   'the clinic team, and the AI assistant gives general guidance only — never a diagnosis.',
             ),
             (
@@ -374,7 +374,7 @@ class LegalScreen extends StatelessWidget {
             ),
             (
               'Payments',
-              'Card and GCash details are processed by the payment provider. PetCare stores only the '
+              'Card and GCash details are processed by the payment provider. CarePaws stores only the '
                   'method and the resulting order status.',
             ),
           ];
@@ -390,8 +390,8 @@ class LegalScreen extends StatelessWidget {
           children: [
             Text(
               kind == LegalKind.terms
-                  ? 'Last updated 1 October 2026 · Applies to PetCare ${Seed.appVersion}'
-                  : 'Last updated 1 October 2026 · Applies to PetCare ${Seed.appVersion}',
+                  ? 'Last updated 1 October 2026 · Applies to CarePaws ${Seed.appVersion}'
+                  : 'Last updated 1 October 2026 · Applies to CarePaws ${Seed.appVersion}',
               style: Type.footnote(p),
             ),
             const SizedBox(height: T.s16),

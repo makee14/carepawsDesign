@@ -4,17 +4,17 @@ import 'dart:typed_data';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:petcare_artifact/app.dart';
-import 'package:petcare_artifact/data/clinic.dart';
-import 'package:petcare_artifact/data/models.dart';
-import 'package:petcare_artifact/data/seed.dart';
-import 'package:petcare_artifact/design/theme.dart';
-import 'package:petcare_artifact/design/tokens.dart';
-import 'package:petcare_artifact/services/ai_service.dart';
-import 'package:petcare_artifact/services/photo_store.dart';
-import 'package:petcare_artifact/state/app_store.dart';
-import 'package:petcare_artifact/widgets/ai_unavailable.dart';
-import 'package:petcare_artifact/widgets/common.dart';
+import 'package:carepaws/app.dart';
+import 'package:carepaws/data/clinic.dart';
+import 'package:carepaws/data/models.dart';
+import 'package:carepaws/data/seed.dart';
+import 'package:carepaws/design/theme.dart';
+import 'package:carepaws/design/tokens.dart';
+import 'package:carepaws/services/ai_service.dart';
+import 'package:carepaws/services/photo_store.dart';
+import 'package:carepaws/state/app_store.dart';
+import 'package:carepaws/widgets/ai_unavailable.dart';
+import 'package:carepaws/widgets/common.dart';
 
 /// Fixed clock so every countdown / date assertion is deterministic.
 DateTime fixedNow() => DateTime(2026, 10, 13, 9, 40);
@@ -501,7 +501,7 @@ void main() {
 
     test('the right password with the wrong email still fails', () async {
       final store = AppStore();
-      expect(await store.signIn('petcare@wrong.com', AppStore.demoPassword), isFalse);
+      expect(await store.signIn('carepaws@wrong.com', AppStore.demoPassword), isFalse);
     });
 
     test('signOut clears the session and any error', () async {
@@ -557,7 +557,7 @@ void main() {
     });
 
     test('the redirect names the clinic and points back to the pet', () {
-      expect(VetPersona.redirect, contains('PetCare'));
+      expect(VetPersona.redirect, contains('CarePaws'));
       expect(VetPersona.redirect, contains('pet'));
       expect(VetPersona.redirect, contains('not a vet'));
     });
@@ -710,7 +710,7 @@ void main() {
 
     test('the unavailable UI copy names the failure and the fix', () {
       expect(aiUnavailableText(AiFailure.noKey), contains('no API key'));
-      expect(aiUnavailableText(AiFailure.noKey), contains('Settings → PetCare AI'));
+      expect(aiUnavailableText(AiFailure.noKey), contains('Settings → CarePaws AI'));
       expect(aiUnavailableText(AiFailure.unreachable), contains("couldn't reach"));
       expect(aiUnavailableText(AiFailure.serviceError), contains('returned an error'));
     });

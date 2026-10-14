@@ -1,6 +1,6 @@
 {
-    "name": "petcare_artifact",
-    "short_name": "petcare_artifact",
+    "name": "carepaws",
+    "short_name": "carepaws",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",

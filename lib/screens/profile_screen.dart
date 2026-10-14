@@ -125,7 +125,7 @@ class ProfileScreen extends StatelessWidget {
                   child: Column(
                     children: [
                       RowTile(
-                        title: 'PetCare AI',
+                        title: 'CarePaws AI',
                         subtitle: store.ai.isLive
                             ? 'Live · ${store.ai.modelLabel}'
                             : store.ai.status == AiStatus.checking
@@ -252,7 +252,7 @@ class ProfileScreen extends StatelessWidget {
                 const SizedBox(height: T.s16),
                 Center(
                   child: Text(
-                    'PetCare Veterinary Clinic',
+                    'CarePaws Veterinary Clinic',
                     style: Type.caption(p),
                   ),
                 ),
@@ -366,7 +366,7 @@ class ProfileScreen extends StatelessWidget {
   Future<void> _logout(BuildContext context) async {
     final ok = await confirmDestructive(
       context,
-      title: 'Log out of PetCare?',
+      title: 'Log out of CarePaws?',
       message: 'Your pets, appointments and orders stay on your account. You can log back in any time.',
       confirmLabel: 'Log out',
     );

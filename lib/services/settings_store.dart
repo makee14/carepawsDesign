@@ -10,10 +10,10 @@ import '../design/theme.dart' show ThemeMode;
 class SettingsStore {
   const SettingsStore._();
 
-  static const _kThemeMode = 'petcare.settings.themeMode';
-  static const _kReduceMotion = 'petcare.settings.reduceMotion';
-  static const _kLanguage = 'petcare.settings.language';
-  static const _kOnboarded = 'petcare.settings.onboarded';
+  static const _kThemeMode = 'carepaws.settings.themeMode';
+  static const _kReduceMotion = 'carepaws.settings.reduceMotion';
+  static const _kLanguage = 'carepaws.settings.language';
+  static const _kOnboarded = 'carepaws.settings.onboarded';
 
   /// SharedPreferences throws in unit tests and on desktop without the plugin.
   /// A failure here must never stop the app from launching, so every call is

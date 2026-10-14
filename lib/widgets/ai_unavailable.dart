@@ -31,7 +31,7 @@ class AiUnavailableCard extends StatelessWidget {
     final p = context.p;
     final book = onBook;
     return Semantics(
-      label: 'PetCare AI is unavailable. ${failure.label}. ${failure.hint}',
+      label: 'CarePaws AI is unavailable. ${failure.label}. ${failure.hint}',
       child: ExcludeSemantics(
         child: SoftCard(
           color: T.amber.withValues(alpha: 0.12),
@@ -44,7 +44,7 @@ class AiUnavailableCard extends StatelessWidget {
                   Ic.svg(Ic.sparkle, color: p.warning, size: 18),
                   const SizedBox(width: 9),
                   Expanded(
-                    child: Text('PetCare AI is unavailable', style: Type.headline(p)),
+                    child: Text('CarePaws AI is unavailable', style: Type.headline(p)),
                   ),
                 ],
               ),
@@ -93,9 +93,9 @@ class AiUnavailableCard extends StatelessWidget {
 /// Plain-text version of the unavailable state for chat bubbles.
 String aiUnavailableText(AiFailure failure) => switch (failure) {
   AiFailure.noKey =>
-    'PetCare AI is unavailable — no API key is configured. Paste a key in Settings → PetCare AI to turn it on. You can still book a visit or call the clinic in the meantime.',
+    'CarePaws AI is unavailable — no API key is configured. Paste a key in Settings → CarePaws AI to turn it on. You can still book a visit or call the clinic in the meantime.',
   AiFailure.unreachable =>
-    "PetCare AI is unavailable — I couldn't reach the AI service. Check your connection and try again, or book a visit / call the clinic if it can't wait.",
+    "CarePaws AI is unavailable — I couldn't reach the AI service. Check your connection and try again, or book a visit / call the clinic if it can't wait.",
   AiFailure.serviceError =>
-    'PetCare AI is unavailable — the AI service returned an error. The key may be invalid; try pasting a fresh one in Settings → PetCare AI.',
+    'CarePaws AI is unavailable — the AI service returned an error. The key may be invalid; try pasting a fresh one in Settings → CarePaws AI.',
 };

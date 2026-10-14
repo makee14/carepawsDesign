@@ -5,17 +5,18 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:petcare_artifact/app.dart';
-import 'package:petcare_artifact/design/tokens.dart';
-import 'package:petcare_artifact/data/models.dart';
-import 'package:petcare_artifact/data/seed.dart';
-import 'package:petcare_artifact/design/theme.dart';
-import 'package:petcare_artifact/screens/appointments/book_flow.dart';
-import 'package:petcare_artifact/screens/pets/pet_profile_screen.dart';
-import 'package:petcare_artifact/screens/triage_screen.dart';
-import 'package:petcare_artifact/services/ai_service.dart';
-import 'package:petcare_artifact/state/app_store.dart';
-import 'package:petcare_artifact/widgets/common.dart';
+import 'package:carepaws/app.dart';
+import 'package:carepaws/design/tokens.dart';
+import 'package:carepaws/data/models.dart';
+import 'package:carepaws/data/seed.dart';
+import 'package:carepaws/design/theme.dart';
+import 'package:carepaws/screens/add_pet_screen.dart';
+import 'package:carepaws/screens/appointments/book_flow.dart';
+import 'package:carepaws/screens/pets/pet_profile_screen.dart';
+import 'package:carepaws/screens/triage_screen.dart';
+import 'package:carepaws/services/ai_service.dart';
+import 'package:carepaws/state/app_store.dart';
+import 'package:carepaws/widgets/common.dart';
 
 DateTime fixedNow() => DateTime(2026, 10, 13, 9, 40);
 
@@ -615,6 +616,52 @@ void main() {
     });
   });
 
+  group('Add pet', () {
+    testWidgets('back on step 2 returns to step 1 instead of discarding the form', (
+      tester,
+    ) async {
+      final store = AppStore(now: fixedNow());
+      await tester.binding.setSurfaceSize(const Size(390, 844));
+      await tester.pumpWidget(
+        AppScope(
+          store: store,
+          child: CupertinoApp(
+            theme: themeFor(AppPalette.light),
+            home: const AddPetScreen(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Step 1: enter a name and continue.
+      await tester.enterText(find.byType(CupertinoTextField).first, 'Pepper');
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Continue'));
+      await tester.pumpAndSettle();
+      expect(find.text('Almost done'), findsOneWidget);
+
+      // Nav back goes to step 1, not out of the flow (regression: it used
+      // to pop the whole screen, discarding the entered data).
+      await tester.tap(
+        find.descendant(
+          of: find.byType(DetailNavBar),
+          matching: find.byType(CupertinoButton),
+        ).first,
+      );
+      await tester.pumpAndSettle();
+      expect(find.byType(AddPetScreen), findsOneWidget);
+      expect(find.text('Add pet'), findsOneWidget);
+      // The entered name is preserved.
+      expect(
+        (find.byType(CupertinoTextField).first.evaluate().single.widget
+                as CupertinoTextField)
+            .controller
+            ?.text,
+        'Pepper',
+      );
+    });
+  });
+
   group('Triage — all four routes', () {
     // Drives the real triage engine through a canned Gemini API: model
     // discovery returns one flash model and content generation returns the
@@ -838,9 +885,9 @@ void main() {
       (tester) async {
         await pumpShell(tester);
         await openTab(tester, 'Chats');
-        await tester.tap(find.text('PetCare AI').first);
+        await tester.tap(find.text('CarePaws AI').first);
         await tester.pumpAndSettle();
-        expect(find.text('PetCare AI is unavailable'), findsOneWidget);
+        expect(find.text('CarePaws AI is unavailable'), findsOneWidget);
         expect(find.textContaining('No API key is configured'), findsOneWidget);
         expect(find.text('Add an API key'), findsOneWidget);
         // Never a dead end: working alternatives are right there.
@@ -854,7 +901,7 @@ void main() {
     ) async {
       await pumpShell(tester);
       await openTab(tester, 'Chats');
-      await tester.tap(find.text('PetCare AI').first);
+      await tester.tap(find.text('CarePaws AI').first);
       await tester.pumpAndSettle();
       await tester.enterText(
         find.byType(CupertinoTextField).first,
@@ -864,7 +911,7 @@ void main() {
       await tester.tap(find.bySemanticsLabel('Send message'));
       await tester.pumpAndSettle();
       expect(find.textContaining('no API key is configured'), findsWidgets);
-      expect(find.textContaining('Settings → PetCare AI'), findsWidgets);
+      expect(find.textContaining('Settings → CarePaws AI'), findsWidgets);
     });
 
     testWidgets(
@@ -880,7 +927,7 @@ void main() {
           ),
         );
         await tester.pumpAndSettle();
-        expect(find.text('PetCare AI is unavailable'), findsOneWidget);
+        expect(find.text('CarePaws AI is unavailable'), findsOneWidget);
         // The card pushes the form down — scroll until the field is built.
         await scrollToText(tester, 'Describe the concern');
         await tester.enterText(
@@ -906,7 +953,7 @@ void main() {
       await scrollAndTap(tester, find.text('AI Triage'));
       await tester.pumpAndSettle();
       expect(find.byType(TriageScreen), findsOneWidget);
-      expect(find.text('PetCare AI is unavailable'), findsOneWidget);
+      expect(find.text('CarePaws AI is unavailable'), findsOneWidget);
       expect(find.text('Demo AI'), findsNothing);
     });
 
@@ -915,7 +962,7 @@ void main() {
     ) async {
       await pumpShell(tester);
       await openTab(tester, 'Chats');
-      await tester.tap(find.text('PetCare AI').first);
+      await tester.tap(find.text('CarePaws AI').first);
       await tester.pumpAndSettle();
       expect(find.text('Start health check'), findsWidgets);
       expect(find.textContaining('Labeled AI'), findsOneWidget);
@@ -928,7 +975,7 @@ void main() {
     ) async {
       await pumpShell(tester);
       await openTab(tester, 'Chats');
-      expect(find.text('PetCare AI'), findsWidgets);
+      expect(find.text('CarePaws AI'), findsWidgets);
       expect(find.text('Clinic team'), findsWidgets);
       expect(find.textContaining('Always available'), findsWidgets);
     });
@@ -1105,6 +1152,13 @@ void main() {
         // Step 6 — confirmed.
         expect(find.text('You are booked'), findsOneWidget);
         expect(store.upcoming.any((a) => a.serviceId == 'sv1'), isTrue);
+
+        // Done dismisses the flow (regression: the confirmation step used
+        // to show no button and no back affordance, trapping the user).
+        expect(find.text('Done'), findsOneWidget);
+        await scrollAndTap(tester, find.text('Done').first);
+        await tester.pumpAndSettle();
+        expect(find.byType(BookFlow), findsNothing);
       },
     );
 

@@ -21,7 +21,7 @@ import 'profile/settings_screens.dart';
 
 enum TriageEntry { home, aiChat, booking }
 
-/// Shared triage engine. Three entry points (Home quick action, the PetCare AI
+/// Shared triage engine. Three entry points (Home quick action, the CarePaws AI
 /// thread, Book step 2) all land here.
 class TriageScreen extends StatefulWidget {
   const TriageScreen({
@@ -563,7 +563,7 @@ class _Disclaimer extends StatelessWidget {
           const SizedBox(width: 9),
           Expanded(
             child: Text(
-              "PetCare AI gives guidance, not a diagnosis. A veterinarian has to examine "
+              "CarePaws AI gives guidance, not a diagnosis. A veterinarian has to examine "
               "${pet?.name ?? 'your pet'} in person to confirm anything.",
               style: Type.footnote(p),
             ),
@@ -998,7 +998,7 @@ class EmergencyTriageView extends StatelessWidget {
                     Text(
                       open
                           ? "Ask for the vet on duty. Keep ${pet?.name ?? 'your pet'} quiet and warm on the way."
-                          : 'This hospital is open 24 hours. Go now — do not wait for PetCare to reopen.',
+                          : 'This hospital is open 24 hours. Go now — do not wait for CarePaws to reopen.',
                       style: Type.footnote(p).copyWith(color: p.onPrimaryFill.withValues(alpha: 0.92)),
                     ),
                     const SizedBox(height: 14),

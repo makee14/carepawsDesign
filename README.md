@@ -1,6 +1,6 @@
-# PetCare Veterinary Clinic — customer app
+# CarePaws Veterinary Clinic — customer app
 
-A complete, tappable Flutter prototype of the PetCare Veterinary Clinic customer
+A complete, tappable Flutter prototype of the CarePaws Veterinary Clinic customer
 mobile app (testing build).
 
 Cupertino-first: `CupertinoApp`, `CupertinoNavigationBar` / `CupertinoTabBar`,
@@ -79,7 +79,7 @@ flutter devices                       # the iPhone appears by name
 flutter run -d <iphone-id>
 ```
 
-First run asks for the bundle id `com.petcare.petcareArtifact` in Xcode ▸
+First run asks for the bundle id `com.carepaws.carepaws` in Xcode ▸
 Signing & Capabilities ▸ Team. Set **iOS Deployment Target** to 13.0 or higher.
 On device, trust the developer certificate the first time you launch the app
 (Settings ▸ General ▸ VPN & Device Management).
@@ -210,8 +210,8 @@ demo account:
 
 | Field | Value |
 |---|---|
-| Email | `petcare@test.com` |
-| Password | `petcarecustomer1` |
+| Email | `carepaws@test.com` |
+| Password | `carepawscustomer1` |
 
 Any other email or password is rejected with an inline message and the form
 stays put. "Use the demo account" fills both fields and signs in. **Settings ▸
@@ -226,7 +226,7 @@ authentication.
 
 ### Adding a key on the device (no rebuild)
 
-**Settings ▸ PetCare AI** has a key field. Paste a key (or use the paste
+**Settings ▸ CarePaws AI** has a key field. Paste a key (or use the paste
 button) and tap **Save key** — the status chip flips to *Live* immediately and
 the key is remembered across launches. This avoids `--dart-define` entirely,
 which is handy when testing on a phone.
@@ -238,7 +238,7 @@ affordance only; remove it before shipping a build.
 
 The key is read from, in order:
 
-1. A key typed into Settings ▸ PetCare AI on the device.
+1. A key typed into Settings ▸ CarePaws AI on the device.
 2. A key baked in at build time — `tool/dev.sh`, or
    `flutter run --dart-define=GEMINI_API_KEY=…`.
 
@@ -428,7 +428,7 @@ Shop); care reminders with Terracotta switches and an in-context notification
 permission sheet on the first toggle; clinic info with hours, address,
 emergency contact and the nearest after-hours hospital.
 
-**CHATS** — one inbox. Pinned "PetCare AI" thread (Always available, labelled
+**CHATS** — one inbox. Pinned "CarePaws AI" thread (Always available, labelled
 AI, "Start health check" entry point) and a "Clinic team" thread with a
 response-time note when offline. Staff directory (name + role, no presence
 badges). AI → clinic handoff carries the pet and the triage result.

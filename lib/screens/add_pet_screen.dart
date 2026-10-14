@@ -141,7 +141,7 @@ class _AddPetScreenState extends State<AddPetScreen> {
           date: DateTime.now(),
           title: 'Profile created',
           detail:
-              'Added to PetCare. Bring this pet to the next visit so the clinic can record vitals '
+              'Added to CarePaws. Bring this pet to the next visit so the clinic can record vitals '
               'and complete the health record.',
           role: StaffRole.vetAssistant,
           staffName: Seed.assistant.name,
@@ -169,6 +169,9 @@ class _AddPetScreenState extends State<AddPetScreen> {
       backgroundColor: p.background,
       navigationBar: DetailNavBar(
         title: _step == 0 ? 'Add pet' : 'Almost done',
+        // Step 1 back goes to step 0, not out of the flow — popping here
+        // would discard the whole form.
+        onBack: _step == 1 ? () => setState(() => _step = 0) : null,
       ),
       child: SafeArea(
         child: Column(

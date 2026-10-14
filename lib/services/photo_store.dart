@@ -13,7 +13,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 class PhotoStore {
   const PhotoStore._();
 
-  static const ownerKey = 'petcare.photo.owner';
+  static const ownerKey = 'carepaws.photo.owner';
 
   /// Picks and downsizes a photo. Returns null when the picker is unavailable
   /// (desktop, or a simulator with no library) or the user cancels.
@@ -37,7 +37,7 @@ class PhotoStore {
     }
   }
 
-  static String petKey(String petId) => 'petcare.photo.pet.$petId';
+  static String petKey(String petId) => 'carepaws.photo.pet.$petId';
 
   static Future<SharedPreferences?> _prefs() async {
     try {

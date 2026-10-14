@@ -73,7 +73,7 @@ class SettingsScreen extends StatelessWidget {
               ),
             ),
             const SizedBox(height: T.s20),
-            Text('PetCare AI', style: Type.headline(p)),
+            Text('CarePaws AI', style: Type.headline(p)),
             const SizedBox(height: 10),
             const AiSettingsCard(),
             const SizedBox(height: T.s20),
@@ -127,7 +127,7 @@ class AiSettingsScreen extends StatelessWidget {
     final p = context.p;
     return CupertinoPageScaffold(
       backgroundColor: p.background,
-      navigationBar: const DetailNavBar(title: 'PetCare AI'),
+      navigationBar: const DetailNavBar(title: 'CarePaws AI'),
       child: SafeArea(
         child: ListView(
           padding: EdgeInsets.fromLTRB(
@@ -141,7 +141,7 @@ class AiSettingsScreen extends StatelessWidget {
             const SizedBox(height: T.s20),
             Text(
               'The key decides whether health checks and chat can run on a real model. '
-              'Without one, PetCare AI stays unavailable — everything else about the app works the same.',
+              'Without one, CarePaws AI stays unavailable — everything else about the app works the same.',
               style: Type.footnote(p).copyWith(color: p.textSecondary),
             ),
           ],
@@ -211,7 +211,7 @@ class _AiSettingsCardState extends State<AiSettingsCard> {
             Text(
               ok
                   ? 'Health checks and chat now run on ${store.ai.modelLabel}.'
-                  : '${(store.ai.failure ?? AiFailure.noKey).label}, so PetCare AI stayed unavailable. '
+                  : '${(store.ai.failure ?? AiFailure.noKey).label}, so CarePaws AI stayed unavailable. '
                         '${(store.ai.failure ?? AiFailure.noKey).hint}',
               style: Type.footnote(context.p),
               textAlign: TextAlign.center,
@@ -684,7 +684,7 @@ class LanguageScreen extends StatelessWidget {
             ),
             const SizedBox(height: T.s16),
             Text(
-              'PetCare is available in English, Tagalog and Bisaya. Clinic records and receipts always stay '
+              'CarePaws is available in English, Tagalog and Bisaya. Clinic records and receipts always stay '
               'in English so the vet team can read them.',
               style: Type.footnote(context.p),
             ),
@@ -861,7 +861,7 @@ class HelpScreen extends StatelessWidget {
     ),
     (
       'Is my health check a diagnosis?',
-      'No. PetCare AI is guidance. A veterinarian has to examine your pet to confirm anything.',
+      'No. CarePaws AI is guidance. A veterinarian has to examine your pet to confirm anything.',
     ),
   ];
 

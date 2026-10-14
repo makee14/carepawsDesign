@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Renders the PetCare launcher icon from tool/icon/*.svg into the Android
+# Renders the CarePaws launcher icon from tool/icon/*.svg into the Android
 # mipmap buckets, at both legacy and adaptive-icon sizes.
 #
 #   tool/make_icon.sh

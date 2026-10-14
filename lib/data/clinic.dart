@@ -1,9 +1,9 @@
-/// Single source of truth for PetCare Veterinary Clinic facts.
+/// Single source of truth for CarePaws Veterinary Clinic facts.
 ///
 /// Every screen, the AI service and the seed data read from here — clinic
 /// facts are never duplicated as string literals anywhere else.
 abstract final class Clinic {
-  static const name = 'PetCare Veterinary Clinic';
+  static const name = 'CarePaws Veterinary Clinic';
   static const address =
       'Unit 12, Greenhills Shopping Centre, Shaw Blvd, Brgy. Shaw, Mandaluyong City';
   static const phone = '+63 2 8712 4409';

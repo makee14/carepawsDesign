@@ -1,9 +1,9 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:petcare_artifact/screens/onboarding_illustrations.dart';
-import 'package:petcare_artifact/screens/onboarding_screen.dart';
-import 'package:petcare_artifact/screens/profile/settings_screens.dart';
-import 'package:petcare_artifact/state/app_store.dart';
+import 'package:carepaws/screens/onboarding_illustrations.dart';
+import 'package:carepaws/screens/onboarding_screen.dart';
+import 'package:carepaws/screens/profile/settings_screens.dart';
+import 'package:carepaws/state/app_store.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Onboarding flow tests.

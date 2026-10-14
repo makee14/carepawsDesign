@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/cupertino.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 import 'data/models.dart';
 import 'data/seed.dart';
@@ -20,7 +21,7 @@ import 'screens/shops_screen.dart';
 import 'state/app_store.dart';
 import 'widgets/common.dart';
 
-/// Splash + auth. The PetCare logo mark appears here (and only here).
+/// Splash + auth. The CarePaws logo mark appears here (and only here).
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key, this.onDone});
 
@@ -137,7 +138,7 @@ class _SplashScreenState extends State<SplashScreen> {
                       FadeIn(
                         index: 1,
                         child: Text(
-                          'PETCARE',
+                          'CAREPAWS',
                           style: Type.largeTitle(p).copyWith(
                             letterSpacing: 5,
                             fontWeight: FontWeight.w800,
@@ -178,15 +179,15 @@ class _SplashScreenState extends State<SplashScreen> {
                               children: [
                                 Text(
                                   store.ai.isLive
-                                      ? 'PetCare AI ready'
-                                      : 'PetCare AI · Unavailable',
+                                      ? 'CarePaws AI ready'
+                                      : 'CarePaws AI · Unavailable',
                                   style: Type.headline(p),
                                 ),
                                 const SizedBox(height: 2),
                                 Text(
                                   store.ai.isLive
                                       ? 'Model ${store.ai.modelLabel ?? 'auto'} selected automatically.'
-                                      : 'Needs an API key. Add one any time in Settings → PetCare AI.',
+                                      : 'Needs an API key. Add one any time in Settings → CarePaws AI.',
                                   style: Type.footnote(p),
                                 ),
                               ],
@@ -222,70 +223,43 @@ class _SplashScreenState extends State<SplashScreen> {
   }
 }
 
-/// The PetCare logo mark — dog and cat inside a brush ring. Used on splash
-/// and auth only, per the one-paw-mark rule.
+/// The CarePaws logo mark — a paw print with a heart for its pad, paws for
+/// the patients and a heart for the care. Used on splash and auth only,
+/// per the one-mark rule. Matches the launcher icon (tool/icon/).
 class LogoMark extends StatelessWidget {
   const LogoMark({super.key, this.size = 120});
   final double size;
 
   @override
   Widget build(BuildContext context) {
-    final p = context.p;
     return Semantics(
       image: true,
-      label: 'PetCare Veterinary Clinic logo',
+      label: 'CarePaws Veterinary Clinic logo',
       child: SizedBox.square(
         dimension: size,
         child: DecoratedBox(
           decoration: BoxDecoration(
-            color: p.surface,
-            shape: BoxShape.circle,
-            border: Border.all(
-              color: T.taupe.withValues(alpha: 0.45),
-              width: size * 0.035,
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [T.orange, T.terracotta],
             ),
+            shape: BoxShape.circle,
             boxShadow: [
               BoxShadow(
-                color: T.taupe.withValues(alpha: 0.18),
-                blurRadius: size * 0.14,
+                color: T.orange.withValues(alpha: 0.35),
+                blurRadius: size * 0.18,
                 spreadRadius: size * 0.01,
               ),
             ],
           ),
           child: Center(
-            child: SizedBox.square(
-              dimension: size * 0.74,
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  Positioned(
-                    left: size * 0.04,
-                    top: size * 0.16,
-                    child: Transform.rotate(
-                      angle: -0.16,
-                      child: Ic.svg(
-                        Ic.dog,
-                        color: T.orange,
-                        size: size * 0.44,
-                        stroke: 1.9,
-                      ),
-                    ),
-                  ),
-                  Positioned(
-                    right: size * 0.03,
-                    bottom: size * 0.13,
-                    child: Transform.rotate(
-                      angle: 0.1,
-                      child: Ic.svg(
-                        Ic.cat,
-                        color: p.primaryFill,
-                        size: size * 0.36,
-                        stroke: 1.9,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+            child: SvgPicture.string(
+              '<svg viewBox="0 0 24 24" fill="${Ic.hex(T.cream)}" xmlns="http://www.w3.org/2000/svg">'
+              '<path d="${Ic.pawHeart}"/></svg>',
+              width: size * 0.62,
+              height: size * 0.62,
+              semanticsLabel: null,
             ),
           ),
         ),
@@ -839,13 +813,13 @@ Future<DateTime?> showDatePickerSheet(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 CupertinoButton(
-                  onPressed: () => Navigator.of(ctx).pop(),
+                  onPressed: () => dismissSheet(ctx),
                   child: const Text('Cancel'),
                 ),
                 CupertinoButton(
                   onPressed: () {
                     confirmed = true;
-                    Navigator.of(ctx).pop();
+                    dismissSheet(ctx);
                   },
                   child: const Text('Done'),
                 ),
@@ -910,12 +884,17 @@ class DetailNavBar extends StatelessWidget
     this.actions = const [],
     this.showBack = true,
     this.previousTitle,
+    this.onBack,
   });
 
   final String title;
   final List<Widget> actions;
   final bool showBack;
   final String? previousTitle;
+
+  /// Overrides the back button action (e.g. step back within a multi-step
+  /// flow instead of popping the route). Null keeps the default maybePop.
+  final VoidCallback? onBack;
 
   @override
   bool shouldFullyObstruct(BuildContext context) => true;
@@ -938,7 +917,7 @@ class DetailNavBar extends StatelessWidget
               child: CupertinoButton(
                 padding: EdgeInsets.zero,
                 minimumSize: const Size(48, 44),
-                onPressed: () => Navigator.of(context).maybePop(),
+                onPressed: onBack ?? () => Navigator.of(context).maybePop(),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -977,8 +956,8 @@ String greetingFor(DateTime t) {
 
 String greetingSub(DateTime t) => switch (t.hour) {
   < 12 => 'Starting with Biscuit’s walk, then his 10 AM check-up.',
-  < 17 => 'Biscuit’s visit is coming up. Here is today at PetCare.',
-  _ => 'Mochi is fed and settled. Here is tomorrow at PetCare.',
+  < 17 => 'Biscuit’s visit is coming up. Here is today at CarePaws.',
+  _ => 'Mochi is fed and settled. Here is tomorrow at CarePaws.',
 };
 
 /// Live countdown to the next appointment, e.g. "in 2d 6h" / "in 3h 12m".

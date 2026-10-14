@@ -39,7 +39,7 @@ class RemindersScreen extends StatelessWidget {
                         Expanded(
                           child: Text(
                             store.notificationsAsked
-                                ? 'Notifications are allowed for PetCare. Toggle anything below on or off.'
+                                ? 'Notifications are allowed for CarePaws. Toggle anything below on or off.'
                                 : 'Notifications are not enabled yet. Turning on your first reminder '
                                       'will ask permission right here.',
                             style: Type.footnote(p),
@@ -310,7 +310,7 @@ class ClinicInfoScreen extends StatelessWidget {
                             Uri.parse(
                               'https://maps.google.com/?q=${Uri.encodeComponent(Clinic.address)}',
                             ),
-                            'Open PetCare in Maps',
+                            'Open CarePaws in Maps',
                           ),
                         ),
                       ],
@@ -365,7 +365,7 @@ class ClinicInfoScreen extends StatelessWidget {
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          'PetCare closes at 7:00 PM on weekdays and 4:00 PM on Sundays. '
+                          'CarePaws closes at 7:00 PM on weekdays and 4:00 PM on Sundays. '
                           'Outside those hours, go to the nearest 24-hour animal hospital:',
                           style: Type.body(p),
                         ),

@@ -11,7 +11,7 @@ import '../data/models.dart';
 /// Gemini API key.
 ///
 /// Two sources, in priority order:
-///   1. A key typed into Settings ▸ PetCare AI on the device (dev/test only —
+///   1. A key typed into Settings ▸ CarePaws AI on the device (dev/test only —
 ///      it is stored in plaintext on the phone, so it never ships).
 ///   2. A key baked in at build time:
 ///        flutter run --dart-define=GEMINI_API_KEY=your_key_here
@@ -29,9 +29,9 @@ enum AiStatus { checking, live, unavailable }
 /// Why the assistant cannot answer right now. Surfaced verbatim in the
 /// "AI unavailable" UI, so each case names exactly what went wrong.
 enum AiFailure {
-  noKey('No API key is configured', 'Paste a key in Settings → PetCare AI to turn it on.'),
-  unreachable("Couldn't reach the AI service", 'Check the connection and try again, or paste a fresh key in Settings → PetCare AI.'),
-  serviceError('The AI service returned an error', 'The key may be invalid — paste a fresh one in Settings → PetCare AI and try again.');
+  noKey('No API key is configured', 'Paste a key in Settings → CarePaws AI to turn it on.'),
+  unreachable("Couldn't reach the AI service", 'Check the connection and try again, or paste a fresh key in Settings → CarePaws AI.'),
+  serviceError('The AI service returned an error', 'The key may be invalid — paste a fresh one in Settings → CarePaws AI and try again.');
 
   const AiFailure(this.label, this.hint);
   final String label;
@@ -70,7 +70,7 @@ class VetPersona {
         ? 'The owner did not share a name — greet them plainly and never invent one.'
         : "The owner's first name is $ownerFirstName — use it when it feels natural, never any other name.";
     return '''
-You are PetCare AI, the assistant inside the ${Clinic.name} app. You are an AI
+You are CarePaws AI, the assistant inside the ${Clinic.name} app. You are an AI
 assistant, not a veterinarian and not Dr. Alvarez. The owner is at home,
 talking to you on their phone — you are not in the room with them. The pet's
 name and species come with each question; name the pet often.
@@ -129,7 +129,7 @@ managed at home.''';
   /// Fixed answer for anything the model flagged as out of scope. Deterministic
   /// on purpose: an off-topic question never gets free-reformulated.
   static const redirect =
-      "I'm PetCare AI — an assistant, not a vet — so I only help with your own pets here at PetCare. "
+      "I'm CarePaws AI — an assistant, not a vet — so I only help with your own pets here at CarePaws. "
       'Ask me about feeding, health, vaccines or a health check and I will take it from there.';
 }
 
@@ -147,7 +147,7 @@ class AiService {
   static const _v1beta = 'v1beta';
 
   /// Where an on-device key is kept between launches.
-  static const keyPrefName = 'petcare.gemini_api_key';
+  static const keyPrefName = 'carepaws.gemini_api_key';
   static const _keyPref = keyPrefName;
   static const _placeholder = 'YOUR_GEMINI_API_KEY';
 
@@ -182,9 +182,28 @@ class AiService {
   /// uses this to warn that the value is stored in plaintext.
   bool get keyFromDevice => _looksLikeKey(_storedKey);
 
-  /// Runs at startup. Loads any on-device key, then lists models and dynamically
-  /// picks a free-tier model that supports text + image input, preferring the
-  /// flash family. Safe to call again after a key changes.
+  /// Free-tier text model IDs, newest family first. Only used when the
+  /// models-list endpoint fails or lists nothing usable — the dynamic list
+  /// is always the primary path, so this never overrides what the API
+  /// reports. Verified against Google's pricing page 2026-10-14: the 2.0
+  /// family was shut down 2026-06-01, and omni / image / pro-preview are
+  /// paid-only.
+  static const _knownFreeIds = <String>[
+    'gemini-3.8-flash',
+    'gemini-3.5-flash',
+    'gemini-3.1-flash-lite',
+    'gemini-2.5-flash',
+    'gemini-2.5-flash-lite',
+    'gemini-2.5-pro',
+  ];
+
+  /// Runs at startup. Loads any on-device key, lists the API's models, then
+  /// probes each free-tier candidate with a real minimal request and keeps
+  /// the first one that actually answers. The list endpoint cannot report
+  /// quota or billing, so a model that is listed but not usable on the key's
+  /// tier is skipped automatically — this is what makes the pick the best
+  /// *free* model, not just the best-listed one. Safe to call again after a
+  /// key changes.
   Future<void> bootstrap() async {
     await _restoreKey();
     if (!keyConfigured) {
@@ -196,23 +215,86 @@ class AiService {
     modelId = null;
     modelLabel = null;
     try {
-      final candidates = await _listModels();
-      if (candidates.isEmpty) {
-        _enterUnavailable(AiFailure.serviceError);
-        return;
+      final candidates = await _candidates();
+      for (final c in candidates) {
+        if (await _probe(c.name)) {
+          modelId = c.name;
+          modelLabel = c.label;
+          status = AiStatus.live;
+          failure = null;
+          debugPrint('[ai] live model: ${c.name}');
+          return;
+        }
+        debugPrint('[ai] candidate ${c.name} did not answer, trying next');
       }
-      final pick = candidates.first;
-      modelId = pick.name;
-      modelLabel = pick.name;
-      status = AiStatus.live;
-      failure = null;
-      debugPrint('[ai] live model: ${pick.name}');
+      _enterUnavailable(AiFailure.serviceError);
     } on AiException catch (e) {
       _enterUnavailable(e.failure);
     } on TimeoutException {
       _enterUnavailable(AiFailure.unreachable);
     } catch (_) {
       _enterUnavailable(AiFailure.unreachable);
+    }
+  }
+
+  /// Ordered probe candidates: the API's live list first (filtered to
+  /// free-tier text models and ranked best-first), then the known-free
+  /// fallback IDs for when the list endpoint drifts or fails. Duplicates
+  /// are removed; list order is probe order.
+  Future<List<_Model>> _candidates() async {
+    final out = <_Model>[];
+    final seen = <String>{};
+    try {
+      for (final c in await _listModels()) {
+        if (seen.add(c.name)) out.add(c);
+      }
+    } on AiException catch (e) {
+      // Unreachable: the probes would fail too — propagate it.
+      // 400/401/403 from the list endpoint means the key itself is
+      // rejected — probing other models with the same key cannot succeed,
+      // so fail fast instead of burning quota on doomed probes.
+      if (e.failure == AiFailure.unreachable) rethrow;
+      if (RegExp(r'HTTP 40[013]').hasMatch(e.detail ?? '')) rethrow;
+      // Any other list failure falls through to the known IDs below.
+    }
+    for (final id in _knownFreeIds) {
+      if (seen.add(id)) out.add(_Model(id, id));
+    }
+    return out;
+  }
+
+  /// One-word liveness probe. True when the key, the model and the tier all
+  /// work together: HTTP 200 plus any text in the reply. Anything else —
+  /// 400 on a bad key, 403/429 on quota or billing, transport failure —
+  /// means "try the next candidate", never a crash.
+  Future<bool> _probe(String id) async {
+    try {
+      final uri = Uri.https(
+        _base,
+        '/$_v1beta/models/$id:generateContent',
+        {'key': _effectiveKey},
+      );
+      final res = await _client
+          .post(
+            uri,
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({
+              'contents': [
+                {
+                  'role': 'user',
+                  'parts': [
+                    {'text': 'Reply with exactly this word: ok'},
+                  ],
+                },
+              ],
+              'generationConfig': {'temperature': 0, 'maxOutputTokens': 8},
+            }),
+          )
+          .timeout(timeout);
+      if (res.statusCode != 200) return false;
+      return _content(res.body).trim().isNotEmpty;
+    } catch (_) {
+      return false;
     }
   }
 
@@ -288,13 +370,24 @@ class AiService {
       final methods = (m['supportedGenerationMethods'] as List? ?? const [])
           .cast<String>();
       if (!methods.contains('generateContent')) continue;
-      // Tuning a generative model (e.g. *_tuned) is not a free-tier default.
-      if (name.contains('tuned')) continue;
-      // Vision: models with image understanding are not embeddings / aqa / tts.
-      if (name.contains('embedding') ||
-          name.contains('aqa') ||
-          name.contains('tts') ||
-          name.contains('live')) {
+      // Skip anything that is not a free-tier text model:
+      // tuned: custom tuned models, not free-tier defaults.
+      // embedding/aqa: not generative text.
+      // tts/live/transcribe: audio endpoints with different request shapes.
+      // image/omni: paid-only (image generation, Omni Flash).
+      // robotics/veo/lyria: specialized models, not general chat.
+      final n = name.toLowerCase();
+      if (n.contains('tuned') ||
+          n.contains('embedding') ||
+          n.contains('aqa') ||
+          n.contains('tts') ||
+          n.contains('live') ||
+          n.contains('transcribe') ||
+          n.contains('image') ||
+          n.contains('omni') ||
+          n.contains('robotics') ||
+          n.contains('veo') ||
+          n.contains('lyria')) {
         continue;
       }
       out.add(_Model(name, m['displayName'] as String? ?? name));
@@ -437,7 +530,7 @@ class AiService {
           }
         ],
       };
-      final res = await _post(body);
+      final res = await _postChat(body);
       return _content(res.body);
     } on AiException {
       rethrow;
@@ -540,6 +633,28 @@ class AiService {
       throw AiException(AiFailure.serviceError, 'HTTP ${res.statusCode}');
     }
     return res;
+  }
+
+  /// POSTs a chat body that asks for structured JSON. Some models accept
+  /// generateContent but reject responseJsonSchema with a 400 — in that
+  /// case the request is retried once as plain text, which [_parseChat]
+  /// already handles gracefully.
+  Future<http.Response> _postChat(Map<String, Object?> withSchema) async {
+    try {
+      return await _post(withSchema);
+    } on AiException catch (e) {
+      final badRequest =
+          e.failure == AiFailure.serviceError &&
+          (e.detail ?? '').contains('400');
+      if (!badRequest) rethrow;
+      debugPrint('[ai] model rejected JSON schema, retrying as plain text');
+      final plain = Map<String, Object?>.from(withSchema);
+      final gc = Map<String, Object?>.from(
+        withSchema['generationConfig'] as Map<String, Object?>,
+      )..remove('responseMimeType')..remove('responseJsonSchema');
+      plain['generationConfig'] = gc;
+      return await _post(plain);
+    }
   }
 
   /// Reads the `{"inScope":…,"reply":…}` envelope. Returns null when the model

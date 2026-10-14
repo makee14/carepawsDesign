@@ -36,7 +36,7 @@ Future<void> main() async {
   // Drives the live countdowns on Home (and the open/closed + upcoming/past
   // partitions) — the store clock otherwise only moves when tests drive it.
   store.startClock();
-  runApp(PetCareApp(store: store));
+  runApp(CarePawsApp(store: store));
 }
 
 /// Visual-review harness. Set a `--dart-define=SHOT=<screen>` to boot straight
@@ -50,8 +50,8 @@ const String _shot = String.fromEnvironment('SHOT');
 /// iOS-first: CupertinoApp navigation, Cupertino sheet/alert patterns and the
 /// system (SF Pro) text theme. Android still runs — it just renders the same
 /// Cupertino widgets.
-class PetCareApp extends StatefulWidget {
-  const PetCareApp({super.key, required this.store, this.skipSplash = false});
+class CarePawsApp extends StatefulWidget {
+  const CarePawsApp({super.key, required this.store, this.skipSplash = false});
 
   final AppStore store;
 
@@ -59,10 +59,10 @@ class PetCareApp extends StatefulWidget {
   final bool skipSplash;
 
   @override
-  State<PetCareApp> createState() => _PetCareAppState();
+  State<CarePawsApp> createState() => _CarePawsAppState();
 }
 
-class _PetCareAppState extends State<PetCareApp> with WidgetsBindingObserver {
+class _CarePawsAppState extends State<CarePawsApp> with WidgetsBindingObserver {
   final _navKey = GlobalKey<NavigatorState>();
 
   @override
@@ -77,7 +77,7 @@ class _PetCareAppState extends State<PetCareApp> with WidgetsBindingObserver {
   }
 
   @override
-  void didUpdateWidget(PetCareApp oldWidget) {
+  void didUpdateWidget(CarePawsApp oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (identical(oldWidget.store, widget.store)) return;
     oldWidget.store.removeListener(_onStoreChanged);
@@ -131,7 +131,7 @@ class _PetCareAppState extends State<PetCareApp> with WidgetsBindingObserver {
       store: widget.store,
       child: CupertinoApp(
         navigatorKey: _navKey,
-        title: 'PetCare',
+        title: 'CarePaws',
         debugShowCheckedModeBanner: false,
         theme: themeFor(_palette),
         builder: (context, child) {
