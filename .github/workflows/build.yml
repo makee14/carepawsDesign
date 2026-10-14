@@ -1,0 +1,87 @@
+# Builds an installable release APK and an unsigned IPA on every push to main.
+# The Android APK is a release build signed with the debug key when no release
+# keystore is configured (installable for testing; see build.gradle.kts).
+# The APK is committed back to releases/ so it lives in the repo.
+# The iOS IPA is unsigned — sideload it with Sideloadly (see IOS_TESTING.md);
+# Sideloadly signs it with the installer's Apple ID at install time.
+
+name: build
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  android-apk:
+    name: Android APK (release)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Flutter 3.47.7
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.47.7"
+          channel: stable
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Analyze
+        run: flutter analyze
+
+      - name: Test
+        run: flutter test
+
+      - name: Build release APK
+        run: flutter build apk --release --no-tree-shake-icons
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: carepaws-release-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
+
+      - name: Commit APK to releases/
+        run: |
+          mkdir -p releases
+          cp build/app/outputs/flutter-apk/app-release.apk releases/carepaws-release.apk
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add releases/carepaws-release.apk
+          git diff --staged --quiet || git commit -m "CI: release APK build [skip ci]"
+          git push
+
+  ios-ipa:
+    name: iOS IPA (unsigned)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Flutter 3.47.7
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.47.7"
+          channel: stable
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build unsigned IPA
+        run: flutter build ipa --no-codesign
+
+      - name: Upload unsigned IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: carepaws-unsigned-ipa
+          path: build/ios/ipa/*.ipa
