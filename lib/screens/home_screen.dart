@@ -1,6 +1,3 @@
-import 'dart:async';
-import 'dart:math' as math;
-
 import 'package:flutter/cupertino.dart';
 
 import '../app.dart';
@@ -87,7 +84,14 @@ class HomeScreen extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: T.s16),
-                FadeIn(index: 0, child: _NextAppointmentHero(store: store)),
+                SectionHeader(
+                  title: 'Next appointment',
+                  icon: Ic.calendar,
+                  padding: const EdgeInsets.fromLTRB(0, 0, 0, T.s8),
+                  actionLabel: 'View all',
+                  onAction: () => switchTab(context, 2),
+                ),
+                FadeIn(index: 0, child: _NextAppointmentCard(store: store)),
                 const SizedBox(height: T.s24),
                 FadeIn(index: 1, child: _QuickActions(store: store)),
                 const SizedBox(height: T.s8),
@@ -137,376 +141,49 @@ class HomeScreen extends StatelessWidget {
   }
 }
 
-/// Hero carousel: one page per upcoming appointment (the next five), paging
-/// itself every five seconds. Zero appointments keeps the empty state; a
-/// single appointment renders with no paging chrome and no timer.
-class _NextAppointmentHero extends StatefulWidget {
-  const _NextAppointmentHero({required this.store});
+/// Compact next-appointment card: the same row the Profile tab uses — pet
+/// icon, title, date line and status chips — with no hero art and no paging.
+/// Tapping opens the appointment detail (or the booking flow when empty);
+/// the Appointments tab owns the full upcoming list.
+class _NextAppointmentCard extends StatelessWidget {
+  const _NextAppointmentCard({required this.store});
   final AppStore store;
 
-  @override
-  State<_NextAppointmentHero> createState() => _NextAppointmentHeroState();
-}
-
-class _NextAppointmentHeroState extends State<_NextAppointmentHero> {
-  /// Paging beyond five turns the hero into a slideshow; the seed ships two.
-  static const _maxPages = 5;
-
-  /// Auto-advance cadence. Long enough to read the card, short enough to feel
-  /// alive.
-  static const _autoAdvance = Duration(seconds: 5);
-
-  /// Idle time after the user's finger leaves before auto-advance resumes.
-  static const _resumeDelay = Duration(milliseconds: 2500);
-
-  late final PageController _pages = PageController();
-  Timer? _auto;
-  Timer? _resume;
-  bool _holding = false;
-  int _page = 0;
-  int _count = -1;
-
-  List<Appointment> get _visible =>
-      widget.store.upcomingAppointments.take(_maxPages).toList();
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    _reconcile();
-  }
-
-  @override
-  void didUpdateWidget(covariant _NextAppointmentHero oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    _reconcile();
-  }
-
-  /// Keeps the controller, the dot state and the timer consistent when the
-  /// appointment list changes under the carousel — a booking, a cancellation,
-  /// or the clock tick dropping a finished visit.
-  void _reconcile() {
-    final count = _visible.length;
-    if (count != _count) {
-      _count = count;
-      if (_page >= count) {
-        _page = count <= 0 ? 0 : count - 1;
-        if (_pages.hasClients) _pages.jumpToPage(_page);
-      }
-    }
-    _syncTimer();
-  }
-
-  /// (Re)starts the auto-advance timer exactly when it should run: more than
-  /// one page, motion allowed, the home route on top and tickers enabled, and
-  /// no finger down. With Reduce Motion there is no timer at all — pages still
-  /// change on swipe, instantly, with no animation.
-  void _syncTimer() {
-    _auto?.cancel();
-    _auto = null;
-    if (!mounted || _holding || _visible.length < 2) return;
-    if (reduceMotionOf(context)) return;
-    if (!TickerMode.valuesOf(context).enabled) return;
-    if (ModalRoute.of(context)?.isCurrent == false) return;
-    _auto = Timer.periodic(_autoAdvance, (_) => _advance());
-  }
-
-  void _advance() {
-    if (!mounted || !_pages.hasClients) return;
-    final count = _visible.length;
-    if (count < 2) return;
-    final current = (_pages.page ?? _page.toDouble()).round() % count;
-    _pages.animateToPage(
-      (current + 1) % count,
-      duration: Motion.base,
-      curve: Motion.enter,
-    );
-  }
-
-  void _pause() {
-    _holding = true;
-    _auto?.cancel();
-    _auto = null;
-    _resume?.cancel();
-    _resume = null;
-  }
-
-  void _scheduleResume() {
-    _holding = false;
-    _resume?.cancel();
-    _resume = Timer(_resumeDelay, () {
-      if (mounted) _syncTimer();
-    });
-  }
-
-  @override
-  void dispose() {
-    _auto?.cancel();
-    _resume?.cancel();
-    _pages.dispose();
-    super.dispose();
-  }
-
-  /// Fixed card height, derived from the type ramp at the current text scaler:
-  /// the headline always reserves two lines, so paging never moves the content
-  /// below the carousel. At AX5 the slot grows with the scaler instead of
-  /// clipping; a few points of slack absorb sub-pixel line-height drift.
-  double _cardHeight(AppPalette p) {
-    final scaler = MediaQuery.textScalerOf(context).scale(1);
-    double line(TextStyle s) => s.fontSize! * (s.height ?? 1.0) * scaler;
-    final row = math.max(
-      44.0,
-      line(Type.headline(p)) * 2 + 4 + line(Type.footnote(p)),
-    );
-    final chips = math.max(line(Type.caption(p)), 11.0) + 8;
-    const gap = 12.0;
-    return T.s16 * 2 + row + gap + chips + 6;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final p = context.p;
-    final pages = _visible;
-
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        // Tall portrait card, about 3:4, nearly full screen width. The hero
-        // art takes the upper ~60%; the info panel floats fully inside the
-        // card below it, inset from every edge.
-        final cardW = constraints.maxWidth;
-        final heroH = cardW * 0.80;
-        final panelH = _cardHeight(p);
-        final pageH = heroH + 16 + panelH + 18;
-
-        Widget page(Appointment? a, int index) => _HeroPage(
-          store: widget.store,
-          a: a,
-          index: index,
-          count: pages.length,
-          pageHeight: pageH,
-          heroHeight: heroH,
-          panelHeight: panelH,
-        );
-
-        if (pages.length < 2) {
-          // Zero keeps the empty state; one renders with no paging chrome.
-          return page(pages.isEmpty ? null : pages.single, 0);
-        }
-
-        return Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            SizedBox(
-              height: pageH,
-              child: Listener(
-                onPointerDown: (_) => _pause(),
-                onPointerUp: (_) => _scheduleResume(),
-                onPointerCancel: (_) => _scheduleResume(),
-                child: PageView.builder(
-                  controller: _pages,
-                  itemCount: pages.length,
-                  onPageChanged: (i) => setState(() => _page = i),
-                  itemBuilder: (context, i) => page(pages[i], i),
-                ),
-              ),
-            ),
-            _Dots(count: pages.length, active: _page),
-          ],
-        );
-      },
-    );
-  }
-}
-
-/// One carousel page: a tall portrait card (~3:4). The upper ~60% is open
-/// hero space for the pet art; the lower third holds a smaller info panel
-/// that floats fully inside the card — inset from the left, right and bottom
-/// edges, about 75% of the card's width.
-///
-/// Structural, never overflow: the Column lays out in normal flow (hero art,
-/// then the panel with its margins) and the page box is sized from the same
-/// numbers, so the panel is always fully inside the page box and no ancestor
-/// can clip it.
-class _HeroPage extends StatelessWidget {
-  const _HeroPage({
-    required this.store,
-    required this.a,
-    required this.index,
-    required this.count,
-    required this.pageHeight,
-    required this.heroHeight,
-    required this.panelHeight,
-  });
-
-  final AppStore store;
-  final Appointment? a;
-  final int index;
-  final int count;
-  final double pageHeight;
-  final double heroHeight;
-  final double panelHeight;
-
-  void _open(BuildContext context) {
+  void _open(BuildContext context, Appointment? a) {
     if (a == null) {
       Navigator.of(context).push(appRoute(const BookLandingScreen()));
     } else {
       Navigator.of(context)
-          .push(appRoute(AppointmentDetailScreen(appointmentId: a!.id)));
+          .push(appRoute(AppointmentDetailScreen(appointmentId: a.id)));
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final p = context.p;
-    final appt = a;
-    final service = appt == null ? null : store.serviceOf(appt.serviceId);
-    final pet = appt == null ? null : store.pet(appt.petId);
-    final staff = appt == null ? null : store.staffOf(appt.staffId);
+    final a = store.nextAppointment;
+    final pet = a == null ? null : store.pet(a.petId);
+    final service = a == null ? null : store.serviceOf(a.serviceId);
+    final staff = a == null ? null : store.staffOf(a.staffId);
 
-    final label = (appt == null || pet == null)
+    final label = (a == null || pet == null)
         ? 'No upcoming appointment. Book an appointment'
-        : count > 1
-        ? 'Upcoming appointment ${index + 1} of $count. ${pet.name}, ${service!.name}, '
-              '${mediumDate(appt.start)}, with ${staff!.name}. ${appt.status.label}'
         : 'Next appointment. ${pet.name}, ${service!.name}, '
-              '${mediumDate(appt.start)}, with ${staff!.name}. ${appt.status.label}';
+              '${mediumDate(a.start)}, with ${staff!.name}. ${a.status.label}';
 
-    final card = ClipRRect(
-      borderRadius: BorderRadius.circular(28),
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              T.amber.withValues(alpha: p.isDark ? 0.30 : 0.42),
-              p.surface,
-            ],
-          ),
-        ),
-        child: Column(
-          children: [
-            // Hero: the upper ~60% is open space for the pet art.
-            SizedBox(
-              height: heroHeight,
-              width: double.infinity,
-              child: Stack(
-                children: [
-                  Positioned.fill(
-                    child: pet == null
-                        ? PetArt(seed: 1, iconSize: heroHeight * 0.52)
-                        : PetAvatar(
-                            pet: pet,
-                            iconSize: heroHeight * 0.52,
-                            label: '${pet.name} portrait',
-                          ),
-                  ),
-                  Positioned(
-                    left: T.s16,
-                    top: T.s16,
-                    child: StatusChip(
-                      label: appt == null
-                          ? 'No bookings yet'
-                          : 'Next appointment',
-                      icon: Ic.calendar,
-                      fg: T.espresso,
-                      bg: T.cream.withValues(alpha: 0.9),
-                    ),
-                  ),
-                ],
-              ),
+    return GlassCard(
+      border: p.isDark ? const Color(0x33FFFFFF) : const Color(0x8CFFFFFF),
+      onTap: () => _open(context, a),
+      semanticLabel: label,
+      child: a == null || pet == null
+          ? _EmptyHeroBody(pet: pet)
+          : _HeroBody(
+              store: store,
+              a: a,
+              pet: pet,
+              service: service!,
+              staffName: staff!.name,
             ),
-            // Info panel: floats fully inside the card — inset from the left,
-            // right and bottom edges, about 75% of the card's width.
-            // Appointment pages share one fixed panel height so paging never
-            // jumps. The empty body bounds its text (maxLines) so it always
-            // fits the same fixed height, even with the wide golden font or
-            // large Dynamic Type.
-            Padding(
-              padding: const EdgeInsets.fromLTRB(0, 16, 0, 18),
-              child: FractionallySizedBox(
-                widthFactor: 0.75,
-                child: appt == null || pet == null
-                    ? SizedBox(
-                        height: panelHeight,
-                        child: Center(
-                          child: GlassCard(
-                            border: p.isDark
-                                ? const Color(0x33FFFFFF)
-                                : const Color(0x8CFFFFFF),
-                            child: _EmptyHeroBody(pet: pet),
-                          ),
-                        ),
-                      )
-                    : GlassCard(
-                        border: p.isDark
-                            ? const Color(0x33FFFFFF)
-                            : const Color(0x8CFFFFFF),
-                        height: panelHeight,
-                        child: _HeroBody(
-                          store: store,
-                          a: appt,
-                          pet: pet,
-                          service: service!,
-                          staffName: staff!.name,
-                          compact: Layout.needsTallLayout(context),
-                        ),
-                      ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-
-    return Semantics(
-      button: true,
-      label: label,
-      child: ExcludeSemantics(
-        child: PressScale(
-          scale: 0.99,
-          onTap: () => _open(context),
-          child: SizedBox(height: pageHeight, child: card),
-        ),
-      ),
-    );
-  }
-}
-
-/// Page indicators. Decorative — the position is also announced in each page's
-/// semantics label — so they stay out of the accessibility tree.
-class _Dots extends StatelessWidget {
-  const _Dots({required this.count, required this.active});
-
-  final int count;
-  final int active;
-
-  @override
-  Widget build(BuildContext context) {
-    final reduce = reduceMotionOf(context);
-    return Padding(
-      padding: const EdgeInsets.only(top: 10),
-      child: ExcludeSemantics(
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            for (var i = 0; i < count; i++) ...[
-              if (i > 0) const SizedBox(width: 6),
-              AnimatedContainer(
-                duration: reduce ? Duration.zero : Motion.fast,
-                curve: Motion.enter,
-                width: i == active ? 18 : 6,
-                height: 6,
-                decoration: BoxDecoration(
-                  color: i == active
-                      ? T.terracotta
-                      : T.taupe.withValues(alpha: 0.45),
-                  borderRadius: BorderRadius.circular(T.rPill),
-                ),
-              ),
-            ],
-          ],
-        ),
-      ),
     );
   }
 }
@@ -518,7 +195,6 @@ class _HeroBody extends StatelessWidget {
     required this.pet,
     required this.service,
     required this.staffName,
-    required this.compact,
   });
 
   final AppStore store;
@@ -526,14 +202,13 @@ class _HeroBody extends StatelessWidget {
   final Pet pet;
   final Service service;
   final String staffName;
-  final bool compact;
 
   @override
   Widget build(BuildContext context) {
     final p = context.p;
-    // Lives inside the carousel's fixed-height glass card, so it fills the
-    // card and centers its content: one-line headlines get even breathing room
-    // instead of a taller-looking card than their two-line siblings.
+    // Natural height inside the compact card: one-line headlines get even
+    // breathing room instead of a taller-looking card than their two-line
+    // siblings, and large Dynamic Type grows the card instead of clipping.
     return Column(
       mainAxisSize: MainAxisSize.max,
       mainAxisAlignment: MainAxisAlignment.center,
@@ -630,7 +305,7 @@ class _EmptyHeroBody extends StatelessWidget {
   Widget build(BuildContext context) {
     final p = context.p;
     // Bounded line counts: the golden block font (and large Dynamic Type)
-    // wraps aggressively, so unbounded text overflowed the fixed panel.
+    // wraps aggressively, so unbounded text would push the card around.
     return Row(
       children: [
         Expanded(
@@ -1076,7 +751,7 @@ class _ClinicCard extends StatelessWidget {
                       compact: true,
                       fg: open ? p.success : p.warning,
                       bg: open
-                          ? const Color(0xFFDDF2E3)
+                          ? p.success.withValues(alpha: 0.14)
                           : T.amber.withValues(alpha: 0.28),
                     ),
                   ],

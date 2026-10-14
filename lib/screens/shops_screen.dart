@@ -163,8 +163,8 @@ class _ShopsScreenState extends State<ShopsScreen> {
               sliver: SliverGrid(
                 gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                   crossAxisCount: MediaQuery.sizeOf(context).width > 620 ? 3 : 2,
-                  mainAxisSpacing: 14,
-                  crossAxisSpacing: 14,
+                  mainAxisSpacing: 16,
+                  crossAxisSpacing: 16,
                   childAspectRatio: 0.62,
                 ),
                 delegate: SliverChildBuilderDelegate(
@@ -240,7 +240,7 @@ class ProductCard extends StatelessWidget {
     // The card is a link to the detail screen; the "Add" control is a separate
     // sibling button so VoiceOver still reaches it (no nested exclusion).
     return SoftCard(
-      padding: const EdgeInsets.all(10),
+      padding: const EdgeInsets.all(12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -301,19 +301,19 @@ class ProductCard extends StatelessWidget {
               ),
             ),
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 8),
           Flexible(
             child: Text(
               product.name,
-              style: Type.footnoteEmph(p),
-              maxLines: 3,
+              style: Type.headline(p),
+              maxLines: 2,
               overflow: TextOverflow.ellipsis,
             ),
           ),
           const SizedBox(height: 4),
           Text(
             product.tagline,
-            style: Type.caption(p),
+            style: Type.footnote(p).copyWith(color: p.textSecondary),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
@@ -321,21 +321,13 @@ class ProductCard extends StatelessWidget {
           Row(
             children: [
               Expanded(
-                child: Semantics(
-                  button: true,
-                  label: 'Open ${product.name} details',
-                  child: ExcludeSemantics(
-                    child: PressScale(
-                      scale: 0.98,
-                      onTap: () => Navigator.of(context).push(
-                        appRoute(ProductDetailScreen(productId: product.id)),
-                      ),
-                      child: Text(
-                        peso(product.price),
-                        style: Type.headline(p).copyWith(color: p.accentText),
-                      ),
-                    ),
-                  ),
+                child: Text(
+                  peso(product.price),
+                  style: Type.headline(p).copyWith(color: p.accentText),
+                  // One line, always: at large Dynamic Type the price must
+                  // ellipsize instead of wrapping and pushing the card taller.
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
               _MiniAdd(product: product),
@@ -364,17 +356,17 @@ class _MiniAdd extends StatelessWidget {
         child: PressScale(
           onTap: () => addToCartWithFeedback(context, product),
           child: Container(
-            width: 34,
-            height: 34,
+            width: 44,
+            height: 44,
             decoration: BoxDecoration(
               color: product.inStock ? p.primaryFill : p.fieldBg,
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(12),
             ),
             child: Center(
               child: Ic.svg(
                 product.inStock ? Ic.plus : Ic.bell,
                 color: product.inStock ? p.onPrimaryFill : p.textSecondary,
-                size: 17,
+                size: 20,
                 stroke: 2.3,
               ),
             ),

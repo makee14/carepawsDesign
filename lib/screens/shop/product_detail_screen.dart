@@ -28,7 +28,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     final p = context.p;
     final product = store.productOf(widget.productId);
     final hasRx = store.hasPrescription(product.id);
-    final heroH = Layout.heroHeight(context, 220);
+    final heroH = Layout.heroHeight(context, 180);
 
     return CupertinoPageScaffold(
       backgroundColor: p.background,
@@ -114,8 +114,13 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                           fg: product.inStock
                                               ? p.success
                                               : p.destructive,
+                                          // Theme-aware tint of the palette's
+                                          // success colour: 6.37:1 light and
+                                          // 7.24:1 dark (script-measured),
+                                          // where the old hardcoded #DDF2E3
+                                          // was 1.48:1 in dark mode.
                                           bg: product.inStock
-                                              ? const Color(0xFFDDF2E3)
+                                              ? p.success.withValues(alpha: 0.14)
                                               : const Color(0x1FDC2626),
                                         ),
                                       ],
@@ -130,6 +135,15 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                     ],
                   ),
                   const SizedBox(height: T.s16),
+                  // Thumbnail strip sits directly under the hero, not buried
+                  // below the description.
+                  Text('Gallery', style: Type.headline(p)),
+                  const SizedBox(height: 8),
+                  GalleryRow(
+                    count: product.gallery.isEmpty ? 4 : product.gallery.length,
+                    onTap: () => _gallery(context, product),
+                  ),
+                  const SizedBox(height: T.s20),
                   Text('About this product', style: Type.headline(p)),
                   const SizedBox(height: 8),
                   Text(product.description, style: Type.body(p)),
@@ -165,13 +179,6 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                       ),
                     ),
                   ],
-                  const SizedBox(height: T.s20),
-                  Text('Gallery', style: Type.headline(p)),
-                  const SizedBox(height: 10),
-                  GalleryRow(
-                    count: product.gallery.isEmpty ? 4 : product.gallery.length,
-                    onTap: () => _gallery(context, product),
-                  ),
                   const SizedBox(height: T.s20),
                   Text('Quantity', style: Type.headline(p)),
                   const SizedBox(height: 10),

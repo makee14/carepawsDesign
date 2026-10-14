@@ -331,9 +331,8 @@ void main() {
       await pumpShell(tester);
       expect(find.textContaining('Good morning'), findsOneWidget);
       expect(find.text('My Pets'), findsOneWidget);
-      // The structural hero now sizes itself in flow (taller than the old
-      // overflow-based one), so the reminders section starts just below the
-      // initial build window — reveal it like a user would.
+      // The compact next-appointment card still leaves the reminders section
+      // below the initial build window — reveal it like a user would.
       await scrollTo(tester, 'Care reminders');
       expect(find.text('Care reminders'), findsOneWidget);
       await scrollTo(tester, 'Clinic info');
@@ -357,12 +356,11 @@ void main() {
   });
 
   group('Home', () {
-    testWidgets('shows the next appointment hero with a live countdown', (
+    testWidgets('shows the next appointment card with a live countdown', (
       tester,
     ) async {
       await pumpShell(tester);
-      // The carousel builds pages lazily: only the visible page is in the
-      // tree, so its "Next appointment" chip appears once.
+      // One compact card: the section header names it, the chip counts down.
       expect(find.text('Next appointment'), findsOneWidget);
       expect(find.text('in 3d'), findsWidgets);
       expect(find.textContaining('Biscuit'), findsWidgets);
@@ -370,7 +368,7 @@ void main() {
 
     testWidgets('shows both sample pets', (tester) async {
       await pumpShell(tester);
-      // The taller hero can leave the pet row just below the fold.
+      // The pet row can sit just below the fold.
       await scrollToText(tester, 'Biscuit');
       expect(find.text('Biscuit'), findsWidgets);
       expect(find.text('Mochi'), findsWidgets);
@@ -395,8 +393,8 @@ void main() {
 
       // Find the medications switch and turn it on.
       await scrollToText(tester, 'Care reminders');
-      // The taller carousel hero can leave the switches just below the fold;
-      // find them offstage and let ensureVisible do the scrolling.
+      // The switches can sit just below the fold; find them offstage and let
+      // ensureVisible do the scrolling.
       final sw = find.byType(CupertinoSwitch, skipOffstage: false).first;
       await tester.ensureVisible(sw);
       await tester.pumpAndSettle();
@@ -419,8 +417,8 @@ void main() {
       await pumpShell(tester, store: store);
 
       await scrollToText(tester, 'Care reminders');
-      // The taller carousel hero can leave the switches just below the fold;
-      // find them offstage and let ensureVisible do the scrolling.
+      // The switches can sit just below the fold; find them offstage and let
+      // ensureVisible do the scrolling.
       final noff = find.byType(CupertinoSwitch, skipOffstage: false);
       await tester.ensureVisible(noff.first);
       await tester.pumpAndSettle();
@@ -445,78 +443,15 @@ void main() {
     });
   });
 
-  group('Home appointment carousel', () {
-    /// Current carousel page, read off the PageView the hero owns.
-    int carouselPage(WidgetTester tester) =>
-        (tester.widget<PageView>(find.byType(PageView)).controller?.page ?? 0)
-            .round();
-
-    testWidgets('auto-advances every 5 seconds and wraps around', (
-      tester,
-    ) async {
-      await pumpShell(tester);
-      expect(find.byType(PageView), findsOneWidget);
-      expect(carouselPage(tester), 0);
-
-      await tester.pump(const Duration(seconds: 5));
-      await tester.pumpAndSettle();
-      expect(carouselPage(tester), 1);
-
-      await tester.pump(const Duration(seconds: 5));
-      await tester.pumpAndSettle();
-      expect(carouselPage(tester), 0);
-    });
-
-    testWidgets('pauses while touched and resumes after idle', (tester) async {
-      await pumpShell(tester);
-      final gesture = await tester.startGesture(
-        tester.getCenter(find.byType(PageView)),
-      );
-      // A small drag breaks the tap (no accidental push) without paging.
-      await gesture.moveBy(const Offset(0, 30));
-      await tester.pump(const Duration(seconds: 6));
-      await tester.pumpAndSettle();
-      // The 5s auto-advance was suppressed for the whole hold.
-      expect(carouselPage(tester), 0);
-
-      await gesture.up();
-      // Resume is idle-gated: 2.5s of quiet, then the 5s cadence restarts.
-      await tester.pump(const Duration(milliseconds: 2500));
-      await tester.pump(const Duration(seconds: 5));
-      await tester.pumpAndSettle();
-      expect(carouselPage(tester), 1);
-      expect(tester.takeException(), isNull);
-    });
-
-    testWidgets('reduced motion disables auto-advance but keeps paging', (
-      tester,
-    ) async {
-      await pumpShell(tester, reduceMotion: true);
-      expect(find.byType(PageView), findsOneWidget);
-
-      await tester.pump(const Duration(seconds: 11));
-      await tester.pumpAndSettle();
-      // No auto-advance timer at all under Reduce Motion.
-      expect(carouselPage(tester), 0);
-
-      // A manual swipe still pages — instantly, with no animation.
-      await tester.drag(find.byType(PageView), const Offset(-400, 0));
-      await tester.pumpAndSettle();
-      expect(carouselPage(tester), 1);
-      expect(tester.takeException(), isNull);
-    });
-
-    testWidgets('a single appointment shows no paging chrome and no timer', (
+  group('Home next-appointment card', () {
+    testWidgets('a single appointment shows one compact card, no paging', (
       tester,
     ) async {
       final s = AppStore(now: fixedNow())..cancelAppointment('a2');
       await pumpShell(tester, store: s);
       expect(find.byType(PageView), findsNothing);
       expect(find.text('Next appointment'), findsOneWidget);
-
-      await tester.pump(const Duration(seconds: 11));
-      await tester.pumpAndSettle();
-      expect(find.byType(PageView), findsNothing);
+      expect(find.text('Biscuit \u00b7 Vet Consultation'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
 
@@ -526,11 +461,19 @@ void main() {
         ..cancelAppointment('a2');
       await pumpShell(tester, store: s);
       expect(find.text('Nothing booked yet'), findsOneWidget);
-      expect(find.byType(PageView), findsNothing);
 
       await tester.tap(find.text('Book').first);
       await tester.pumpAndSettle();
       expect(find.text('Choose a service to get started'), findsOneWidget);
+    });
+
+    testWidgets('tapping the card opens that appointment', (tester) async {
+      await pumpShell(tester);
+      await tester.tap(find.text('Biscuit \u00b7 Vet Consultation'));
+      await tester.pumpAndSettle();
+      // Appointment detail for a1 (Biscuit's consultation) is on top.
+      expect(find.text('Vet Consultation'), findsWidgets);
+      expect(tester.takeException(), isNull);
     });
 
     testWidgets('countdown updates as the store clock advances', (
@@ -545,39 +488,6 @@ void main() {
       await tester.pump();
       expect(find.text('in 57m'), findsWidgets);
       expect(find.text('in 59m'), findsNothing);
-    });
-
-    testWidgets('both pages share one fixed card height at AX5', (
-      tester,
-    ) async {
-      await pumpShell(tester, textScale: 1.6);
-      // Pages build lazily, so measure each card while its page is current.
-      Finder cardFinder() => find.descendant(
-        of: find.byType(PageView),
-        matching: find.byType(GlassCard),
-      );
-      expect(cardFinder(), findsOneWidget);
-      final h0 = tester.getSize(cardFinder()).height;
-
-      await tester.drag(find.byType(PageView), const Offset(-400, 0));
-      await tester.pumpAndSettle();
-      expect(cardFinder(), findsOneWidget);
-      final h1 = tester.getSize(cardFinder()).height;
-
-      // Identical heights: paging never moves the content below the carousel.
-      expect(h1, h0);
-      expect(tester.takeException(), isNull);
-    });
-
-    testWidgets('tapping a page opens that appointment', (tester) async {
-      await pumpShell(tester);
-      await tester.drag(find.byType(PageView), const Offset(-400, 0));
-      await tester.pumpAndSettle();
-      expect(carouselPage(tester), 1);
-      await tester.tap(find.text('Mochi · Full Grooming'));
-      await tester.pumpAndSettle();
-      // Appointment detail for a2 (Mochi's grooming) is on top.
-      expect(find.text('Full Grooming'), findsWidgets);
     });
   });
 
