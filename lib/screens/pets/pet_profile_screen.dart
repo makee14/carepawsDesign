@@ -157,7 +157,15 @@ class _PetProfileScreenState extends State<PetProfileScreen> {
                                     ],
                                   ),
                                   const SizedBox(height: 10),
-                                  _VitalsInline(pet: pet),
+                                  // The hero strip keeps weight only: temperature
+                                  // and heart rate duplicate the Vitals section
+                                  // below, and weight is dropped from the stat
+                                  // strip further down so it is not shown twice.
+                                  _VitalsInline(
+                                    vitals: pet.vitals
+                                        .where((v) => v.icon == 'scale')
+                                        .toList(),
+                                  ),
                                 ],
                               ),
                             ),
@@ -171,7 +179,6 @@ class _PetProfileScreenState extends State<PetProfileScreen> {
                   // Stat strip
                   StatStrip(
                     stats: [
-                      (Ic.scale, '${pet.weightKg} kg', 'Weight'),
                       (
                         Ic.paw,
                         pet.species == Species.dog ? 'Dog' : 'Cat',
@@ -393,13 +400,13 @@ class _PetProfileScreenState extends State<PetProfileScreen> {
 }
 
 class _VitalsInline extends StatelessWidget {
-  const _VitalsInline({required this.pet});
-  final Pet pet;
+  const _VitalsInline({required this.vitals});
+  final List<Vital> vitals;
 
   @override
   Widget build(BuildContext context) {
     final p = context.p;
-    final shown = pet.vitals.take(3).toList();
+    final shown = vitals;
     return Row(
       children: [
         for (var i = 0; i < shown.length; i++) ...[

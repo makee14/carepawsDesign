@@ -12,6 +12,7 @@ import '../services/ai_service.dart';
 import '../services/auth_store.dart';
 import '../services/photo_store.dart';
 import '../services/settings_store.dart';
+import 'profile_store.dart';
 
 /// Single source of truth for the whole app. A lightweight ChangeNotifier is
 /// enough here — the prototype has no need for a heavier state package.
@@ -99,11 +100,78 @@ class AppStore extends ChangeNotifier {
     notifyListeners();
   }
 
-  // ------------------------------------------------------------- accessors
-  /// Display name: the registered account's name when signed in with one,
-  /// otherwise the seeded owner name (demo account).
-  String get ownerName => accountName ?? Seed.ownerName;
+  // ------------------------------------------------------- owner profile
+  /// Display name: the name saved on Edit profile when signed in with an
+  /// account, otherwise the registered account's name, otherwise the seeded
+  /// owner name (demo account).
+  String get ownerName => _profileName ?? accountName ?? Seed.ownerName;
 
+  /// Phone number saved on Edit profile. Empty until the owner saves one —
+  /// the old build showed a hardcoded seed contact here instead.
+  String get ownerPhone => _profilePhone;
+
+  /// Email of the signed-in account, normalized to lowercase. Empty when
+  /// signed out.
+  String get ownerEmail => accountEmail ?? '';
+
+  String? _profileName;
+  String _profilePhone = '';
+
+  /// Loads the saved name/phone for the signed-in account. Called after a
+  /// successful sign-in; without it, edits from a previous session would
+  /// silently revert to the registration/seed values.
+  Future<void> _loadOwnerProfile() async {
+    final email = accountEmail;
+    if (email == null) {
+      _profileName = null;
+      _profilePhone = '';
+      return;
+    }
+    final saved = await ProfileStore.read(email);
+    _profileName = saved.name.isEmpty ? null : saved.name;
+    _profilePhone = saved.phone;
+  }
+
+  /// Validates and saves the editable profile. Returns null on success, or a
+  /// map of field → message for inline errors. The email is the account key
+  /// and is never edited here.
+  Future<Map<ProfileField, String>?> saveOwnerProfile({
+    required String name,
+    required String phone,
+  }) async {
+    final errors = <ProfileField, String>{};
+    final cleanName = name.trim();
+    if (cleanName.isEmpty) {
+      errors[ProfileField.name] = 'Please enter your name.';
+    }
+    final cleanPhone = phone.trim();
+    if (cleanPhone.isNotEmpty && !_looksLikePhone(cleanPhone)) {
+      errors[ProfileField.phone] = 'That phone number does not look right.';
+    }
+    if (errors.isNotEmpty) return errors;
+
+    _profileName = cleanName;
+    _profilePhone = cleanPhone;
+    final email = accountEmail;
+    if (email != null) {
+      await ProfileStore.write(
+        email: email,
+        name: cleanName,
+        phone: cleanPhone,
+      );
+    }
+    notifyListeners();
+    return null;
+  }
+
+  /// Lenient on purpose: international prefixes, spaces, dashes, parentheses
+  /// are all fine — the only requirement is at least 7 digits.
+  static bool _looksLikePhone(String s) {
+    if (!RegExp(r'^[+()\-. \d]+$').hasMatch(s)) return false;
+    return RegExp(r'\d').allMatches(s).length >= 7;
+  }
+
+  // ------------------------------------------------------------- accessors
   /// First name for conversational copy. Empty when the profile has no name —
   /// callers use a plain greeting instead of a hardcoded name.
   String get ownerFirstName {
@@ -116,10 +184,10 @@ class AppStore extends ChangeNotifier {
     return up.isEmpty ? null : up.first;
   }
 
-  /// Soonest first — the home carousel pages through these, and the
-  /// Appointments list and reminders rely on the same ordering. Visits whose
-  /// pet is no longer on the account are skipped, so removing a pet (or the
-  /// whole account) can never leave a dangling reference on screen.
+  /// Soonest first — the home appointment card and the Appointments list
+  /// rely on the same ordering. Visits whose pet is no longer on the account
+  /// are skipped, so removing a pet (or the whole account) can never leave
+  /// a dangling reference on screen.
   List<Appointment> get upcomingAppointments =>
       (appointments
             .where(
@@ -538,13 +606,15 @@ class AppStore extends ChangeNotifier {
       accountName = registeredName; // null for the demo account
       accountEmail = email.trim().toLowerCase();
       signInError = null;
+      await _loadOwnerProfile();
     } else {
       accountName = null;
       accountEmail = null;
+      _profileName = null;
+      _profilePhone = '';
       // One neutral message either way: naming which half was wrong would
       // confirm that the email exists on this device.
-      signInError =
-          'That email and password do not match. Check both and try again.';
+      signInError = "Email and password don't match. Try again.";
     }
     notifyListeners();
     return signedIn;
@@ -558,6 +628,8 @@ class AppStore extends ChangeNotifier {
     signingIn = false;
     accountName = null;
     accountEmail = null;
+    _profileName = null;
+    _profilePhone = '';
     notifyListeners();
   }
 

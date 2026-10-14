@@ -294,7 +294,8 @@ class ExportScreen extends StatelessWidget {
     final data = {
       'account': {
         'name': store.ownerName,
-        'contact': Seed.ownerContact,
+        'phone': store.ownerPhone,
+        'email': store.ownerEmail,
         'exported': isoDay(store.now),
       },
       'pets': [

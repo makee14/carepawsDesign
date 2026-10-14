@@ -43,7 +43,7 @@ class ProfileScreen extends StatelessWidget {
                       Navigator.of(context)
                           .push(appRoute(const EditProfileScreen())),
                   semanticLabel:
-                      '${store.ownerName}. ${Seed.ownerContact}. Tap to edit your profile',
+                      '${store.ownerName}. ${[store.ownerPhone, store.ownerEmail].where((s) => s.isNotEmpty).join(', ')}. Tap to edit your profile',
                   child: Row(
                     children: [
                       Container(
@@ -71,8 +71,18 @@ class ProfileScreen extends StatelessWidget {
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Text(store.ownerName, style: Type.title2(p)),
-                            const SizedBox(height: 3),
-                            Text(Seed.ownerContact, style: Type.footnote(p)),
+                            if (store.ownerPhone.isNotEmpty) ...[
+                              const SizedBox(height: 3),
+                              Text(store.ownerPhone, style: Type.footnote(p)),
+                            ],
+                            if (store.ownerEmail.isNotEmpty) ...[
+                              const SizedBox(height: 2),
+                              Text(
+                                store.ownerEmail,
+                                style: Type.footnote(p)
+                                    .copyWith(color: p.textSecondary),
+                              ),
+                            ],
                             const SizedBox(height: 6),
                             StatusChip(
                               label:

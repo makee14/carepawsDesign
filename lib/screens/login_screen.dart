@@ -33,8 +33,14 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _hidden = true;
   bool _registerMode = false;
 
-  /// Shown once after a successful registration, on the sign-in form.
-  String? _registeredNote;
+  /// Raw message from the last failed submit. Rendered as an inline
+  /// field-level error (red border + message under the field) instead of a
+  /// banner card; cleared the moment the user edits any field.
+  String? _formError;
+
+  /// Which register-mode field [_formError] belongs to. Null in sign-in mode,
+  /// where the neutral message implicates the email + password pair.
+  _LoginField? _errorField;
 
   @override
   void dispose() {
@@ -58,11 +64,18 @@ class _LoginScreenState extends State<LoginScreen> {
         setState(() {
           _registerMode = false;
           _password.clear();
-          _registeredNote =
-              'Account created for ${_email.text.trim()} — sign in with your new password.';
+          _formError = null;
+          _errorField = null;
         });
+        showToast(context, 'Account created — sign in with your new password.');
       } else {
         errorHaptic();
+        setState(() {
+          _formError = store.signInError;
+          _errorField = store.signInError == null
+              ? null
+              : _fieldForRegisterError(store.signInError!);
+        });
       }
       return;
     }
@@ -73,14 +86,37 @@ class _LoginScreenState extends State<LoginScreen> {
       widget.onSignedIn();
     } else {
       errorHaptic();
+      setState(() {
+        _formError = store.signInError;
+        _errorField = null; // the neutral message implicates the pair
+      });
     }
+  }
+
+  /// Maps an [AuthStore.register] failure onto the field it belongs to. The
+  /// messages are matched by content — they are AuthStore's own copy, whose
+  /// API (in services/) this screen cannot change.
+  _LoginField _fieldForRegisterError(String message) {
+    final m = message.toLowerCase();
+    if (m.contains('name')) return _LoginField.name;
+    if (m.contains('email')) return _LoginField.email;
+    return _LoginField.password;
+  }
+
+  void _clearError() {
+    if (_formError == null) return;
+    setState(() {
+      _formError = null;
+      _errorField = null;
+    });
   }
 
   void _switchMode(bool register) {
     if (_registerMode == register) return;
     setState(() {
       _registerMode = register;
-      _registeredNote = null;
+      _formError = null;
+      _errorField = null;
       // Clear any stale error when switching modes.
       AppScope.read(context).signInError = null;
     });
@@ -96,6 +132,28 @@ class _LoginScreenState extends State<LoginScreen> {
         _email.text.trim().isNotEmpty &&
         _password.text.isNotEmpty &&
         (!_registerMode || _name.text.trim().isNotEmpty);
+
+    // Split the last failure onto its field: in sign-in mode the neutral
+    // message implicates the pair (red border on both, text under password).
+    String? nameError, emailError, passwordError;
+    var emailInvalid = false, passwordInvalid = false;
+    if (_formError != null) {
+      if (_registerMode) {
+        switch (_errorField) {
+          case _LoginField.name:
+            nameError = _formError;
+          case _LoginField.email:
+            emailError = _formError;
+          case _LoginField.password:
+          case null:
+            passwordError = _formError;
+        }
+      } else {
+        emailInvalid = true;
+        passwordInvalid = true;
+        passwordError = _formError;
+      }
+    }
 
     return CupertinoPageScaffold(
       backgroundColor: p.background,
@@ -150,7 +208,11 @@ class _LoginScreenState extends State<LoginScreen> {
                       keyboardType: TextInputType.name,
                       textInputAction: TextInputAction.next,
                       enabled: !busy,
-                      onChanged: (_) => setState(() {}),
+                      errorText: nameError,
+                      onChanged: (_) {
+                        _clearError();
+                        setState(() {});
+                      },
                     ),
                     const SizedBox(height: 12),
                   ],
@@ -162,8 +224,13 @@ class _LoginScreenState extends State<LoginScreen> {
                     keyboardType: TextInputType.emailAddress,
                     textInputAction: TextInputAction.next,
                     enabled: !busy,
+                    errorText: emailError,
+                    invalid: emailInvalid,
                     onSubmitted: (_) => _passwordFocus.requestFocus(),
-                    onChanged: (_) => setState(() {}),
+                    onChanged: (_) {
+                      _clearError();
+                      setState(() {});
+                    },
                   ),
                   const SizedBox(height: 12),
                   _Field(
@@ -177,10 +244,15 @@ class _LoginScreenState extends State<LoginScreen> {
                     enabled: !busy,
                     focusNode: _passwordFocus,
                     textInputAction: TextInputAction.go,
+                    errorText: passwordError,
+                    invalid: passwordInvalid,
                     onSubmitted: (_) {
                       if (canSubmit) _submit();
                     },
-                    onChanged: (_) => setState(() {}),
+                    onChanged: (_) {
+                      _clearError();
+                      setState(() {});
+                    },
                     suffix: IconTap(
                       path: Ic.eye,
                       label: _hidden ? 'Show password' : 'Hide password',
@@ -188,14 +260,6 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ),
                   if (_registerMode) _PasswordRule(password: _password.text),
-                  if (_registeredNote != null && !_registerMode) ...[
-                    const SizedBox(height: 12),
-                    _InfoNote(text: _registeredNote!),
-                  ],
-                  if (store.signInError != null) ...[
-                    const SizedBox(height: 12),
-                    _ErrorNote(text: store.signInError!),
-                  ],
                   const SizedBox(height: T.s20),
                   PrimaryButton(
                     label: _registerMode ? 'Create account' : 'Sign in',
@@ -257,6 +321,8 @@ class _Field extends StatelessWidget {
     this.focusNode,
     this.suffix,
     this.enabled = true,
+    this.errorText,
+    this.invalid = false,
     this.onChanged,
     this.onSubmitted,
   });
@@ -271,12 +337,19 @@ class _Field extends StatelessWidget {
   final FocusNode? focusNode;
   final Widget? suffix;
   final bool enabled;
+
+  /// Concise message rendered under the field, with a red border.
+  final String? errorText;
+
+  /// Red border without a message (the message lives under a sibling field).
+  final bool invalid;
   final ValueChanged<String>? onChanged;
   final ValueChanged<String>? onSubmitted;
 
   @override
   Widget build(BuildContext context) {
     final p = context.p;
+    final hasError = invalid || errorText != null;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -311,13 +384,26 @@ class _Field extends StatelessWidget {
           decoration: BoxDecoration(
             color: p.surface,
             borderRadius: BorderRadius.circular(T.rCard),
-            border: Border.all(color: p.divider),
+            border: Border.all(
+              color: hasError ? p.destructive : p.divider,
+              width: hasError ? 1.5 : 1,
+            ),
           ),
         ),
+        if (errorText != null) ...[
+          const SizedBox(height: 6),
+          Text(
+            errorText!,
+            style: Type.footnote(p).copyWith(color: p.destructive),
+          ),
+        ],
       ],
     );
   }
 }
+
+/// Which register-mode field a failure message belongs to.
+enum _LoginField { name, email, password }
 
 /// Live password-rule checklist under the create-account password field:
 /// 8+ characters, a letter, a number. Each rule flips to a check the moment
@@ -366,64 +452,57 @@ class _PasswordRule extends StatelessWidget {
   }
 }
 
-/// Neutral confirmation note — green-tinted, never alarming.
-class _InfoNote extends StatelessWidget {
-  const _InfoNote({required this.text});
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    final p = context.p;
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: p.success.withValues(alpha: 0.10),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: p.success.withValues(alpha: 0.30)),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Ic.svg(Ic.checkCircle, color: p.success, size: 17),
-          const SizedBox(width: 9),
-          Expanded(
-            child: Text(
-              text,
-              style: Type.footnote(p).copyWith(color: p.success),
-            ),
-          ),
-        ],
-      ),
-    );
+/// Subtle transient confirmation — a small dark pill above the home indicator
+/// that dismisses itself. Used for success confirmations where a banner card
+/// would be too loud (account created, profile saved).
+void showToast(BuildContext context, String message) {
+  final overlay = Overlay.of(context);
+  late final OverlayEntry entry;
+  var dismissed = false;
+  void dismiss() {
+    if (dismissed) return;
+    dismissed = true;
+    entry.remove();
   }
+
+  entry = OverlayEntry(builder: (_) => _Toast(message: message));
+  overlay.insert(entry);
+  Future.delayed(const Duration(milliseconds: 2400), dismiss);
 }
 
-class _ErrorNote extends StatelessWidget {
-  const _ErrorNote({required this.text});
-  final String text;
+class _Toast extends StatelessWidget {
+  const _Toast({required this.message});
+  final String message;
 
   @override
   Widget build(BuildContext context) {
     final p = context.p;
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: p.destructive.withValues(alpha: 0.10),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: p.destructive.withValues(alpha: 0.30)),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Ic.svg(Ic.alert, color: p.destructive, size: 17),
-          const SizedBox(width: 9),
-          Expanded(
-            child: Text(
-              text,
-              style: Type.footnote(p).copyWith(color: p.destructive),
+    return Positioned(
+      left: 24,
+      right: 24,
+      bottom: MediaQuery.paddingOf(context).bottom + 28,
+      // Never blocks touches — it is purely informational and dismisses
+      // itself. No animation: with nothing moving there is no reduced-motion
+      // variant to honor.
+      child: IgnorePointer(
+        child: Center(
+          child: Semantics(
+            liveRegion: true,
+            label: message,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                color: T.espresso.withValues(alpha: 0.92),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Text(
+                message,
+                style: Type.footnote(p).copyWith(color: T.cream),
+                textAlign: TextAlign.center,
+              ),
             ),
           ),
-        ],
+        ),
       ),
     );
   }

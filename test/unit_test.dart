@@ -546,8 +546,7 @@ void main() {
     });
 
     test('sign-in failure is one neutral message either way', () async {
-      const neutral =
-          'That email and password do not match. Check both and try again.';
+      const neutral = "Email and password don't match. Try again.";
       final store = AppStore();
       addTearDown(store.dispose);
       // Unknown email and wrong password produce the identical message, so

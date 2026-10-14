@@ -3,12 +3,12 @@ import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../app.dart';
-import '../../data/seed.dart';
 import '../../design/icons.dart';
 import '../../design/theme.dart';
 import '../../design/tokens.dart';
 import '../../services/photo_store.dart';
 import '../../state/app_store.dart';
+import '../../state/profile_store.dart';
 import '../../widgets/common.dart';
 import '../onboarding_screen.dart';
 import 'privacy_screen.dart';
@@ -637,15 +637,19 @@ class _PhotoTextAction extends StatelessWidget {
 
 class _EditProfileScreenState extends State<EditProfileScreen> {
   late final TextEditingController _name;
-  late final TextEditingController _contact;
+  late final TextEditingController _phone;
+  late final TextEditingController _email;
   bool _picking = false;
+  bool _saving = false;
+  Map<ProfileField, String>? _errors;
 
   @override
   void initState() {
     super.initState();
     final store = AppScope.read(context);
     _name = TextEditingController(text: store.ownerName);
-    _contact = TextEditingController(text: Seed.ownerContact);
+    _phone = TextEditingController(text: store.ownerPhone);
+    _email = TextEditingController(text: store.ownerEmail);
   }
 
   Future<void> _pickPhoto() async {
@@ -660,10 +664,45 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     }
   }
 
+  /// The old build never wrote anything here — it showed a fake "Profile
+  /// saved." notice. This validates, persists per account, and refreshes the
+  /// store, so the Profile tab and every greeting pick up the new values.
+  Future<void> _save() async {
+    if (_saving) return;
+    final store = AppScope.read(context);
+    setState(() {
+      _saving = true;
+      _errors = null;
+    });
+    final errors = await store.saveOwnerProfile(
+      name: _name.text,
+      phone: _phone.text,
+    );
+    if (!mounted) return;
+    setState(() {
+      _saving = false;
+      _errors = errors;
+    });
+    if (errors == null) {
+      successHaptic();
+      // The toast lives on the ROOT overlay, not this tab's: it is app-level
+      // feedback and must outlive the pop below. (An entry inserted into the
+      // tab's own overlay never became visible once the route popped.)
+      showToastOnOverlay(
+        Overlay.of(context, rootOverlay: true),
+        'Profile saved.',
+      );
+      Navigator.of(context).pop();
+    } else {
+      errorHaptic();
+    }
+  }
+
   @override
   void dispose() {
     _name.dispose();
-    _contact.dispose();
+    _phone.dispose();
+    _email.dispose();
     super.dispose();
   }
 
@@ -734,12 +773,27 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                     label: 'Full name',
                     controller: _name,
                     icon: Ic.person,
+                    keyboardType: TextInputType.name,
+                    errorText: _errors?[ProfileField.name],
                   ),
                   const SizedBox(height: T.s16),
                   _Field(
-                    label: 'Contact',
-                    controller: _contact,
+                    label: 'Phone',
+                    controller: _phone,
+                    hint: '0917 000 0000',
                     icon: Ic.phone,
+                    keyboardType: TextInputType.phone,
+                    errorText: _errors?[ProfileField.phone],
+                  ),
+                  const SizedBox(height: T.s16),
+                  _Field(
+                    label: 'Email',
+                    controller: _email,
+                    icon: Ic.person,
+                    keyboardType: TextInputType.emailAddress,
+                    enabled: false,
+                    caption:
+                        'Your sign-in email. To change it, contact the clinic.',
                   ),
                   const SizedBox(height: T.s16),
                   SoftCard(
@@ -763,10 +817,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               child: PrimaryButton(
                 label: 'Save changes',
                 icon: Ic.check,
-                onPressed: () {
-                  dismissSheet(context);
-                  ScaffoldlessNotice.show(context, 'Profile saved.');
-                },
+                busy: _saving,
+                onPressed: _saving ? null : _save,
               ),
             ),
           ],
@@ -776,31 +828,62 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   }
 }
 
-class ScaffoldlessNotice {
-  static void show(BuildContext context, String message) {
-    showAppSheet(
-      context,
-      scrollable: false,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Ic.svg(
-              Ic.checkCircle,
-              color: context.p.success,
-              size: 40,
-              stroke: 1.9,
+/// Subtle transient confirmation — a small dark pill above the home indicator
+/// that dismisses itself. Duplicated from the sign-in screen: both flows need
+/// it, and the shared widget kit is outside this workstream's ownership.
+void showToast(BuildContext context, String message) {
+  showToastOnOverlay(Overlay.of(context), message);
+}
+
+/// [showToast] against an explicitly captured overlay, for callers that pop
+/// a route right after: the entry must land on an overlay that outlives the
+/// pop.
+void showToastOnOverlay(OverlayState overlay, String message) {
+  late final OverlayEntry entry;
+  var dismissed = false;
+  void dismiss() {
+    if (dismissed) return;
+    dismissed = true;
+    entry.remove();
+  }
+
+  entry = OverlayEntry(builder: (_) => _Toast(message: message));
+  overlay.insert(entry);
+  Future.delayed(const Duration(milliseconds: 2400), dismiss);
+}
+
+class _Toast extends StatelessWidget {
+  const _Toast({required this.message});
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.p;
+    return Positioned(
+      left: 24,
+      right: 24,
+      bottom: MediaQuery.paddingOf(context).bottom + 28,
+      // Never blocks touches — it is purely informational and dismisses
+      // itself. No animation: with nothing moving there is no reduced-motion
+      // variant to honor.
+      child: IgnorePointer(
+        child: Center(
+          child: Semantics(
+            liveRegion: true,
+            label: message,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                color: T.espresso.withValues(alpha: 0.92),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Text(
+                message,
+                style: Type.footnote(p).copyWith(color: T.cream),
+                textAlign: TextAlign.center,
+              ),
             ),
-            const SizedBox(height: 12),
-            Text(
-              message,
-              style: Type.headline(context.p),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: T.s20),
-            PrimaryButton(label: 'OK', onPressed: () => dismissSheet(context)),
-          ],
+          ),
         ),
       ),
     );
@@ -812,10 +895,22 @@ class _Field extends StatelessWidget {
     required this.label,
     required this.controller,
     required this.icon,
+    this.hint,
+    this.caption,
+    this.keyboardType,
+    this.enabled = true,
+    this.errorText,
   });
   final String label;
   final TextEditingController controller;
   final String icon;
+  final String? hint;
+  final String? caption;
+  final TextInputType? keyboardType;
+  final bool enabled;
+
+  /// Concise message rendered under the field, with a red border.
+  final String? errorText;
 
   @override
   Widget build(BuildContext context) {
@@ -833,16 +928,34 @@ class _Field extends StatelessWidget {
         const SizedBox(height: 8),
         CupertinoTextField(
           controller: controller,
+          enabled: enabled,
+          keyboardType: keyboardType,
+          autocorrect: false,
+          enableSuggestions: false,
           style: Type.body(p),
+          placeholder: hint,
           placeholderStyle: Type.body(p).copyWith(color: p.textSecondary),
           padding: const EdgeInsets.all(14),
           cursorColor: p.primaryFill,
           decoration: BoxDecoration(
-            color: p.surface,
+            color: enabled ? p.surface : p.surface.withValues(alpha: 0.6),
             borderRadius: BorderRadius.circular(T.rCard),
-            border: Border.all(color: p.divider),
+            border: Border.all(
+              color: errorText != null ? p.destructive : p.divider,
+              width: errorText != null ? 1.5 : 1,
+            ),
           ),
         ),
+        if (errorText != null) ...[
+          const SizedBox(height: 6),
+          Text(
+            errorText!,
+            style: Type.footnote(p).copyWith(color: p.destructive),
+          ),
+        ] else if (caption != null) ...[
+          const SizedBox(height: 6),
+          Text(caption!, style: Type.caption(p)),
+        ],
       ],
     );
   }
