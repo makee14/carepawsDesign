@@ -82,7 +82,8 @@ class CartScreen extends StatelessWidget {
                             const SizedBox(width: 12),
                             Text(
                               peso(store.cartTotal),
-                              style: Type.title1(p).copyWith(color: p.accentText),
+                              style: Type.title1(p)
+                                  .copyWith(color: p.accentText),
                             ),
                           ],
                         ),
@@ -90,9 +91,9 @@ class CartScreen extends StatelessWidget {
                         PrimaryButton(
                           label: 'Checkout · ${peso(store.cartTotal)}',
                           icon: Ic.arrowRight,
-                          onPressed: () => Navigator.of(context).push(
-                            appRoute(const CheckoutScreen()),
-                          ),
+                          onPressed: () =>
+                              Navigator.of(context)
+                                  .push(appRoute(const CheckoutScreen())),
                         ),
                       ],
                     ),

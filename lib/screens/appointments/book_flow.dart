@@ -81,7 +81,8 @@ class _BookFlowState extends State<BookFlow> {
 
   AppStore get _store => AppScope.read(context);
 
-  Service? get _service => _serviceId == null ? null : _store.serviceOf(_serviceId!);
+  Service? get _service =>
+      _serviceId == null ? null : _store.serviceOf(_serviceId!);
 
   Staff get _staff => _store.staffOf(_store.autoAssignStaff(_serviceId ?? ''));
 
@@ -95,7 +96,13 @@ class _BookFlowState extends State<BookFlow> {
 
   DateTime? get _slot {
     if (_date == null || _time == null) return null;
-    return DateTime(_date!.year, _date!.month, _date!.day, _time!.hour, _time!.minute);
+    return DateTime(
+      _date!.year,
+      _date!.month,
+      _date!.day,
+      _time!.hour,
+      _time!.minute,
+    );
   }
 
   bool _canContinue() => switch (_step) {
@@ -196,7 +203,9 @@ class _BookFlowState extends State<BookFlow> {
             if (_step < 5) _ProgressBar(step: _step, total: steps),
             // Keyed per step: otherwise the step ListViews share one
             // ScrollableState and a new step would open scrolled down.
-            Expanded(child: KeyedSubtree(key: ValueKey(_step), child: _body(store))),
+            Expanded(
+              child: KeyedSubtree(key: ValueKey(_step), child: _body(store)),
+            ),
             StickyCta(
               extra: (_step > 0 && _step < 5)
                   ? SecondaryButton(
@@ -223,7 +232,8 @@ class _BookFlowState extends State<BookFlow> {
                 onPressed: _step == 5
                     ? () => doneToTab(context, 2)
                     : (_canContinue() ? _next : null),
-              )),
+              ),
+            ),
           ],
         ),
       ),
@@ -256,7 +266,10 @@ class _BookFlowState extends State<BookFlow> {
       children: [
         Text('Who is this visit for?', style: Type.title1(p)),
         const SizedBox(height: 6),
-        Text('Pre-selected from your last booking — change it if you like.', style: Type.footnote(p)),
+        Text(
+          'Pre-selected from your last booking — change it if you like.',
+          style: Type.footnote(p),
+        ),
         const SizedBox(height: T.s20),
         if (store.pets.isEmpty)
           EmptyState(
@@ -264,7 +277,8 @@ class _BookFlowState extends State<BookFlow> {
             title: 'No pets yet',
             body: 'Add a pet before booking so we can attach the visit to their record.',
             actionLabel: 'Add pet',
-            onAction: () => Navigator.of(context).push(appRoute(const _NoPetYet())),
+            onAction: () =>
+                Navigator.of(context).push(appRoute(const _NoPetYet())),
           )
         else
           for (final pet in store.pets)
@@ -280,7 +294,9 @@ class _BookFlowState extends State<BookFlow> {
                     child: SoftCard(
                       padding: const EdgeInsets.all(12),
                       borderColor: _petId == pet.id ? p.accent : null,
-                      color: _petId == pet.id ? T.amber.withValues(alpha: 0.12) : null,
+                      color: _petId == pet.id
+                          ? T.amber.withValues(alpha: 0.12)
+                          : null,
                       child: Row(
                         children: [
                           PetArt(
@@ -327,7 +343,10 @@ class _BookFlowState extends State<BookFlow> {
         children: [
           Text('AI health check', style: Type.title1(p)),
           const SizedBox(height: 6),
-          Text('Optional, and it changes nothing about your booking.', style: Type.footnote(p)),
+          Text(
+            'Optional, and it changes nothing about your booking.',
+            style: Type.footnote(p),
+          ),
           const SizedBox(height: T.s24),
           SoftCard(
             child: Column(
@@ -337,7 +356,12 @@ class _BookFlowState extends State<BookFlow> {
                   children: [
                     Ic.svg(Ic.sparkle, color: p.accent, size: 22),
                     const SizedBox(width: 10),
-                    Expanded(child: Text('Run a health check', style: Type.headline(p))),
+                    Expanded(
+                      child: Text(
+                        'Run a health check',
+                        style: Type.headline(p),
+                      ),
+                    ),
                   ],
                 ),
                 const SizedBox(height: 8),
@@ -350,9 +374,9 @@ class _BookFlowState extends State<BookFlow> {
                   const SizedBox(height: T.s16),
                   AiUnavailableCard(
                     failure: store.ai.failure ?? AiFailure.noKey,
-                    onOpenSettings: () => Navigator.of(context).push(
-                      appRoute(const AiSettingsScreen()),
-                    ),
+                    onOpenSettings: () =>
+                        Navigator.of(context)
+                            .push(appRoute(const AiSettingsScreen())),
                     onCall: () => callPhoneNumber(
                       context,
                       number: Clinic.phone,
@@ -365,16 +389,17 @@ class _BookFlowState extends State<BookFlow> {
                   label: 'Start health check',
                   icon: Ic.sparkle,
                   onPressed: () async {
-                    final result = await Navigator.of(context).push<TriageResult>(
-                      CupertinoPageRoute<TriageResult>(
-                        builder: (_) => TriageScreen(
-                          entry: TriageEntry.booking,
-                          preselectedPetId: _petId,
-                          showSkip: true,
-                          onComplete: (r) => Navigator.of(context).pop(r),
-                        ),
-                      ),
-                    );
+                    final result = await Navigator.of(context)
+                        .push<TriageResult>(
+                          CupertinoPageRoute<TriageResult>(
+                            builder: (_) => TriageScreen(
+                              entry: TriageEntry.booking,
+                              preselectedPetId: _petId,
+                              showSkip: true,
+                              onComplete: (r) => Navigator.of(context).pop(r),
+                            ),
+                          ),
+                        );
                     if (result != null) setState(() => _triage = result);
                   },
                 ),
@@ -416,9 +441,15 @@ class _BookFlowState extends State<BookFlow> {
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
       children: [
-        Text('What does ${pet?.name ?? 'your pet'} need?', style: Type.title1(p)),
+        Text(
+          'What does ${pet?.name ?? 'your pet'} need?',
+          style: Type.title1(p),
+        ),
         const SizedBox(height: 6),
-        Text('Staff are assigned automatically by service line.', style: Type.footnote(p)),
+        Text(
+          'Staff are assigned automatically by service line.',
+          style: Type.footnote(p),
+        ),
         const SizedBox(height: T.s20),
         for (final s in Seed.services)
           Padding(
@@ -426,7 +457,8 @@ class _BookFlowState extends State<BookFlow> {
             child: Semantics(
               button: true,
               selected: _serviceId == s.id,
-              label: '${s.name}. ${s.blurb}. ${s.durationLabel}. ${s.priceNote == null ? peso(s.price) : '${s.priceNote} ${peso(s.price)}'}',
+              label:
+                  '${s.name}. ${s.blurb}. ${s.durationLabel}. ${s.priceNote == null ? peso(s.price) : '${s.priceNote} ${peso(s.price)}'}',
               child: ExcludeSemantics(
                 child: PressScale(
                   onTap: () => setState(() {
@@ -437,7 +469,9 @@ class _BookFlowState extends State<BookFlow> {
                   child: SoftCard(
                     padding: const EdgeInsets.all(14),
                     borderColor: _serviceId == s.id ? p.accent : null,
-                    color: _serviceId == s.id ? T.amber.withValues(alpha: 0.12) : null,
+                    color: _serviceId == s.id
+                        ? T.amber.withValues(alpha: 0.12)
+                        : null,
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -451,7 +485,12 @@ class _BookFlowState extends State<BookFlow> {
                                 borderRadius: BorderRadius.circular(11),
                               ),
                               child: Center(
-                                child: Ic.svg(s.icon, color: p.primaryFill, size: 21, stroke: 1.9),
+                                child: Ic.svg(
+                                  s.icon,
+                                  color: p.primaryFill,
+                                  size: 21,
+                                  stroke: 1.9,
+                                ),
                               ),
                             ),
                             const SizedBox(width: 12),
@@ -490,7 +529,9 @@ class _BookFlowState extends State<BookFlow> {
                             ),
                             StatusChip(
                               label: s.role.short,
-                              icon: s.role == StaffRole.groomer ? Ic.scissors : Ic.heartPulse,
+                              icon: s.role == StaffRole.groomer
+                                  ? Ic.scissors
+                                  : Ic.heartPulse,
                               compact: true,
                             ),
                           ],
@@ -536,7 +577,8 @@ class _BookFlowState extends State<BookFlow> {
               return Semantics(
                 button: true,
                 selected: selected,
-                label: '${shortDate(d)}${isToday(d, store.now) ? ', today' : ''}',
+                label:
+                    '${shortDate(d)}${isToday(d, store.now) ? ', today' : ''}',
                 child: ExcludeSemantics(
                   child: PressScale(
                     onTap: () => setState(() {
@@ -559,7 +601,9 @@ class _BookFlowState extends State<BookFlow> {
                           Text(
                             dayNames[d.weekday - 1],
                             style: Type.caption(p).copyWith(
-                              color: selected ? p.onPrimaryFill : p.textSecondary,
+                              color: selected
+                                  ? p.onPrimaryFill
+                                  : p.textSecondary,
                             ),
                           ),
                           const SizedBox(height: 4),
@@ -572,7 +616,9 @@ class _BookFlowState extends State<BookFlow> {
                           Text(
                             monthNames[d.month - 1],
                             style: Type.caption(p).copyWith(
-                              color: selected ? p.onPrimaryFill.withValues(alpha: 0.9) : p.textSecondary,
+                              color: selected
+                                  ? p.onPrimaryFill.withValues(alpha: 0.9)
+                                  : p.textSecondary,
                             ),
                           ),
                         ],
@@ -588,7 +634,10 @@ class _BookFlowState extends State<BookFlow> {
         if (_date == null)
           Text('Choose a date to see available times.', style: Type.footnote(p))
         else if (slots.isEmpty)
-          Text('No slots left on this day — try the next one.', style: Type.footnote(p))
+          Text(
+            'No slots left on this day — try the next one.',
+            style: Type.footnote(p),
+          )
         else ...[
           Text('Available times', style: Type.headline(p)),
           const SizedBox(height: 10),
@@ -599,8 +648,12 @@ class _BookFlowState extends State<BookFlow> {
               for (final slot in slots)
                 _TimePill(
                   slot: slot,
-                  selected: _time?.hour == slot.hour && _time?.minute == slot.minute,
-                  onTap: () => setState(() => _time = TimeOfDay(hour: slot.hour, minute: slot.minute)),
+                  selected:
+                      _time?.hour == slot.hour && _time?.minute == slot.minute,
+                  onTap: () => setState(
+                    () =>
+                        _time = TimeOfDay(hour: slot.hour, minute: slot.minute),
+                  ),
                 ),
             ],
           ),
@@ -674,7 +727,11 @@ class _BookFlowState extends State<BookFlow> {
               const SizedBox(height: 10),
               Row(
                 children: [
-                  StaffAvatar(initials: staff.initials, size: 44, role: staff.role),
+                  StaffAvatar(
+                    initials: staff.initials,
+                    size: 44,
+                    role: staff.role,
+                  ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Column(
@@ -698,7 +755,10 @@ class _BookFlowState extends State<BookFlow> {
                 const SizedBox(height: 12),
                 Text('Grooming intake', style: Type.headline(p)),
                 const SizedBox(height: 8),
-                AmountRow(label: 'Size', value: '$_intakeSize (${pet?.weightKg} kg)'),
+                AmountRow(
+                  label: 'Size',
+                  value: '$_intakeSize (${pet?.weightKg} kg)',
+                ),
                 AmountRow(label: 'Coat condition', value: _intakeCoat),
                 if (_notes.text.trim().isNotEmpty)
                   AmountRow(label: 'Notes', value: _notes.text.trim()),
@@ -792,13 +852,20 @@ class _BookFlowState extends State<BookFlow> {
               shape: BoxShape.circle,
             ),
             child: Center(
-              child: Ic.svg(Ic.checkCircle, color: p.success, size: 42, stroke: 2),
+              child: Ic.svg(
+                Ic.checkCircle,
+                color: p.success,
+                size: 42,
+                stroke: 2,
+              ),
             ),
           ),
         ),
         const SizedBox(height: T.s20),
         Text(
-          a.status == ApptStatus.requestPending ? 'Request sent' : 'You are booked',
+          a.status == ApptStatus.requestPending
+              ? 'Request sent'
+              : 'You are booked',
           style: Type.largeTitle(p),
           textAlign: TextAlign.center,
         ),
@@ -827,8 +894,9 @@ class _BookFlowState extends State<BookFlow> {
   }
 
   // ------------------------------------------------------------------ slots
-  List<DateTime> _next14Days(DateTime from) =>
-      [for (var i = 0; i < 14; i++) DateTime(from.year, from.month, from.day + i)];
+  List<DateTime> _next14Days(DateTime from) => [
+    for (var i = 0; i < 14; i++) DateTime(from.year, from.month, from.day + i),
+  ];
 
   /// Slot spacing follows the service duration: grooming 1–2h, assistant
   /// 15–20m, vet consults 30m.
@@ -889,7 +957,11 @@ class _ProgressBar extends StatelessWidget {
 }
 
 class _TimePill extends StatelessWidget {
-  const _TimePill({required this.slot, required this.selected, required this.onTap});
+  const _TimePill({
+    required this.slot,
+    required this.selected,
+    required this.onTap,
+  });
   final DateTime slot;
   final bool selected;
   final VoidCallback onTap;
@@ -962,7 +1034,10 @@ class _GroomingIntake extends StatelessWidget {
         children: [
           Text('Grooming intake', style: Type.headline(p)),
           const SizedBox(height: 4),
-          Text('Helps Ana plan the cut and quote accurately.', style: Type.footnote(p)),
+          Text(
+            'Helps Ana plan the cut and quote accurately.',
+            style: Type.footnote(p),
+          ),
           const SizedBox(height: 14),
           Text('Breed / size', style: Type.footnoteEmph(p)),
           const SizedBox(height: 8),
@@ -971,7 +1046,11 @@ class _GroomingIntake extends StatelessWidget {
             runSpacing: 8,
             children: [
               for (final s in sizes)
-                FilterPill(label: s, selected: size == s, onTap: () => onSize(s)),
+                FilterPill(
+                  label: s,
+                  selected: size == s,
+                  onTap: () => onSize(s),
+                ),
             ],
           ),
           const SizedBox(height: 16),
@@ -982,7 +1061,11 @@ class _GroomingIntake extends StatelessWidget {
             runSpacing: 8,
             children: [
               for (final c in coats)
-                FilterPill(label: c, selected: coat == c, onTap: () => onCoat(c)),
+                FilterPill(
+                  label: c,
+                  selected: coat == c,
+                  onTap: () => onCoat(c),
+                ),
             ],
           ),
           const SizedBox(height: 16),
@@ -1035,7 +1118,8 @@ class _TriageSummaryCard extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           StatusChip(
-            label: '${result.urgencyLabel} · routes to ${_routeLabel(result.route)}',
+            label:
+                '${result.urgencyLabel} · routes to ${_routeLabel(result.route)}',
             icon: Ic.arrowRight,
             compact: true,
             fg: tone,
@@ -1088,11 +1172,16 @@ class _NoPetYet extends StatelessWidget {
           children: [
             Ic.svg(Ic.paw, color: context.p.accent, size: 44),
             const SizedBox(height: T.s16),
-            Text('Add a pet from the Home tab first', style: Type.title2(context.p), textAlign: TextAlign.center),
+            Text(
+              'Add a pet from the Home tab first',
+              style: Type.title2(context.p),
+              textAlign: TextAlign.center,
+            ),
             const SizedBox(height: 8),
             Text(
               'Once a pet is on file, visits, vaccines and documents attach to their record automatically.',
-              style: Type.body(context.p).copyWith(color: context.p.textSecondary),
+              style: Type.body(context.p)
+                  .copyWith(color: context.p.textSecondary),
               textAlign: TextAlign.center,
             ),
           ],

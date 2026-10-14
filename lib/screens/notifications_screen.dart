@@ -113,7 +113,9 @@ class _NotificationCard extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    Expanded(child: Text(notification.title, style: Type.headline(p))),
+                    Expanded(
+                      child: Text(notification.title, style: Type.headline(p)),
+                    ),
                     if (!notification.read)
                       Container(
                         width: 9,
@@ -165,7 +167,8 @@ class ShopsTab extends StatelessWidget {
               Text(
                 'Mochi is booked for a full grooming on Tue 20 Oct at 9:00 AM with Ana Reyes. '
                 'Your intake note about the matting behind her ears is attached.',
-                style: Type.body(context.p).copyWith(color: context.p.textSecondary),
+                style: Type.body(context.p)
+                    .copyWith(color: context.p.textSecondary),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: T.s24),
@@ -201,7 +204,12 @@ class _BookingShortcut extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Ic.svg(Ic.checkCircle, color: context.p.success, size: 44, stroke: 1.9),
+              Ic.svg(
+                Ic.checkCircle,
+                color: context.p.success,
+                size: 44,
+                stroke: 1.9,
+              ),
               const SizedBox(height: T.s16),
               Text('Confirmed', style: Type.title2(context.p)),
               const SizedBox(height: 8),
@@ -210,7 +218,8 @@ class _BookingShortcut extends StatelessWidget {
                     ? 'You have no upcoming appointments.'
                     : '${store.pet(a.petId)?.name} · ${store.serviceOf(a.serviceId).name}\n'
                           '${mediumDate(a.start)}\nwith ${store.staffOf(a.staffId).name}',
-                style: Type.body(context.p).copyWith(color: context.p.textSecondary),
+                style: Type.body(context.p)
+                    .copyWith(color: context.p.textSecondary),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: T.s24),
@@ -251,13 +260,15 @@ class _InfoShortcut extends StatelessWidget {
               Text(
                 'Flea & Tick Spot-On is active for Biscuit until 25 Sep 2027. '
                 'Restricted shop items can now be paid for at checkout.',
-                style: Type.body(context.p).copyWith(color: context.p.textSecondary),
+                style: Type.body(context.p)
+                    .copyWith(color: context.p.textSecondary),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: T.s24),
               PrimaryButton(
                 label: 'OK',
-                onPressed: () => Navigator.of(context).popUntil((r) => r.isFirst),
+                onPressed: () =>
+                    Navigator.of(context).popUntil((r) => r.isFirst),
               ),
             ],
           ),

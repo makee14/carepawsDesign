@@ -78,7 +78,10 @@ void main() {
       );
       await sendText(tester, 'I have a question about my appointment.');
       expect(find.textContaining('Thanks!'), findsOneWidget);
-      expect(find.textContaining('rivermarkjefferson13@gmail.com'), findsNothing);
+      expect(
+        find.textContaining('rivermarkjefferson13@gmail.com'),
+        findsNothing,
+      );
     });
 
     testWidgets('offline reply is warm and names the 9 AM reopening', (
@@ -115,9 +118,7 @@ void main() {
       expect(m.text, isEmpty);
     });
 
-    testWidgets('photo button shows in the clinic thread only', (
-      tester,
-    ) async {
+    testWidgets('photo button shows in the clinic thread only', (tester) async {
       await pumpThread(tester, 'th_clinic', accountName: 'Mark');
       expect(find.bySemanticsLabel('Attach a photo'), findsOneWidget);
 
@@ -136,18 +137,14 @@ void main() {
       expect(find.text('Camera'), findsOneWidget);
       // The desktop test harness has no picker: choosing a source must
       // fail soft (no preview, no crash, no message sent).
-      final before = tester
-          .widgetList(find.byType(Image))
-          .length;
+      final before = tester.widgetList(find.byType(Image)).length;
       await tester.tap(find.text('Photo library'));
       await tester.pumpAndSettle();
       expect(find.text('Add a photo'), findsNothing);
       expect(tester.widgetList(find.byType(Image)).length, before);
     });
 
-    testWidgets('an image message renders as a photo bubble', (
-      tester,
-    ) async {
+    testWidgets('an image message renders as a photo bubble', (tester) async {
       final s = await pumpThread(tester, 'th_clinic', accountName: 'Mark');
       // A real 1x1 PNG: the codec must decode the bytes under test.
       final png = base64Decode(

@@ -67,8 +67,11 @@ void main() {
     );
     await tester.tap(find.widgetWithText(PrimaryButton, 'Done'));
     await tester.pumpAndSettle();
-    expect(find.widgetWithText(PrimaryButton, 'Done'), findsNothing,
-        reason: 'Done must dismiss the sheet');
+    expect(
+      find.widgetWithText(PrimaryButton, 'Done'),
+      findsNothing,
+      reason: 'Done must dismiss the sheet',
+    );
     // And we are back on the AI settings screen, not stranded.
     expect(find.text('Gemini'), findsOneWidget);
   });

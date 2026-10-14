@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+
 /// Minimal Cupertino-friendly replacement for Material's `TimeOfDay`.
 /// The app never imports Material, so this keeps the tree Cupertino-only.
 @immutable

@@ -278,7 +278,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
     final reply = store.staffOnline()
         ? '${_thanks(store)}! Photo received — I\'ll take a look and get back to you here.'
         : '${_thanks(store)}! Photo received — we\'re closed right now, but I\'ll '
-            'review it first thing at 9:00 AM and reply here.';
+              'review it first thing at 9:00 AM and reply here.';
     store.pushMessage(
       ChatMessage(
         id: 'a${at.microsecondsSinceEpoch + 1}',
@@ -735,15 +735,10 @@ class _Bubble extends StatelessWidget {
                   ),
                   decoration: BoxDecoration(
                     borderRadius: radius,
-                    border: Border.all(
-                      color: mine ? p.primaryFill : p.divider,
-                    ),
+                    border: Border.all(color: mine ? p.primaryFill : p.divider),
                   ),
                   clipBehavior: Clip.antiAlias,
-                  child: Image.memory(
-                    message.imageBytes!,
-                    fit: BoxFit.cover,
-                  ),
+                  child: Image.memory(message.imageBytes!, fit: BoxFit.cover),
                 ),
               ),
             ),

@@ -65,7 +65,9 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                 left: 12,
                                 top: 12,
                                 child: StatusChip(
-                                  label: hasRx ? 'Prescription on file' : 'Prescription required',
+                                  label: hasRx
+                                      ? 'Prescription on file'
+                                      : 'Prescription required',
                                   icon: Ic.shield,
                                   fg: p.onPrimaryFill,
                                   bg: hasRx ? p.success : p.primaryFill,
@@ -88,7 +90,10 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                 children: [
                                   Text(product.name, style: Type.title2(p)),
                                   const SizedBox(height: 4),
-                                  Text(product.tagline, style: Type.footnote(p)),
+                                  Text(
+                                    product.tagline,
+                                    style: Type.footnote(p),
+                                  ),
                                   const SizedBox(height: 10),
                                   // One horizontal row, never a Wrap: the chip
                                   // set is fixed, so a scroll row keeps the
@@ -109,7 +114,9 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                           label: product.inStock
                                               ? '${product.stock} in stock'
                                               : 'Out of stock',
-                                          icon: product.inStock ? Ic.checkCircle : Ic.alert,
+                                          icon: product.inStock
+                                              ? Ic.checkCircle
+                                              : Ic.alert,
                                           compact: true,
                                           fg: product.inStock
                                               ? p.success
@@ -120,7 +127,9 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                           // where the old hardcoded #DDF2E3
                                           // was 1.48:1 in dark mode.
                                           bg: product.inStock
-                                              ? p.success.withValues(alpha: 0.14)
+                                              ? p.success.withValues(
+                                                  alpha: 0.14,
+                                                )
                                               : const Color(0x1FDC2626),
                                         ),
                                       ],
@@ -171,7 +180,9 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                           ),
                           const SizedBox(height: 10),
                           SecondaryButton(
-                            label: hasRx ? 'View prescription' : 'Ask the clinic',
+                            label: hasRx
+                                ? 'View prescription'
+                                : 'Ask the clinic',
                             icon: hasRx ? Ic.doc : Ic.chat,
                             onPressed: () => _askClinic(context, product),
                           ),
@@ -229,21 +240,19 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
         id: 'rx${store.now.microsecondsSinceEpoch}',
         threadId: 'th_clinic',
         author: ChatAuthor.vetAssistant,
-        text: 'Asked about ${product.name} — is a prescription needed for ${store.pet(store.pets.first.id)?.name}?',
+        text:
+            'Asked about ${product.name} — is a prescription needed for ${store.pet(store.pets.first.id)?.name}?',
         at: store.now,
         sentByMe: true,
         petId: store.pets.first.id,
       ),
     );
-    Navigator.of(context).push(
-      appRoute(
-        const _RxAskScreen(productName: ''),
-      ),
-    );
+    Navigator.of(context).push(appRoute(const _RxAskScreen(productName: '')));
   }
 
   void _gallery(BuildContext context, Product product) {
-    Navigator.of(context).push(appRoute(ProductGalleryScreen(product: product)));
+    Navigator.of(context)
+        .push(appRoute(ProductGalleryScreen(product: product)));
   }
 }
 
@@ -265,7 +274,11 @@ class _RxAskScreen extends StatelessWidget {
             children: [
               Ic.svg(Ic.checkCircle, color: p.success, size: 44, stroke: 1.9),
               const SizedBox(height: T.s16),
-              Text('Message sent', style: Type.title1(p), textAlign: TextAlign.center),
+              Text(
+                'Message sent',
+                style: Type.title1(p),
+                textAlign: TextAlign.center,
+              ),
               const SizedBox(height: 8),
               Text(
                 'Miguel will reply about the prescription during clinic hours. '
@@ -355,7 +368,9 @@ class QuantityStepper extends StatelessWidget {
                 width: 44,
                 height: 44,
                 decoration: BoxDecoration(
-                  color: value > min ? p.fieldBg : p.fieldBg.withValues(alpha: 0.5),
+                  color: value > min
+                      ? p.fieldBg
+                      : p.fieldBg.withValues(alpha: 0.5),
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(color: p.divider),
                 ),
@@ -391,7 +406,9 @@ class QuantityStepper extends StatelessWidget {
                 width: 44,
                 height: 44,
                 decoration: BoxDecoration(
-                  color: value < max ? p.fieldBg : p.fieldBg.withValues(alpha: 0.5),
+                  color: value < max
+                      ? p.fieldBg
+                      : p.fieldBg.withValues(alpha: 0.5),
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(color: p.divider),
                 ),

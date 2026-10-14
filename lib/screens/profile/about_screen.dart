@@ -26,17 +26,18 @@ class AboutScreen extends StatelessWidget {
           children: [
             const Center(child: LogoMark(size: 104)),
             const SizedBox(height: T.s20),
-            Text('CAREPAWS', style: Type.largeTitle(p).copyWith(letterSpacing: 4)),
+            Text(
+              'CAREPAWS',
+              style: Type.largeTitle(p).copyWith(letterSpacing: 4),
+            ),
             const SizedBox(height: 4),
             Text(
               'Veterinary Clinic',
-              style: Type.footnote(p).copyWith(letterSpacing: 1.4, color: p.accentText),
+              style: Type.footnote(p)
+                  .copyWith(letterSpacing: 1.4, color: p.accentText),
             ),
             const SizedBox(height: 6),
-            Text(
-              Seed.appVersion,
-              style: Type.caption(p),
-            ),
+            Text(Seed.appVersion, style: Type.caption(p)),
             const SizedBox(height: T.s24),
             SoftCard(
               child: Column(
@@ -70,10 +71,26 @@ class AboutScreen extends StatelessWidget {
                         ? 'Live · ${store.ai.modelLabel ?? 'auto-selected model'}'
                         : 'Unavailable · no API key',
                   ),
-                  _BuildRow(icon: Ic.checkCircle, label: 'Clinic hours', value: clinicStatusLine(store.now)),
-                  _BuildRow(icon: Ic.paw, label: 'Pets on file', value: '${store.petCount}'),
-                  _BuildRow(icon: Ic.calendar, label: 'Upcoming visits', value: '${store.upcoming.length}'),
-                  _BuildRow(icon: Ic.bag, label: 'Orders', value: '${store.orders.length}'),
+                  _BuildRow(
+                    icon: Ic.checkCircle,
+                    label: 'Clinic hours',
+                    value: clinicStatusLine(store.now),
+                  ),
+                  _BuildRow(
+                    icon: Ic.paw,
+                    label: 'Pets on file',
+                    value: '${store.petCount}',
+                  ),
+                  _BuildRow(
+                    icon: Ic.calendar,
+                    label: 'Upcoming visits',
+                    value: '${store.upcoming.length}',
+                  ),
+                  _BuildRow(
+                    icon: Ic.bag,
+                    label: 'Orders',
+                    value: '${store.orders.length}',
+                  ),
                 ],
               ),
             ),
@@ -102,7 +119,11 @@ class AboutScreen extends StatelessWidget {
 }
 
 class _BuildRow extends StatelessWidget {
-  const _BuildRow({required this.icon, required this.label, required this.value});
+  const _BuildRow({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
   final String icon;
   final String label;
   final String value;

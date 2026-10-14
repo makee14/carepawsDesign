@@ -1,7 +1,6 @@
 @Tags(['live'])
 library;
 
-
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:carepaws/data/models.dart';
@@ -24,12 +23,19 @@ void main() {
       expect(ai.failure, AiFailure.noKey);
       await expectLater(
         ai.chat(petName: 'Biscuit', species: 'dog', question: 'hi'),
-        throwsA(isA<AiException>().having((e) => e.failure, 'failure', AiFailure.noKey)),
+        throwsA(
+          isA<AiException>().having(
+            (e) => e.failure,
+            'failure',
+            AiFailure.noKey,
+          ),
+        ),
       );
     });
   });
 
-  final hasKey = geminiApiKey.isNotEmpty &&
+  final hasKey =
+      geminiApiKey.isNotEmpty &&
       geminiApiKey != 'YOUR_GEMINI_API_KEY' &&
       geminiApiKey.length > 20;
   if (!hasKey) {
@@ -38,23 +44,27 @@ void main() {
   }
 
   group('Gemini model discovery', () {
-    test('bootstraps into live mode and picks a vision-capable model', () async {
-      final ai = AiService();
-      await ai.bootstrap();
-      expect(ai.status, AiStatus.live, reason: 'should reach live mode');
-      expect(ai.isUnavailable, isFalse);
-      expect(ai.modelId, isNotNull);
-      expect(ai.modelId, isNotEmpty);
-      // A full flash-family model is preferred over lite/preview/aliases.
-      expect(ai.modelId, contains('flash'));
-      expect(ai.modelId, isNot(contains('lite')));
-      expect(ai.modelId, isNot(contains('preview')));
-      expect(ai.modelId, isNot(contains('latest')));
-      expect(ai.modelId, isNot(contains('tts')));
-      expect(ai.modelId, isNot(contains('embedding')));
-      debugPrint('[live] selected model: ${ai.modelId}');
-      ai.dispose();
-    }, timeout: const Timeout(Duration(seconds: 60)));
+    test(
+      'bootstraps into live mode and picks a vision-capable model',
+      () async {
+        final ai = AiService();
+        await ai.bootstrap();
+        expect(ai.status, AiStatus.live, reason: 'should reach live mode');
+        expect(ai.isUnavailable, isFalse);
+        expect(ai.modelId, isNotNull);
+        expect(ai.modelId, isNotEmpty);
+        // A full flash-family model is preferred over lite/preview/aliases.
+        expect(ai.modelId, contains('flash'));
+        expect(ai.modelId, isNot(contains('lite')));
+        expect(ai.modelId, isNot(contains('preview')));
+        expect(ai.modelId, isNot(contains('latest')));
+        expect(ai.modelId, isNot(contains('tts')));
+        expect(ai.modelId, isNot(contains('embedding')));
+        debugPrint('[live] selected model: ${ai.modelId}');
+        ai.dispose();
+      },
+      timeout: const Timeout(Duration(seconds: 60)),
+    );
   });
 
   group('Live triage', () {
@@ -93,26 +103,92 @@ void main() {
     }, timeout: const Timeout(Duration(seconds: 60)));
 
     test('mild concern can be handled at home', () async {
-      final r = await triage('Mochi is shedding a lot, how often should I brush her?');
+      final r = await triage(
+        'Mochi is shedding a lot, how often should I brush her?',
+      );
       expect(r.route, isNot(TriageRoute.emergency));
       expect(r.summary, isNotEmpty);
     }, timeout: const Timeout(Duration(seconds: 60)));
 
-    test('accepts a photo (vision input) and still returns a usable result',
-        () async {
-      // 1x1 transparent PNG.
-      final png = Uint8List.fromList([
-        0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D,
-        0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
-        0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4, 0x89, 0x00, 0x00, 0x00,
-        0x0A, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9C, 0x63, 0x00, 0x01, 0x00, 0x00,
-        0x05, 0x00, 0x01, 0x0D, 0x0A, 0x2D, 0xB4, 0x00, 0x00, 0x00, 0x00, 0x49,
-        0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82,
-      ]);
-      final r = await triage('Is this coat healthy?', photo: png);
-      expect(r.route, isNotNull);
-      expect(r.summary, isNotEmpty);
-    }, timeout: const Timeout(Duration(seconds: 60)));
+    test(
+      'accepts a photo (vision input) and still returns a usable result',
+      () async {
+        // 1x1 transparent PNG.
+        final png = Uint8List.fromList([
+          0x89,
+          0x50,
+          0x4E,
+          0x47,
+          0x0D,
+          0x0A,
+          0x1A,
+          0x0A,
+          0x00,
+          0x00,
+          0x00,
+          0x0D,
+          0x49,
+          0x48,
+          0x44,
+          0x52,
+          0x00,
+          0x00,
+          0x00,
+          0x01,
+          0x00,
+          0x00,
+          0x00,
+          0x01,
+          0x08,
+          0x06,
+          0x00,
+          0x00,
+          0x00,
+          0x1F,
+          0x15,
+          0xC4,
+          0x89,
+          0x00,
+          0x00,
+          0x00,
+          0x0A,
+          0x49,
+          0x44,
+          0x41,
+          0x54,
+          0x78,
+          0x9C,
+          0x63,
+          0x00,
+          0x01,
+          0x00,
+          0x00,
+          0x05,
+          0x00,
+          0x01,
+          0x0D,
+          0x0A,
+          0x2D,
+          0xB4,
+          0x00,
+          0x00,
+          0x00,
+          0x00,
+          0x49,
+          0x45,
+          0x4E,
+          0x44,
+          0xAE,
+          0x42,
+          0x60,
+          0x82,
+        ]);
+        final r = await triage('Is this coat healthy?', photo: png);
+        expect(r.route, isNotNull);
+        expect(r.summary, isNotEmpty);
+      },
+      timeout: const Timeout(Duration(seconds: 60)),
+    );
   });
 
   group('Live chat', () {
@@ -131,14 +207,17 @@ void main() {
   });
 
   group('Fallback behaviour', () {
-    test('an unreachable API surfaces unreachable instead of a canned answer', () async {
-      // A 1ms timeout guarantees the request cannot complete; the service
-      // must report unreachable, never guess.
-      final ai = AiService(timeout: const Duration(milliseconds: 1));
-      addTearDown(ai.dispose);
-      await ai.bootstrap();
-      expect(ai.status, AiStatus.unavailable);
-      expect(ai.failure, AiFailure.unreachable);
-    });
+    test(
+      'an unreachable API surfaces unreachable instead of a canned answer',
+      () async {
+        // A 1ms timeout guarantees the request cannot complete; the service
+        // must report unreachable, never guess.
+        final ai = AiService(timeout: const Duration(milliseconds: 1));
+        addTearDown(ai.dispose);
+        await ai.bootstrap();
+        expect(ai.status, AiStatus.unavailable);
+        expect(ai.failure, AiFailure.unreachable);
+      },
+    );
   });
 }

@@ -38,7 +38,8 @@ class _ShopsScreenState extends State<ShopsScreen> {
           prod.tagline.toLowerCase().contains(q) ||
           prod.description.toLowerCase().contains(q);
       final matchesNeed = _need == PetNeed.all || prod.need == _need;
-      final matchesSpecies = _species == null || prod.species.contains(_species!);
+      final matchesSpecies =
+          _species == null || prod.species.contains(_species!);
       return matchesQuery && matchesNeed && matchesSpecies;
     }).toList();
 
@@ -60,12 +61,16 @@ class _ShopsScreenState extends State<ShopsScreen> {
                         child: CupertinoSearchTextField(
                           placeholder: 'Search food, medicine, grooming',
                           style: Type.body(p),
-                          placeholderStyle: Type.body(p).copyWith(color: p.textSecondary),
+                          placeholderStyle: Type.body(p)
+                              .copyWith(color: p.textSecondary),
                           onChanged: (v) => setState(() => _query = v),
                           backgroundColor: p.surface,
                           itemColor: p.textSecondary,
                           borderRadius: BorderRadius.circular(T.rControl),
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 12,
+                          ),
                         ),
                       ),
                       const SizedBox(width: 8),
@@ -75,9 +80,9 @@ class _ShopsScreenState extends State<ShopsScreen> {
                             path: Ic.doc,
                             label: 'My orders',
                             color: p.primaryFill,
-                            onPressed: () => Navigator.of(context).push(
-                              appRoute(const OrdersScreen()),
-                            ),
+                            onPressed: () =>
+                                Navigator.of(context)
+                                    .push(appRoute(const OrdersScreen())),
                           ),
                           _CartBadge(),
                         ],
@@ -108,16 +113,22 @@ class _ShopsScreenState extends State<ShopsScreen> {
                           label: 'For dogs',
                           icon: Ic.dog,
                           selected: _species == Species.dog,
-                          onTap: () => setState(() =>
-                              _species = _species == Species.dog ? null : Species.dog),
+                          onTap: () => setState(
+                            () => _species = _species == Species.dog
+                                ? null
+                                : Species.dog,
+                          ),
                         ),
                         const SizedBox(width: 8),
                         FilterPill(
                           label: 'For cats',
                           icon: Ic.cat,
                           selected: _species == Species.cat,
-                          onTap: () => setState(() =>
-                              _species = _species == Species.cat ? null : Species.cat),
+                          onTap: () => setState(
+                            () => _species = _species == Species.cat
+                                ? null
+                                : Species.cat,
+                          ),
                         ),
                       ],
                     ),
@@ -147,7 +158,8 @@ class _ShopsScreenState extends State<ShopsScreen> {
                 child: EmptyState(
                   icon: Ic.search,
                   title: 'No products match',
-                  body: 'Nothing matches “$_query” in this category. Browse everything instead.',
+                  body:
+                      'Nothing matches “$_query” in this category. Browse everything instead.',
                   actionLabel: 'Browse all products',
                   onAction: () => setState(() {
                     _query = '';
@@ -159,10 +171,17 @@ class _ShopsScreenState extends State<ShopsScreen> {
             )
           else
             SliverPadding(
-              padding: EdgeInsets.fromLTRB(20, 0, 20, 40 + TabBarClearance.of(context)),
+              padding: EdgeInsets.fromLTRB(
+                20,
+                0,
+                20,
+                40 + TabBarClearance.of(context),
+              ),
               sliver: SliverGrid(
                 gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: MediaQuery.sizeOf(context).width > 620 ? 3 : 2,
+                  crossAxisCount: MediaQuery.sizeOf(context).width > 620
+                      ? 3
+                      : 2,
                   mainAxisSpacing: 16,
                   crossAxisSpacing: 16,
                   childAspectRatio: 0.62,
@@ -196,7 +215,11 @@ class _CartBadge extends StatelessWidget {
               SizedBox.square(
                 dimension: T.tap,
                 child: Center(
-                  child: Ic.svg(Ic.cart, color: context.p.primaryFill, size: 24),
+                  child: Ic.svg(
+                    Ic.cart,
+                    color: context.p.primaryFill,
+                    size: 24,
+                  ),
                 ),
               ),
               if (n > 0)
@@ -204,7 +227,10 @@ class _CartBadge extends StatelessWidget {
                   right: 2,
                   top: 4,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 5,
+                      vertical: 1,
+                    ),
                     decoration: BoxDecoration(
                       color: const Color(0xFFDC2626),
                       borderRadius: BorderRadius.circular(9),
@@ -253,9 +279,9 @@ class ProductCard extends StatelessWidget {
               child: ExcludeSemantics(
                 child: PressScale(
                   scale: 0.98,
-                  onTap: () => Navigator.of(context).push(
-                    appRoute(ProductDetailScreen(productId: product.id)),
-                  ),
+                  onTap: () => Navigator.of(
+                    context,
+                  ).push(appRoute(ProductDetailScreen(productId: product.id))),
                   child: Stack(
                     children: [
                       Positioned.fill(
@@ -379,7 +405,10 @@ class _MiniAdd extends StatelessWidget {
 
 /// Shared add-to-cart behaviour: in stock adds, out of stock registers a
 /// "Notify me" instead of hiding the product.
-Future<void> addToCartWithFeedback(BuildContext context, Product product) async {
+Future<void> addToCartWithFeedback(
+  BuildContext context,
+  Product product,
+) async {
   final store = AppScope.read(context);
   if (product.inStock) {
     store.addToCart(product.id);
@@ -400,18 +429,20 @@ Future<void> addToCartWithFeedback(BuildContext context, Product product) async 
         children: [
           Ic.svg(Ic.bell, color: context.p.accent, size: 38, stroke: 1.8),
           const SizedBox(height: 12),
-          Text('We will let you know', style: Type.title2(context.p), textAlign: TextAlign.center),
+          Text(
+            'We will let you know',
+            style: Type.title2(context.p),
+            textAlign: TextAlign.center,
+          ),
           const SizedBox(height: 8),
           Text(
             '${product.name} is out of stock. We will notify you the moment a new batch arrives at the clinic.',
-            style: Type.body(context.p).copyWith(color: context.p.textSecondary),
+            style: Type.body(context.p)
+                .copyWith(color: context.p.textSecondary),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: T.s20),
-          PrimaryButton(
-            label: 'Done',
-            onPressed: () => dismissSheet(context),
-          ),
+          PrimaryButton(label: 'Done', onPressed: () => dismissSheet(context)),
         ],
       ),
     ),

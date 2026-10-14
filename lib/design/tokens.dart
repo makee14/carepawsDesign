@@ -24,10 +24,13 @@ class T {
   // ---- derived semantic tokens (contrast-verified) --------------------------
   /// #2A1A0E — 15.27:1 on cream, 16.77:1 on card.
   static const text = Color(0xFF2A1A0E);
+
   /// #6B5646 — 6.28:1 on cream, 6.90:1 on card. Secondary copy stays readable.
   static const textSecondary = Color(0xFF6B5646);
+
   /// #A8480F — darkened terracotta, 5.32:1 on cream / 5.84:1 with white text.
   static const terracottaDeep = Color(0xFFA8480F);
+
   /// #B14E12 — readable terracotta for small secondary labels (4.82:1).
   static const terracottaText = Color(0xFFB14E12);
 
