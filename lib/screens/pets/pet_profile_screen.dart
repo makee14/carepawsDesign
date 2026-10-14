@@ -156,7 +156,7 @@ class _PetProfileScreenState extends State<PetProfileScreen> {
                                       ),
                                     ],
                                   ),
-                                  const SizedBox(height: 10),
+                                  const SizedBox(height: 8),
                                   // The hero strip keeps weight only: temperature
                                   // and heart rate duplicate the Vitals section
                                   // below, and weight is dropped from the stat
@@ -217,9 +217,9 @@ class _PetProfileScreenState extends State<PetProfileScreen> {
                     ],
                   ),
 
-                  const SizedBox(height: T.s20),
+                  const SizedBox(height: T.s16),
                   Text('Details', style: Type.headline(p)),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 8),
                   SoftCard(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 16,
@@ -250,12 +250,12 @@ class _PetProfileScreenState extends State<PetProfileScreen> {
                     ),
                   ),
 
-                  const SizedBox(height: T.s20),
+                  const SizedBox(height: T.s16),
                   Text('Vitals', style: Type.headline(p)),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 8),
                   _VitalsGrid(pet: pet),
 
-                  const SizedBox(height: T.s20),
+                  const SizedBox(height: T.s16),
                   Row(
                     children: [
                       Expanded(
@@ -263,7 +263,7 @@ class _PetProfileScreenState extends State<PetProfileScreen> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 8),
                   SizedBox(
                     height: 38,
                     child: ListView(
@@ -299,9 +299,9 @@ class _PetProfileScreenState extends State<PetProfileScreen> {
                   else
                     for (final e in entries) _TimelineCard(entry: e, pet: pet),
 
-                  const SizedBox(height: T.s20),
+                  const SizedBox(height: T.s16),
                   Text('Documents', style: Type.headline(p)),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 8),
                   if (pet.docs.isEmpty)
                     SoftCard(
                       child: Text(
@@ -357,7 +357,7 @@ class _PetProfileScreenState extends State<PetProfileScreen> {
             ),
             const SizedBox(height: T.s16),
             _DocPreview(doc: d),
-            const SizedBox(height: T.s20),
+            const SizedBox(height: T.s16),
             PrimaryButton(
               label: 'Download',
               icon: Ic.download,
@@ -366,7 +366,7 @@ class _PetProfileScreenState extends State<PetProfileScreen> {
                 ScaffoldlessNotice.show(context, '${d.name} saved to Files.');
               },
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 8),
             SecondaryButton(
               label: 'Close',
               onPressed: () => dismissSheet(context),
@@ -403,7 +403,7 @@ class _DocPreview extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Ic.svg(Ic.doc, color: p.accent, size: 42, stroke: 1.7),
-                const SizedBox(height: 10),
+                const SizedBox(height: 8),
                 Text('Preview', style: Type.footnote(p)),
               ],
             )
@@ -498,8 +498,11 @@ class _VitalsInline extends StatelessWidget {
                   : T.taupe.withValues(alpha: 0.3),
             ),
           Expanded(
+            // Leading-aligned: the stat sits under the name's leading edge
+            // instead of drifting centered beneath the full-width name row.
             child: Column(
               mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Ic.svg(Ic.byName(shown[i].icon), color: p.accent, size: 16),
                 const SizedBox(height: 4),
@@ -515,7 +518,6 @@ class _VitalsInline extends StatelessWidget {
                   style: Type.caption(p),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.center,
                 ),
               ],
             ),
@@ -604,7 +606,7 @@ class _VitalsGrid extends StatelessWidget {
               style: Type.largeTitle(context.p)
                   .copyWith(color: context.p.accentText),
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 8),
             Text(
               v.value.trim() == '—' || v.value.trim().isEmpty
                   ? 'No reading yet — the clinic records this at ${pet.name}\u2019s first visit.'
@@ -613,7 +615,7 @@ class _VitalsGrid extends StatelessWidget {
               style: Type.footnote(context.p),
               textAlign: TextAlign.center,
             ),
-            const SizedBox(height: T.s20),
+            const SizedBox(height: T.s16),
             PrimaryButton(
               label: 'Done',
               onPressed: () => dismissSheet(context),
@@ -728,7 +730,7 @@ class _TimelineCard extends StatelessWidget {
             Text(entry.detail, style: Type.body(context.p)),
             const SizedBox(height: 14),
             Text(entry.staffName, style: Type.footnote(context.p)),
-            const SizedBox(height: T.s20),
+            const SizedBox(height: T.s16),
             PrimaryButton(
               label: 'Done',
               onPressed: () => dismissSheet(context),
@@ -763,7 +765,7 @@ class ScaffoldlessNotice {
               style: Type.headline(context.p),
               textAlign: TextAlign.center,
             ),
-            const SizedBox(height: T.s20),
+            const SizedBox(height: T.s16),
             PrimaryButton(label: 'OK', onPressed: () => dismissSheet(context)),
           ],
         ),

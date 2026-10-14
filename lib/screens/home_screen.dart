@@ -45,10 +45,11 @@ class HomeScreen extends StatelessWidget {
         slivers: [
           LargeTitleBar(title: _greetingTitle(store)),
           SliverPadding(
+            // 8pt grid: 16pt phone margins (32pt on wide), 8pt top.
             padding: EdgeInsets.fromLTRB(
-              wide ? 32 : 20,
-              12,
-              wide ? 32 : 20,
+              wide ? 32 : 16,
+              8,
+              wide ? 32 : 16,
               40 + TabBarClearance.of(context),
             ),
             sliver: SliverList.list(
@@ -108,7 +109,7 @@ class HomeScreen extends StatelessWidget {
                 // the label (exactly like old.pdf), so there is no
                 // SectionHeader here — header + pill would duplicate it.
                 FadeIn(index: 0, child: _NextAppointmentHero(store: store)),
-                const SizedBox(height: T.s24),
+                const SizedBox(height: T.s16),
                 FadeIn(index: 1, child: _QuickActions(store: store)),
                 const SizedBox(height: T.s8),
                 SectionHeader(
@@ -158,10 +159,10 @@ class HomeScreen extends StatelessWidget {
 }
 
 /// Compact hero carousel: one page per upcoming appointment (the next five),
-/// in the old hero composition resized to ~55% of the old height
-/// (~280pt total: 104pt art strip + 16 + floating panel + 14).
-/// Zero appointments keeps the empty state; a single appointment renders
-/// with no paging chrome and no timer.
+/// full-bleed pet photo with the glass info panel floating over its lower
+/// portion — the old hero composition at ~55% of the old height (~280pt
+/// total). Zero appointments keeps the empty state; a single appointment
+/// renders with no paging chrome and no timer.
 class _NextAppointmentHero extends StatefulWidget {
   const _NextAppointmentHero({required this.store});
   final AppStore store;
@@ -170,7 +171,9 @@ class _NextAppointmentHero extends StatefulWidget {
   State<_NextAppointmentHero> createState() => _NextAppointmentHeroState();
 }
 
-/// Hero art strip height (pinned by the design plan).
+/// Photo band visible above the glass panel (pinned by the design plan): with
+/// the panel bottom-anchored at 14pt, the card keeps its ~280pt total height
+/// and the composition stays identical to the previous art-strip layout.
 const _artH = 104.0;
 
 class _NextAppointmentHeroState extends State<_NextAppointmentHero> {
@@ -330,15 +333,18 @@ class _NextAppointmentHeroState extends State<_NextAppointmentHero> {
   }
 }
 
-/// One carousel page: the old hero composition compacted — a 104pt art strip
-/// with the cream label pill top-left, and the info panel floating fully
-/// inside the card below it (0.78 of the card's width, 16pt below the art,
-/// 14pt above the card's bottom edge).
+/// One carousel page: full-bleed pet photo filling the whole card, with the
+/// glass info panel floating over the photo's lower portion (0.78 of the
+/// card's width, 14pt above the card's bottom edge) so the frosted effect
+/// reads against the image — the old hero composition at the compact height.
+/// A top scrim keeps the cream label pill readable on bright photos; a bottom
+/// scrim melts the photo into darkness behind the glass panel so text stays
+/// ≥4.5:1 on any photo, either theme. No photo → seeded art full-bleed
+/// (never an empty box).
 ///
-/// Structural, never overflow: the Column lays out in normal flow (art, then
-/// the panel with its margins) and the page box is sized from the same
-/// numbers, so the panel is always fully inside the page box and no ancestor
-/// can clip it.
+/// Structural, never overflow: the Stack layers in normal paint order and the
+/// page box is sized from the same numbers as the panel, so the panel is
+/// always fully inside the page box and no ancestor can clip it.
 class _HeroPage extends StatelessWidget {
   const _HeroPage({
     required this.store,
@@ -381,80 +387,95 @@ class _HeroPage extends StatelessWidget {
         : 'Next appointment. ${pet.name}, ${service!.name}, '
               '${mediumDate(appt.start)}, with ${staff!.name}. ${appt.status.label}';
 
+    // ponytail: scrims are plain black with theme-picked alpha — the photo
+    // underneath is arbitrary user content, so a neutral scrim is the only
+    // honest contrast guarantee; no theme token can promise that.
     final card = ClipRRect(
       borderRadius: BorderRadius.circular(24),
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              T.amber.withValues(alpha: p.isDark ? 0.30 : 0.42),
-              p.surface,
-            ],
-          ),
-        ),
-        child: SizedBox(
-          height: pageHeight,
-          child: Column(
-            children: [
-              // Art strip: full-bleed pet photo with a bottom scrim melting
-              // into the surface below, and the cream label pill top-left
-              // (solid cream, not glass — readability).
-              SizedBox(
-                height: _artH,
-                width: double.infinity,
-                child: Stack(
-                  children: [
-                    Positioned.fill(
-                      child: pet == null
-                          ? PetArt(seed: 1, iconSize: 52)
-                          : PetAvatar(
-                              pet: pet,
-                              iconSize: 52,
-                              label: '${pet.name} portrait',
-                            ),
+      child: SizedBox(
+        height: pageHeight,
+        child: Stack(
+          children: [
+            // Full-bleed pet photo: the whole card is the portrait. No
+            // photo → seeded art, medallion parked in the visible band
+            // above the panel (never an empty box, never a sliver peeking
+            // from behind the glass). PetAvatar ignores the alignment when
+            // a real photo exists — the photo always fills.
+            Positioned.fill(
+              child: pet == null
+                  ? PetArt(
+                      seed: 1,
+                      iconSize: 52,
+                      alignment: const Alignment(0.0, -0.7),
+                    )
+                  : PetAvatar(
+                      pet: pet,
+                      iconSize: 52,
+                      alignment: const Alignment(0.0, -0.7),
+                      label: '${pet.name} portrait',
                     ),
-                    Positioned(
-                      left: 0,
-                      right: 0,
-                      bottom: 0,
-                      height: 52,
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.topCenter,
-                            end: Alignment.bottomCenter,
-                            colors: [
-                              p.surface.withValues(alpha: 0),
-                              p.surface.withValues(alpha: 0.75),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                    Positioned(
-                      left: 14,
-                      top: 12,
-                      child: StatusChip(
-                        label: appt == null
-                            ? 'No bookings yet'
-                            : 'Next appointment',
-                        icon: Ic.calendar,
-                        fg: T.espresso,
-                        bg: T.cream.withValues(alpha: 0.92),
-                      ),
-                    ),
-                  ],
+            ),
+            // Top scrim: keeps the cream pill readable on bright photos.
+            Positioned(
+              left: 0,
+              right: 0,
+              top: 0,
+              height: 72,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      const Color(0xFF000000)
+                          .withValues(alpha: p.isDark ? 0.30 : 0.20),
+                      const Color(0xFF000000).withValues(alpha: 0),
+                    ],
+                  ),
                 ),
               ),
-              // Floating panel: 0.78 of the card's width, 16pt below the art,
-              // 14pt above the card's bottom edge. Appointment pages share one
-              // fixed panel height so paging never jumps. The empty body
-              // bounds its text (maxLines) so it always fits the same fixed
-              // height, even with the wide golden font or large Dynamic Type.
-              Padding(
-                padding: const EdgeInsets.fromLTRB(0, 16, 0, 14),
+            ),
+            // Bottom scrim: melts the photo into darkness behind the glass
+            // panel so the panel — and its text — reads on any photo.
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              height: panelHeight + 14 + 64,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      const Color(0xFF000000).withValues(alpha: 0),
+                      const Color(0xFF000000)
+                          .withValues(alpha: p.isDark ? 0.45 : 0.32),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            // Cream label pill top-left (solid cream, not glass).
+            Positioned(
+              left: 14,
+              top: 12,
+              child: StatusChip(
+                label: appt == null ? 'No bookings yet' : 'Next appointment',
+                icon: Ic.calendar,
+                fg: T.espresso,
+                bg: T.cream.withValues(alpha: 0.92),
+              ),
+            ),
+            // Floating glass panel over the photo's lower portion: 0.78 of
+            // the card's width, 14pt above the card's bottom edge. One fixed
+            // panel height across pages so paging never jumps; the empty
+            // body bounds its text (maxLines) so it fits at any Dynamic Type.
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 14,
+              child: Center(
                 child: FractionallySizedBox(
                   widthFactor: 0.78,
                   child: appt == null || pet == null
@@ -486,8 +507,8 @@ class _HeroPage extends StatelessWidget {
                         ),
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -603,9 +624,13 @@ class _HeroBody extends StatelessWidget {
                   const SizedBox(height: 4),
                   // Single line, always: at AX5 this used to wrap and push
                   // the card — and the page — taller than its siblings.
+                  // Full-strength text here (not textSecondary): the panel
+                  // floats over an arbitrary photo, and secondary only
+                  // reaches 4.3:1 on near-black photos — primary holds
+                  // ≥10:1 at both extremes.
                   Text(
                     '${mediumDate(a.start)} · $staffName',
-                    style: Type.footnote(p).copyWith(color: p.textSecondary),
+                    style: Type.footnote(p).copyWith(color: p.text),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -635,8 +660,12 @@ class _HeroBody extends StatelessWidget {
                 label: countdownLabel(store.now, a.start),
                 icon: Ic.clock,
                 compact: true,
-                fg: p.warning,
-                bg: T.amber.withValues(alpha: 0.32),
+                // Solid amber with espresso text (8.80:1, photo-independent):
+                // over an arbitrary photo a translucent tint can't guarantee
+                // 4.5:1 — the one sanctioned text-on-amber use. Same language
+                // as the primary CTA.
+                fg: T.espresso,
+                bg: T.amber,
               ),
               const SizedBox(width: 8),
               StatusChip(
@@ -835,11 +864,14 @@ class _PetRow extends StatelessWidget {
                     borderRadius: BorderRadius.circular(T.rCard),
                     child: Stack(
                       children: [
-                        // Full-bleed pet photo.
+                        // Full-bleed pet photo. No photo → seeded art with the
+                        // medallion optically centred in the visible area
+                        // above the name/scrim, not the geometric centre.
                         Positioned.fill(
                           child: PetAvatar(
                             pet: pet,
                             iconSize: 54,
+                            alignment: const Alignment(0.0, -0.35),
                             label: '${pet.name} portrait',
                           ),
                         ),

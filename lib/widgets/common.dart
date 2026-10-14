@@ -979,12 +979,17 @@ class PetAvatar extends StatelessWidget {
     this.radius = 0,
     this.iconSize = 64,
     this.label,
+    this.alignment = Alignment.center,
   });
 
   final Pet pet;
   final double radius;
   final double iconSize;
   final String? label;
+
+  /// Medallion position for the no-photo fallback art. Ignored when the pet
+  /// has a photo (the photo always fills).
+  final AlignmentGeometry alignment;
 
   @override
   Widget build(BuildContext context) {
@@ -994,6 +999,7 @@ class PetAvatar extends StatelessWidget {
         species: pet.species,
         radius: radius,
         iconSize: iconSize,
+        alignment: alignment,
         label: label ?? '${pet.name} portrait',
       );
     }
@@ -1013,6 +1019,7 @@ class PetAvatar extends StatelessWidget {
             species: pet.species,
             radius: radius,
             iconSize: iconSize,
+            alignment: alignment,
             label: label ?? '${pet.name} portrait',
           ),
         ),
@@ -1090,6 +1097,7 @@ class PetArt extends StatelessWidget {
     this.radius = 0,
     this.iconSize = 64,
     this.label,
+    this.alignment = Alignment.center,
   });
 
   final int seed;
@@ -1100,6 +1108,11 @@ class PetArt extends StatelessWidget {
   final double radius;
   final double iconSize;
   final String? label;
+
+  /// Where the medallion sits in the box. Callers with overlaid bottom
+  /// content (name/scrim) shift it up so it reads optically centred in the
+  /// visible area rather than the geometric centre of the whole box.
+  final AlignmentGeometry alignment;
 
   static const _tints = [
     Color(0xFFF7C98B), // amber
@@ -1130,7 +1143,8 @@ class PetArt extends StatelessWidget {
               ],
             ),
           ),
-          child: Center(
+          child: Align(
+            alignment: alignment,
             child: Container(
               width: iconSize * 1.24,
               height: iconSize * 1.24,

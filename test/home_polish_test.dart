@@ -80,6 +80,37 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
+    testWidgets('hero photo is full-bleed with the glass panel overlaid', (
+      tester,
+    ) async {
+      await pumpHome(tester, reduceMotion: true);
+      // The photo fills the card edge to edge...
+      final fills = find.byWidgetPredicate(
+        (w) =>
+            w is Positioned &&
+            w.top == 0 &&
+            w.left == 0 &&
+            w.right == 0 &&
+            w.bottom == 0,
+      );
+      expect(fills, findsWidgets);
+      // ...and the glass info panel floats over the photo's lower portion
+      // (bottom-anchored in the same Stack), never laid out beneath it.
+      final panelAnchor = find.byWidgetPredicate(
+        (w) => w is Positioned && w.bottom == 14 && w.left == 0 && w.right == 0,
+      );
+      expect(panelAnchor, findsWidgets);
+      // The panel itself is frosted glass, so the effect reads on the photo.
+      expect(
+        find.descendant(
+          of: panelAnchor,
+          matching: find.byType(GlassCard),
+        ),
+        findsWidgets,
+      );
+      expect(tester.takeException(), isNull);
+    });
+
     testWidgets('carousel shows one dot per appointment', (tester) async {
       await pumpHome(tester, reduceMotion: true);
       expect(find.byType(PageView), findsOneWidget);

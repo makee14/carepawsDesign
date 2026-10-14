@@ -8,7 +8,8 @@ class T {
   // ---- locked brand palette -------------------------------------------------
   static const orange = Color(0xFFE4843E); // logo mark, illustration accents
   static const terracotta = Color(0xFFD4621A); // large text, icons, accents
-  static const amber = Color(0xFFF4AE52); // chips, ratings (never carries text)
+  static const amber = Color(0xFFF4AE52); // chips, ratings; carries text only
+  // as a solid bg with espresso fg (8.80:1, e.g. the hero countdown chip)
   static const espresso = Color(0xFF2A1A0E); // primary text, 15.27:1 on cream
   static const ink = Color(0xFF25221E); // wordmark ink, large titles
   static const cream = Color(0xFFFEF3E2); // app background
