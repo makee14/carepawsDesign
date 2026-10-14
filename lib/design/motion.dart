@@ -16,6 +16,12 @@ import '../state/app_store.dart';
 ///      useful to people, fade the object out before moving it and fade it back
 ///      in after it is in the new location." A card arriving 10pt below its
 ///      final spot communicates nothing, so the app now only fades.
+///
+///      One deliberate exception: the splash welcome text uses [FadeIn] with
+///      a small [FadeIn.rise] (Mark's explicit request 2026-10-14 — Apple-style
+///      entrances pair the fade with a slight upward rise). It stays one-shot,
+///      subtle (≤12pt), eased with the house curve, and parks at the final
+///      state under reduced motion like everything else.
 /// ---------------------------------------------------------------------------
 class Motion {
   const Motion._();
@@ -59,16 +65,25 @@ bool reduceMotionOf(BuildContext context) {
   return AppScope.maybeOf(context)?.reduceMotionOverride ?? false;
 }
 
-/// One-shot fade.
+/// One-shot fade, optionally with a slight upward rise.
 ///
 /// Wrap a card, a section or a list row and pass its [index] to stagger a group
 /// in left to right, top to bottom. With motion reduced it paints the final
 /// state on the first frame — no fade at all.
 ///
-/// Purely an opacity change: nothing is translated or scaled, so an element
-/// never travels across the screen to arrive.
+/// [rise] is 0 by default: a pure opacity change, nothing is translated or
+/// scaled, so an element never travels across the screen to arrive. A nonzero
+/// rise starts the child [rise]pt below its final spot and eases it up while
+/// fading in — the splash welcome text uses this (see the motion-vocabulary
+/// header for why it is the one exception).
 class FadeIn extends StatefulWidget {
-  const FadeIn({super.key, required this.child, this.index = 0, this.duration = Motion.base});
+  const FadeIn({
+    super.key,
+    required this.child,
+    this.index = 0,
+    this.duration = Motion.base,
+    this.rise = 0,
+  });
 
   final Widget child;
 
@@ -76,6 +91,9 @@ class FadeIn extends StatefulWidget {
   final int index;
 
   final Duration duration;
+
+  /// Upward travel in logical pixels during the entrance. 0 = opacity only.
+  final double rise;
 
   @override
   State<FadeIn> createState() => _FadeInState();
@@ -120,10 +138,15 @@ class _FadeInState extends State<FadeIn> with SingleTickerProviderStateMixin {
     return AnimatedBuilder(
       animation: _c,
       child: widget.child,
-      builder: (context, child) => Opacity(
-        opacity: Motion.enter.transform(_c.value),
-        child: child,
-      ),
+      builder: (context, child) {
+        final eased = Motion.enter.transform(_c.value);
+        final opacity = Opacity(opacity: eased, child: child);
+        if (widget.rise == 0) return opacity;
+        return Transform.translate(
+          offset: Offset(0, (1 - eased) * widget.rise),
+          child: opacity,
+        );
+      },
     );
   }
 }

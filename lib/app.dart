@@ -34,8 +34,8 @@ class _SplashScreenState extends State<SplashScreen>
     with SingleTickerProviderStateMixin {
   bool _ready = false;
 
-  /// Looping logo animation: a slow breathing scale + a halo ring that
-  /// expands and fades, forever. Reduced motion parks everything at rest.
+  /// Looping logo animation: the mark itself rocks gently and breathes on a
+  /// continuous 2.6s loop. Reduced motion parks everything at rest.
   late final AnimationController _loop = AnimationController(
     vsync: this,
     duration: const Duration(milliseconds: 2600),
@@ -142,63 +142,78 @@ class _SplashScreenState extends State<SplashScreen>
           ),
           SafeArea(
             child: Padding(
-              padding: const EdgeInsets.all(T.s24),
+              padding: const EdgeInsets.fromLTRB(T.s24, T.s16, T.s24, T.s16),
               child: Column(
                 children: [
-                  // Optical centering: the hero sits at the true screen
-                  // centre (11:8 split of the free space compensates the
-                  // bottom CTA block) instead of floating high.
-                  const Spacer(flex: 11),
-                  // Staggered arrival: mark, wordmark, then tagline. Each piece
-                  // waits on the one before it so the screen assembles instead
-                  // of appearing all at once.
+                  // The hero's optical centre sits just above true centre:
+                  // more air below it than above, so the CTA block reads as
+                  // anchored rather than the top reading as a dead zone.
+                  const Spacer(flex: 4),
+                  // Staggered arrival: mark fades in, then the wordmark and
+                  // tagline fade + rise gently, Apple-style. Each piece waits
+                  // on the one before it so the screen assembles instead of
+                  // appearing all at once.
                   Column(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
                       FadeIn(
                         duration: Motion.slow,
                         child: _LoopingLogo(loop: _loop, size: 152),
                       ),
-                      const SizedBox(height: T.s24),
+                      const SizedBox(height: T.s20),
                       FadeIn(
                         index: 1,
-                        child: Text(
-                          'CAREPAWS',
-                          style: Type.largeTitle(p).copyWith(
-                            letterSpacing: 5,
-                            fontWeight: FontWeight.w800,
+                        rise: 12,
+                        duration: Motion.slow,
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Text(
+                            'CAREPAWS',
+                            textAlign: TextAlign.center,
+                            style: Type.largeTitle(p).copyWith(
+                              letterSpacing: 5,
+                              fontWeight: FontWeight.w800,
+                            ),
                           ),
                         ),
                       ),
-                      const SizedBox(height: 6),
+                      const SizedBox(height: 8),
                       FadeIn(
                         index: 2,
-                        child: Text(
-                          'Veterinary Clinic',
-                          style: Type.footnote(p).copyWith(
-                            fontSize: 15,
-                            letterSpacing: 1.6,
-                            color: p.accentText,
+                        rise: 12,
+                        duration: Motion.slow,
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Text(
+                            'Veterinary Clinic',
+                            textAlign: TextAlign.center,
+                            style: Type.footnote(p).copyWith(
+                              fontSize: 15,
+                              letterSpacing: 1.6,
+                              color: p.accentText,
+                            ),
                           ),
                         ),
                       ),
                     ],
                   ),
-                  const Spacer(flex: 8),
+                  const Spacer(flex: 6),
+                  // Full-width CTA: a proper 54pt call to action, not a stub.
                   FadeIn(
-                    index: 4,
-                    child: SizedBox(
-                      width: 200,
-                      child: PrimaryButton(
-                        label: 'Get started',
-                        icon: Ic.arrowRight,
-                        onPressed: _ready ? _goToLogin : null,
-                        busy: !_ready,
-                      ),
+                    index: 3,
+                    child: PrimaryButton(
+                      label: 'Get started',
+                      icon: Ic.arrowRight,
+                      onPressed: _ready ? _goToLogin : null,
+                      busy: !_ready,
                     ),
                   ),
                   const SizedBox(height: T.s12),
-                  Text(Seed.appVersion, style: Type.caption(p)),
-                  const SizedBox(height: T.s12),
+                  Text(
+                    Seed.appVersion,
+                    textAlign: TextAlign.center,
+                    style: Type.caption(p),
+                  ),
                 ],
               ),
             ),
@@ -231,9 +246,11 @@ class LogoMark extends StatelessWidget {
   }
 }
 
-/// Splash-only wrapper: the logo mark breathes on a loop — a slow scale
-/// pulse plus a halo ring that expands and fades. Under reduced motion the
-/// controller never starts and the mark renders at rest.
+/// Splash-only wrapper: the logo mark itself animates on a calm continuous
+/// loop — a gentle rock (±4°) plus a soft breathing scale, phase-offset so
+/// the two never read as mechanical. There is deliberately no halo ring or
+/// other decoration around the mark: the mark is the animation. Under
+/// reduced motion the controller never starts and the mark renders at rest.
 class _LoopingLogo extends StatelessWidget {
   const _LoopingLogo({required this.loop, required this.size});
   final Animation<double> loop;
@@ -245,34 +262,14 @@ class _LoopingLogo extends StatelessWidget {
       animation: loop,
       builder: (context, _) {
         final t = loop.value;
-        // 0..1..0 breathing scale over the cycle.
-        final scale = 1.0 + 0.045 * math.sin(t * math.pi * 2);
-        // Halo: expands from the badge edge and fades, twice per cycle.
-        final haloT = (t * 2) % 1.0;
-        return SizedBox.square(
-          dimension: size * 1.5,
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              Opacity(
-                opacity: 0.35 * (1 - haloT),
-                child: Container(
-                  width: size * (1.02 + 0.30 * haloT),
-                  height: size * (1.02 + 0.30 * haloT),
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: T.orange.withValues(alpha: 0.55),
-                      width: 2.5,
-                    ),
-                  ),
-                ),
-              ),
-              Transform.scale(
-                scale: scale,
-                child: LogoMark(size: size),
-              ),
-            ],
+        // One full rock + breathe per 2.6s cycle.
+        final rock = 0.07 * math.sin(t * math.pi * 2);
+        final scale = 1.0 + 0.028 * math.sin(t * math.pi * 2 + 0.9);
+        return Transform.rotate(
+          angle: rock,
+          child: Transform.scale(
+            scale: scale,
+            child: LogoMark(size: size),
           ),
         );
       },
