@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:math' as math;
+
 import 'package:flutter/cupertino.dart';
 
 import '../app.dart';
@@ -50,48 +53,61 @@ class HomeScreen extends StatelessWidget {
             ),
             sliver: SliverList.list(
               children: [
-                // Title line and its actions share one row — the actions used to
-                // sit on a row of their own, which cost ~52pt above the fold.
-                Row(
+                // Subtle warm radial glow behind the greeting — static, no
+                // animation on Home (same pattern as the splash _Glow).
+                Stack(
+                  clipBehavior: Clip.none,
                   children: [
-                    Expanded(
-                      child: Text(
-                        greetingSub(store.now),
-                        style: Type.body(p).copyWith(color: p.textSecondary),
+                    Positioned(
+                      right: -70,
+                      top: -95,
+                      child: _Glow(
+                        size: 210,
+                        color: T.amber.withValues(
+                          alpha: p.isDark ? 0.12 : 0.08,
+                        ),
                       ),
                     ),
-                    NavActions(
-                      actions: [
-                        IconTap(
-                          path: Ic.search,
-                          label: 'Search pets, services and products',
-                          onPressed: () =>
-                              Navigator.of(context)
-                                  .push(appRoute(const SearchScreen())),
+                    // Title line and its actions share one row — the actions used to
+                    // sit on a row of their own, which cost ~52pt above the fold.
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            greetingSub(store.now),
+                            style: Type.body(p)
+                                .copyWith(color: p.textSecondary),
+                          ),
                         ),
-                        IconTap(
-                          path: Ic.bell,
-                          label:
-                              'Notifications, ${store.unreadNotifications} unread',
-                          badge: store.unreadNotifications,
-                          color: p.primaryFill,
-                          onPressed: () =>
-                              Navigator.of(context)
+                        NavActions(
+                          actions: [
+                            IconTap(
+                              path: Ic.search,
+                              label: 'Search pets, services and products',
+                              onPressed: () =>
+                                  Navigator.of(context)
+                                      .push(appRoute(const SearchScreen())),
+                            ),
+                            IconTap(
+                              path: Ic.bell,
+                              label:
+                                  'Notifications, ${store.unreadNotifications} unread',
+                              badge: store.unreadNotifications,
+                              color: p.primaryFill,
+                              onPressed: () => Navigator.of(context)
                                   .push(appRoute(const NotificationsScreen())),
+                            ),
+                          ],
                         ),
                       ],
                     ),
                   ],
                 ),
                 const SizedBox(height: T.s16),
-                SectionHeader(
-                  title: 'Next appointment',
-                  icon: Ic.calendar,
-                  padding: const EdgeInsets.fromLTRB(0, 0, 0, T.s8),
-                  actionLabel: 'View all',
-                  onAction: () => switchTab(context, 2),
-                ),
-                FadeIn(index: 0, child: _NextAppointmentCard(store: store)),
+                // The cream "Next appointment" pill on the card itself carries
+                // the label (exactly like old.pdf), so there is no
+                // SectionHeader here — header + pill would duplicate it.
+                FadeIn(index: 0, child: _NextAppointmentHero(store: store)),
                 const SizedBox(height: T.s24),
                 FadeIn(index: 1, child: _QuickActions(store: store)),
                 const SizedBox(height: T.s8),
@@ -141,49 +157,390 @@ class HomeScreen extends StatelessWidget {
   }
 }
 
-/// Compact next-appointment card: the same row the Profile tab uses — pet
-/// icon, title, date line and status chips — with no hero art and no paging.
-/// Tapping opens the appointment detail (or the booking flow when empty);
-/// the Appointments tab owns the full upcoming list.
-class _NextAppointmentCard extends StatelessWidget {
-  const _NextAppointmentCard({required this.store});
+/// Compact hero carousel: one page per upcoming appointment (the next five),
+/// in the old hero composition resized to ~55% of the old height
+/// (~280pt total: 104pt art strip + 16 + floating panel + 14).
+/// Zero appointments keeps the empty state; a single appointment renders
+/// with no paging chrome and no timer.
+class _NextAppointmentHero extends StatefulWidget {
+  const _NextAppointmentHero({required this.store});
   final AppStore store;
 
-  void _open(BuildContext context, Appointment? a) {
+  @override
+  State<_NextAppointmentHero> createState() => _NextAppointmentHeroState();
+}
+
+/// Hero art strip height (pinned by the design plan).
+const _artH = 104.0;
+
+class _NextAppointmentHeroState extends State<_NextAppointmentHero> {
+  /// Paging beyond five turns the hero into a slideshow; the seed ships two.
+  static const _maxPages = 5;
+
+  /// Auto-advance cadence. Long enough to read the card, short enough to feel
+  /// alive.
+  static const _autoAdvance = Duration(seconds: 5);
+
+  /// Idle time after the user's finger leaves before auto-advance resumes.
+  static const _resumeDelay = Duration(milliseconds: 2500);
+
+  late final PageController _pages = PageController();
+  Timer? _auto;
+  Timer? _resume;
+  bool _holding = false;
+  int _page = 0;
+  int _count = -1;
+
+  List<Appointment> get _visible =>
+      widget.store.upcomingAppointments.take(_maxPages).toList();
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _reconcile();
+  }
+
+  @override
+  void didUpdateWidget(covariant _NextAppointmentHero oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _reconcile();
+  }
+
+  /// Keeps the controller, the dot state and the timer consistent when the
+  /// appointment list changes under the carousel — a booking, a cancellation,
+  /// or the clock tick dropping a finished visit.
+  void _reconcile() {
+    final count = _visible.length;
+    if (count != _count) {
+      _count = count;
+      if (_page >= count) {
+        _page = count <= 0 ? 0 : count - 1;
+        if (_pages.hasClients) _pages.jumpToPage(_page);
+      }
+    }
+    _syncTimer();
+  }
+
+  /// (Re)starts the auto-advance timer exactly when it should run: more than
+  /// one page, motion allowed, the home route on top and tickers enabled, and
+  /// no finger down. With Reduce Motion there is no timer at all — pages still
+  /// change on swipe, instantly, with no animation.
+  void _syncTimer() {
+    _auto?.cancel();
+    _auto = null;
+    if (!mounted || _holding || _visible.length < 2) return;
+    if (reduceMotionOf(context)) return;
+    if (!TickerMode.valuesOf(context).enabled) return;
+    if (ModalRoute.of(context)?.isCurrent == false) return;
+    _auto = Timer.periodic(_autoAdvance, (_) => _advance());
+  }
+
+  void _advance() {
+    if (!mounted || !_pages.hasClients) return;
+    final count = _visible.length;
+    if (count < 2) return;
+    final current = (_pages.page ?? _page.toDouble()).round() % count;
+    _pages.animateToPage(
+      (current + 1) % count,
+      duration: Motion.base,
+      curve: Motion.enter,
+    );
+  }
+
+  void _pause() {
+    _holding = true;
+    _auto?.cancel();
+    _auto = null;
+    _resume?.cancel();
+    _resume = null;
+  }
+
+  void _scheduleResume() {
+    _holding = false;
+    _resume?.cancel();
+    _resume = Timer(_resumeDelay, () {
+      if (mounted) _syncTimer();
+    });
+  }
+
+  @override
+  void dispose() {
+    _auto?.cancel();
+    _resume?.cancel();
+    _pages.dispose();
+    super.dispose();
+  }
+
+  /// Fixed panel height, derived from the type ramp at the current text
+  /// scaler: the headline always reserves two lines, so paging never moves
+  /// the content below the carousel. At AX5 the card grows instead of
+  /// clipping; a few points of slack absorb sub-pixel line-height drift.
+  double _panelHeight(AppPalette p) {
+    final scaler = MediaQuery.textScalerOf(context).scale(1);
+    double line(TextStyle s) => s.fontSize! * (s.height ?? 1.0) * scaler;
+    final row = math.max(
+      44.0,
+      line(Type.headline(p)) * 2 + 4 + line(Type.footnote(p)),
+    );
+    final chips = math.max(line(Type.caption(p)), 11.0) + 8;
+    return 14 * 2 + row + 12 + chips + 6;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.p;
+    final pages = _visible;
+    final panelH = _panelHeight(p);
+    final pageH = _artH + 16 + panelH + 14;
+
+    Widget page(Appointment? a, int index) => _HeroPage(
+      store: widget.store,
+      a: a,
+      index: index,
+      count: pages.length,
+      pageHeight: pageH,
+      panelHeight: panelH,
+    );
+
+    if (pages.length < 2) {
+      // Zero keeps the empty state; one renders with no paging chrome.
+      return page(pages.isEmpty ? null : pages.single, 0);
+    }
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SizedBox(
+          height: pageH,
+          child: Listener(
+            onPointerDown: (_) => _pause(),
+            onPointerUp: (_) => _scheduleResume(),
+            onPointerCancel: (_) => _scheduleResume(),
+            child: PageView.builder(
+              controller: _pages,
+              itemCount: pages.length,
+              onPageChanged: (i) => setState(() => _page = i),
+              itemBuilder: (context, i) => page(pages[i], i),
+            ),
+          ),
+        ),
+        _Dots(count: pages.length, active: _page),
+      ],
+    );
+  }
+}
+
+/// One carousel page: the old hero composition compacted — a 104pt art strip
+/// with the cream label pill top-left, and the info panel floating fully
+/// inside the card below it (0.78 of the card's width, 16pt below the art,
+/// 14pt above the card's bottom edge).
+///
+/// Structural, never overflow: the Column lays out in normal flow (art, then
+/// the panel with its margins) and the page box is sized from the same
+/// numbers, so the panel is always fully inside the page box and no ancestor
+/// can clip it.
+class _HeroPage extends StatelessWidget {
+  const _HeroPage({
+    required this.store,
+    required this.a,
+    required this.index,
+    required this.count,
+    required this.pageHeight,
+    required this.panelHeight,
+  });
+
+  final AppStore store;
+  final Appointment? a;
+  final int index;
+  final int count;
+  final double pageHeight;
+  final double panelHeight;
+
+  void _open(BuildContext context) {
     if (a == null) {
       Navigator.of(context).push(appRoute(const BookLandingScreen()));
     } else {
       Navigator.of(context)
-          .push(appRoute(AppointmentDetailScreen(appointmentId: a.id)));
+          .push(appRoute(AppointmentDetailScreen(appointmentId: a!.id)));
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final p = context.p;
-    final a = store.nextAppointment;
-    final pet = a == null ? null : store.pet(a.petId);
-    final service = a == null ? null : store.serviceOf(a.serviceId);
-    final staff = a == null ? null : store.staffOf(a.staffId);
+    final appt = a;
+    final service = appt == null ? null : store.serviceOf(appt.serviceId);
+    final pet = appt == null ? null : store.pet(appt.petId);
+    final staff = appt == null ? null : store.staffOf(appt.staffId);
 
-    final label = (a == null || pet == null)
+    final label = (appt == null || pet == null)
         ? 'No upcoming appointment. Book an appointment'
+        : count > 1
+        ? 'Upcoming appointment ${index + 1} of $count. ${pet.name}, ${service!.name}, '
+              '${mediumDate(appt.start)}, with ${staff!.name}. ${appt.status.label}'
         : 'Next appointment. ${pet.name}, ${service!.name}, '
-              '${mediumDate(a.start)}, with ${staff!.name}. ${a.status.label}';
+              '${mediumDate(appt.start)}, with ${staff!.name}. ${appt.status.label}';
 
-    return GlassCard(
-      border: p.isDark ? const Color(0x33FFFFFF) : const Color(0x8CFFFFFF),
-      onTap: () => _open(context, a),
-      semanticLabel: label,
-      child: a == null || pet == null
-          ? _EmptyHeroBody(pet: pet)
-          : _HeroBody(
-              store: store,
-              a: a,
-              pet: pet,
-              service: service!,
-              staffName: staff!.name,
-            ),
+    final card = ClipRRect(
+      borderRadius: BorderRadius.circular(24),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              T.amber.withValues(alpha: p.isDark ? 0.30 : 0.42),
+              p.surface,
+            ],
+          ),
+        ),
+        child: SizedBox(
+          height: pageHeight,
+          child: Column(
+            children: [
+              // Art strip: full-bleed pet photo with a bottom scrim melting
+              // into the surface below, and the cream label pill top-left
+              // (solid cream, not glass — readability).
+              SizedBox(
+                height: _artH,
+                width: double.infinity,
+                child: Stack(
+                  children: [
+                    Positioned.fill(
+                      child: pet == null
+                          ? PetArt(seed: 1, iconSize: 52)
+                          : PetAvatar(
+                              pet: pet,
+                              iconSize: 52,
+                              label: '${pet.name} portrait',
+                            ),
+                    ),
+                    Positioned(
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      height: 52,
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [
+                              p.surface.withValues(alpha: 0),
+                              p.surface.withValues(alpha: 0.75),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    Positioned(
+                      left: 14,
+                      top: 12,
+                      child: StatusChip(
+                        label: appt == null
+                            ? 'No bookings yet'
+                            : 'Next appointment',
+                        icon: Ic.calendar,
+                        fg: T.espresso,
+                        bg: T.cream.withValues(alpha: 0.92),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              // Floating panel: 0.78 of the card's width, 16pt below the art,
+              // 14pt above the card's bottom edge. Appointment pages share one
+              // fixed panel height so paging never jumps. The empty body
+              // bounds its text (maxLines) so it always fits the same fixed
+              // height, even with the wide golden font or large Dynamic Type.
+              Padding(
+                padding: const EdgeInsets.fromLTRB(0, 16, 0, 14),
+                child: FractionallySizedBox(
+                  widthFactor: 0.78,
+                  child: appt == null || pet == null
+                      ? SizedBox(
+                          height: panelHeight,
+                          child: Center(
+                            child: GlassCard(
+                              border: p.isDark
+                                  ? const Color(0x33FFFFFF)
+                                  : const Color(0x8CFFFFFF),
+                              padding: const EdgeInsets.all(14),
+                              child: _EmptyHeroBody(pet: pet),
+                            ),
+                          ),
+                        )
+                      : GlassCard(
+                          border: p.isDark
+                              ? const Color(0x33FFFFFF)
+                              : const Color(0x8CFFFFFF),
+                          padding: const EdgeInsets.all(14),
+                          height: panelHeight,
+                          child: _HeroBody(
+                            store: store,
+                            a: appt,
+                            pet: pet,
+                            service: service!,
+                            staffName: staff!.name,
+                          ),
+                        ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    return Semantics(
+      button: true,
+      label: label,
+      child: ExcludeSemantics(
+        child: PressScale(
+          scale: 0.99,
+          onTap: () => _open(context),
+          child: card,
+        ),
+      ),
+    );
+  }
+}
+
+/// Page indicators. Decorative — the position is also announced in each page's
+/// semantics label — so they stay out of the accessibility tree.
+class _Dots extends StatelessWidget {
+  const _Dots({required this.count, required this.active});
+
+  final int count;
+  final int active;
+
+  @override
+  Widget build(BuildContext context) {
+    final reduce = reduceMotionOf(context);
+    return Padding(
+      padding: const EdgeInsets.only(top: 10),
+      child: ExcludeSemantics(
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            for (var i = 0; i < count; i++) ...[
+              if (i > 0) const SizedBox(width: 6),
+              AnimatedContainer(
+                duration: reduce ? Duration.zero : Motion.fast,
+                curve: Motion.enter,
+                width: i == active ? 18 : 6,
+                height: 6,
+                decoration: BoxDecoration(
+                  color: i == active
+                      ? T.terracotta
+                      : T.taupe.withValues(alpha: 0.45),
+                  borderRadius: BorderRadius.circular(T.rPill),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
     );
   }
 }
@@ -362,16 +719,10 @@ class _QuickActions extends StatelessWidget {
         onTap: () =>
             Navigator.of(context).push(appRoute(const ChatLandingScreen())),
       ),
-      (
-        label: 'Shop',
-        icon: Ic.bag,
-        onTap: () =>
-            Navigator.of(context).push(appRoute(const ShopLandingScreen())),
-      ),
     ];
     // Height grows with Dynamic Type so tiles never clip their labels.
     final scale = MediaQuery.textScalerOf(context).scale(1);
-    final h = 92 * scale.clamp(1.0, 1.6);
+    final h = 116 * scale.clamp(1.0, 1.6);
     return SizedBox(
       height: h,
       child: ListView.separated(
@@ -414,18 +765,24 @@ class _QuickAction extends StatelessWidget {
           onTap: onTap,
           child: Container(
             width: width,
+            constraints: const BoxConstraints(minHeight: 44),
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
-            decoration: BoxDecoration(
-              color: p.surface,
-              borderRadius: BorderRadius.circular(T.rCard),
-              border: Border.all(color: p.divider),
-            ),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               mainAxisSize: MainAxisSize.min,
               children: [
-                Flexible(
-                  child: Ic.svg(icon, color: p.accent, size: 24, stroke: 1.9),
+                // Icon in a tinted circle medallion — more designed than the
+                // bare icon, and the 48pt circle is its own touch target.
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: p.accent.withValues(alpha: 0.12),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Center(
+                    child: Ic.svg(icon, color: p.accent, size: 24, stroke: 1.9),
+                  ),
                 ),
                 const SizedBox(height: 8),
                 Flexible(
@@ -454,7 +811,7 @@ class _PetRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final p = context.p;
     return SizedBox(
-      height: 132,
+      height: 188,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         padding: EdgeInsets.zero,
@@ -471,80 +828,90 @@ class _PetRow extends StatelessWidget {
                 onTap: () =>
                     Navigator.of(context)
                         .push(appRoute(PetProfileScreen(petId: pet.id))),
-                child: Container(
-                  width: 168,
-                  decoration: BoxDecoration(
-                    color: p.surface,
+                child: SizedBox(
+                  width: 148,
+                  height: 188,
+                  child: ClipRRect(
                     borderRadius: BorderRadius.circular(T.rCard),
-                    border: Border.all(color: p.divider),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: Stack(
-                          children: [
-                            Positioned.fill(
-                              child: ClipRRect(
-                                borderRadius: const BorderRadius.vertical(
-                                  top: Radius.circular(T.rCard - 1),
-                                ),
-                                child: PetAvatar(
-                                  pet: pet,
-                                  iconSize: 54,
-                                  label: '${pet.name} portrait',
-                                ),
-                              ),
-                            ),
-                            Positioned(
-                              right: 8,
-                              top: 8,
-                              child: StatusChip(
-                                label: pet.species == Species.dog
-                                    ? 'Dog'
-                                    : 'Cat',
-                                compact: true,
-                                fg: T.espresso,
-                                bg: T.cream.withValues(alpha: 0.86),
-                              ),
-                            ),
-                          ],
+                    child: Stack(
+                      children: [
+                        // Full-bleed pet photo.
+                        Positioned.fill(
+                          child: PetAvatar(
+                            pet: pet,
+                            iconSize: 54,
+                            label: '${pet.name} portrait',
+                          ),
                         ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(12, 8, 8, 10),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Text(
-                                    pet.name,
-                                    style: Type.headline(p),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                  Text(
-                                    '${pet.ageLabel} · ${pet.weightKg} kg',
-                                    style: Type.caption(p),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
+                        // Bottom scrim so the cream text stays readable.
+                        Positioned(
+                          left: 0,
+                          right: 0,
+                          bottom: 0,
+                          height: 96,
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                begin: Alignment.topCenter,
+                                end: Alignment.bottomCenter,
+                                colors: [
+                                  const Color(0xFF000000).withValues(alpha: 0),
+                                  const Color(0xFF000000)
+                                      .withValues(alpha: 0.55),
                                 ],
                               ),
                             ),
-                            Ic.svg(
-                              Ic.chevronRight,
-                              color: p.textSecondary,
-                              size: 15,
-                              stroke: 2.2,
-                            ),
-                          ],
+                          ),
                         ),
-                      ),
-                    ],
+                        // Species pill, top-left — glass over the photo.
+                        Positioned(
+                          left: 10,
+                          top: 10,
+                          child: GlassPill(
+                            label: pet.species == Species.dog ? 'Dog' : 'Cat',
+                          ),
+                        ),
+                        // Name + age/weight, bottom-left over the scrim.
+                        Positioned(
+                          left: 10,
+                          right: 36,
+                          bottom: 10,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                pet.name,
+                                style: Type.headline(p)
+                                    .copyWith(color: T.cream),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                '${pet.ageLabel} · ${pet.weightKg} kg',
+                                style: Type.caption(p).copyWith(
+                                  color: T.cream.withValues(alpha: 0.75),
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                          ),
+                        ),
+                        // Chevron affordance, bottom-right over the scrim.
+                        Positioned(
+                          right: 10,
+                          bottom: 12,
+                          child: Ic.svg(
+                            Ic.chevronRight,
+                            color: T.cream,
+                            size: 16,
+                            stroke: 2.4,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -818,6 +1185,27 @@ class _InfoLine extends StatelessWidget {
       ],
     );
   }
+}
+
+/// Subtle warm radial glow — the splash `_Glow` pattern, static (no animation
+/// on Home). Sits behind the greeting so the top of the screen never reads
+/// as a plain flat field.
+class _Glow extends StatelessWidget {
+  const _Glow({required this.size, required this.color});
+  final double size;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) => IgnorePointer(
+    child: Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: RadialGradient(colors: [color, color.withValues(alpha: 0)]),
+      ),
+    ),
+  );
 }
 
 /// Switches to another tab and pops this tab's route stack back to its root.

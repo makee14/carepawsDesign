@@ -473,6 +473,11 @@ class _PressScaleState extends State<PressScale> {
   bool _down = false;
   bool _focused = false;
 
+  /// Web/desktop hover only: a pointer hover lifts brightness a touch and
+  /// shows the click cursor. Touch devices never enter this state, so touch
+  /// press behaviour is unchanged.
+  bool _hover = false;
+
   @override
   Widget build(BuildContext context) {
     final reduce = MediaQuery.disableAnimationsOf(context);
@@ -486,6 +491,24 @@ class _PressScaleState extends State<PressScale> {
       curve: Curves.easeOut,
       child: widget.child,
     );
+
+    if (_hover && interactive) {
+      content = Stack(
+        children: [
+          content,
+          Positioned.fill(
+            child: IgnorePointer(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFFFFF).withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+            ),
+          ),
+        ],
+      );
+    }
 
     if (_focused && interactive) {
       content = Stack(
@@ -507,26 +530,31 @@ class _PressScaleState extends State<PressScale> {
 
     if (!interactive) return content;
 
-    return Focus(
-      canRequestFocus: true,
-      onFocusChange: (v) => setState(() => _focused = v),
-      onKeyEvent: (node, event) {
-        if (event is! KeyDownEvent) return KeyEventResult.ignored;
-        if (event.logicalKey == LogicalKeyboardKey.enter ||
-            event.logicalKey == LogicalKeyboardKey.space ||
-            event.logicalKey == LogicalKeyboardKey.numpadEnter) {
-          widget.onTap!();
-          return KeyEventResult.handled;
-        }
-        return KeyEventResult.ignored;
-      },
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTapDown: (_) => setState(() => _down = true),
-        onTapUp: (_) => setState(() => _down = false),
-        onTapCancel: () => setState(() => _down = false),
-        onTap: widget.onTap,
-        child: content,
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _hover = true),
+      onExit: (_) => setState(() => _hover = false),
+      child: Focus(
+        canRequestFocus: true,
+        onFocusChange: (v) => setState(() => _focused = v),
+        onKeyEvent: (node, event) {
+          if (event is! KeyDownEvent) return KeyEventResult.ignored;
+          if (event.logicalKey == LogicalKeyboardKey.enter ||
+              event.logicalKey == LogicalKeyboardKey.space ||
+              event.logicalKey == LogicalKeyboardKey.numpadEnter) {
+            widget.onTap!();
+            return KeyEventResult.handled;
+          }
+          return KeyEventResult.ignored;
+        },
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTapDown: (_) => setState(() => _down = true),
+          onTapUp: (_) => setState(() => _down = false),
+          onTapCancel: () => setState(() => _down = false),
+          onTap: widget.onTap,
+          child: content,
+        ),
       ),
     );
   }

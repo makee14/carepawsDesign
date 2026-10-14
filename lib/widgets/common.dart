@@ -636,6 +636,43 @@ class StatusChip extends StatelessWidget {
   }
 }
 
+/// Small frosted-glass pill for labels floating over photos (pet species on
+/// the pet cards). Cream text over a white 14% tint stays readable on light
+/// and dark photos alike; glass is used here because it floats over imagery.
+class GlassPill extends StatelessWidget {
+  const GlassPill({super.key, required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.p;
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(T.rPill),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+          decoration: BoxDecoration(
+            color: const Color(0xFFFFFFFF).withValues(alpha: 0.14),
+            borderRadius: BorderRadius.circular(T.rPill),
+            border: Border.all(
+              color: const Color(0xFFFFFFFF).withValues(alpha: 0.25),
+            ),
+          ),
+          child: Text(
+            label,
+            style: Type.caption(p)
+                .copyWith(color: T.cream, fontWeight: FontWeight.w700),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// Selectable filter chip.
 class FilterPill extends StatelessWidget {
   const FilterPill({
@@ -729,25 +766,38 @@ class SectionHeader extends StatelessWidget {
           ],
           Expanded(child: Text(title, style: Type.title2(p))),
           if (actionLabel != null)
-            CupertinoButton(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
-              minimumSize: const Size(48, 44),
-              onPressed: onAction,
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    actionLabel!,
-                    style: Type.footnoteEmph(p).copyWith(color: p.accentText),
+            Semantics(
+              button: true,
+              label: actionLabel,
+              child: ExcludeSemantics(
+                child: PressScale(
+                  onTap: onAction,
+                  child: Container(
+                    constraints: const BoxConstraints(
+                      minWidth: 48,
+                      minHeight: 44,
+                    ),
+                    alignment: Alignment.centerRight,
+                    padding: const EdgeInsets.symmetric(horizontal: 6),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          actionLabel!,
+                          style: Type.footnoteEmph(p)
+                              .copyWith(color: p.accentText),
+                        ),
+                        const SizedBox(width: 3),
+                        Ic.svg(
+                          Ic.chevronRight,
+                          color: p.accentText,
+                          size: 14,
+                          stroke: 2.2,
+                        ),
+                      ],
+                    ),
                   ),
-                  const SizedBox(width: 3),
-                  Ic.svg(
-                    Ic.chevronRight,
-                    color: p.accentText,
-                    size: 14,
-                    stroke: 2.2,
-                  ),
-                ],
+                ),
               ),
             ),
         ],
