@@ -1,7 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:carepaws/app.dart';
 import 'package:carepaws/design/theme.dart';
 import 'package:carepaws/screens/appointments_screen.dart';
 import 'package:carepaws/screens/chats_screen.dart';
@@ -26,9 +25,8 @@ Future<void> pumpTab(
         theme: themeFor(AppPalette.light),
         home: tab,
         builder: (context, child) => MediaQuery(
-          data: MediaQuery.of(context).copyWith(
-            textScaler: TextScaler.linear(textScale),
-          ),
+          data: MediaQuery.of(context)
+              .copyWith(textScaler: TextScaler.linear(textScale)),
           child: child!,
         ),
       ),
