@@ -1,8 +1,10 @@
+import 'dart:convert';
 import 'dart:math' show pow;
 import 'dart:typed_data';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:carepaws/app.dart';
 import 'package:carepaws/data/clinic.dart';
@@ -11,6 +13,7 @@ import 'package:carepaws/data/seed.dart';
 import 'package:carepaws/design/theme.dart';
 import 'package:carepaws/design/tokens.dart';
 import 'package:carepaws/services/ai_service.dart';
+import 'package:carepaws/services/auth_store.dart';
 import 'package:carepaws/services/photo_store.dart';
 import 'package:carepaws/state/app_store.dart';
 import 'package:carepaws/widgets/ai_unavailable.dart';
@@ -131,12 +134,15 @@ void main() {
 
     test('countdownLabel is relative and human', () {
       final now = fixedNow();
-      expect(countdownLabel(now, now.add(const Duration(hours: 3, minutes: 12))),
-          'in 3h 12m');
-      expect(countdownLabel(now, now.add(const Duration(days: 2, hours: 6))),
-          'in 2d 6h');
-      expect(countdownLabel(now, now.add(const Duration(days: 3))),
-          'in 3d');
+      expect(
+        countdownLabel(now, now.add(const Duration(hours: 3, minutes: 12))),
+        'in 3h 12m',
+      );
+      expect(
+        countdownLabel(now, now.add(const Duration(days: 2, hours: 6))),
+        'in 2d 6h',
+      );
+      expect(countdownLabel(now, now.add(const Duration(days: 3))), 'in 3d');
     });
 
     test('clinicOpenAt respects weekday hours and closed Sundays', () {
@@ -170,8 +176,10 @@ void main() {
       final s = AppStore(now: fixedNow());
       final list = s.upcomingAppointments;
       expect(list, isNotEmpty);
-      expect(list.map((a) => a.id).toList(),
-          s.upcoming.map((a) => a.id).toList());
+      expect(
+        list.map((a) => a.id).toList(),
+        s.upcoming.map((a) => a.id).toList(),
+      );
       for (var i = 1; i < list.length; i++) {
         expect(list[i - 1].start.isAfter(list[i].start), isFalse);
       }
@@ -182,11 +190,10 @@ void main() {
       final s = AppStore(now: fixedNow());
       final first = s.upcomingAppointments.first;
       // Jump past the first visit's end: it leaves the upcoming list.
-      s.advanceClock(first.end.difference(fixedNow()) + const Duration(minutes: 1));
-      expect(
-        s.upcomingAppointments.any((a) => a.id == first.id),
-        isFalse,
+      s.advanceClock(
+        first.end.difference(fixedNow()) + const Duration(minutes: 1),
       );
+      expect(s.upcomingAppointments.any((a) => a.id == first.id), isFalse);
     });
 
     test('startClock is idempotent; stopClock and dispose are safe', () {
@@ -198,13 +205,16 @@ void main() {
       s.dispose();
     });
 
-    test('cancelAppointment moves a visit to past and sets cancelled status', () {
-      final s = AppStore(now: fixedNow());
-      final a = s.upcoming.first;
-      s.cancelAppointment(a.id);
-      expect(s.appt(a.id)!.status, ApptStatus.cancelled);
-      expect(s.past.any((x) => x.id == a.id), isTrue);
-    });
+    test(
+      'cancelAppointment moves a visit to past and sets cancelled status',
+      () {
+        final s = AppStore(now: fixedNow());
+        final a = s.upcoming.first;
+        s.cancelAppointment(a.id);
+        expect(s.appt(a.id)!.status, ApptStatus.cancelled);
+        expect(s.past.any((x) => x.id == a.id), isTrue);
+      },
+    );
 
     test('autoAssignStaff routes by service line', () {
       final s = AppStore(now: fixedNow());
@@ -391,7 +401,12 @@ void main() {
       expect(handoff.text, contains('Biscuit'));
       expect(handoff.text, contains('Two episodes'));
       // The vet assistant auto-replies.
-      expect(after.any((m) => m.kind == ChatKind.text && m.author == ChatAuthor.vetAssistant), isTrue);
+      expect(
+        after.any(
+          (m) => m.kind == ChatKind.text && m.author == ChatAuthor.vetAssistant,
+        ),
+        isTrue,
+      );
     });
   });
 
@@ -428,9 +443,16 @@ void main() {
       // Grooming services run 1-2h, assistant tasks 15-20m, vet consults 30m.
       final groomingServices = Seed.services.where((s) => s.grooming);
       expect(groomingServices, isNotEmpty);
-      expect(groomingServices.every((s) => s.durationMinutes >= 60 && s.durationMinutes <= 120),
-          isTrue);
-      expect(asst.every((s) => s.durationMinutes >= 15 && s.durationMinutes <= 20), isTrue);
+      expect(
+        groomingServices.every(
+          (s) => s.durationMinutes >= 60 && s.durationMinutes <= 120,
+        ),
+        isTrue,
+      );
+      expect(
+        asst.every((s) => s.durationMinutes >= 15 && s.durationMinutes <= 20),
+        isTrue,
+      );
       expect(vet.every((s) => s.durationMinutes == 30), isTrue);
       expect(groom, isNotEmpty);
     });
@@ -487,7 +509,10 @@ void main() {
 
     test('an unknown email is rejected', () async {
       final store = AppStore();
-      final ok = await store.signIn('someone@example.com', AppStore.demoPassword);
+      final ok = await store.signIn(
+        'someone@example.com',
+        AppStore.demoPassword,
+      );
       expect(ok, isFalse);
       expect(store.signedIn, isFalse);
       expect(store.signInError, isNotNull);
@@ -501,7 +526,10 @@ void main() {
 
     test('the right password with the wrong email still fails', () async {
       final store = AppStore();
-      expect(await store.signIn('carepaws@wrong.com', AppStore.demoPassword), isFalse);
+      expect(
+        await store.signIn('carepaws@wrong.com', AppStore.demoPassword),
+        isFalse,
+      );
     });
 
     test('signOut clears the session and any error', () async {
@@ -516,20 +544,66 @@ void main() {
     test('a fresh store starts signed out', () {
       expect(AppStore().signedIn, isFalse);
     });
+
+    test('sign-in failure is one neutral message either way', () async {
+      const neutral =
+          'That email and password do not match. Check both and try again.';
+      final store = AppStore();
+      addTearDown(store.dispose);
+      // Unknown email and wrong password produce the identical message, so
+      // neither confirms whether the email exists on this device.
+      expect(await store.signIn('nobody@example.com', 'whatever123'), isFalse);
+      expect(store.signInError, neutral);
+      await store.register('Mark', 'mark@example.com', 'secret123');
+      expect(await store.signIn('mark@example.com', 'wrongpass1'), isFalse);
+      expect(store.signInError, neutral);
+    });
+  });
+
+  group('Password rules', () {
+    test('at least 8 characters with a letter and a number', () {
+      expect(AuthStore.validatePassword('secret123'), isNull);
+      expect(AuthStore.validatePassword('a1b2c3d4'), isNull);
+      expect(AuthStore.validatePassword('short1'), contains('8 characters'));
+      expect(
+        AuthStore.validatePassword('abcdefgh'),
+        contains('letters and numbers'),
+      );
+      expect(
+        AuthStore.validatePassword('12345678'),
+        contains('letters and numbers'),
+      );
+      expect(AuthStore.validatePassword(''), contains('8 characters'));
+    });
+  });
+
+  group('Owner initials', () {
+    test('first letters of the first two name parts', () {
+      expect(initialsOf('Marco Dela Cruz'), 'MD');
+      expect(initialsOf('Mark'), 'M');
+      expect(initialsOf('  ana   reyes  '), 'AR');
+      expect(initialsOf(''), '?');
+    });
   });
 
   group('Local registration', () {
     setUp(() => SharedPreferences.setMockInitialValues({}));
 
-    test('a new account registers and signs in immediately', () async {
+    test('a new account registers without signing in', () async {
       final store = AppStore();
       addTearDown(store.dispose);
       final ok = await store.register('Mark', 'mark@example.com', 'secret123');
       expect(ok, isTrue);
-      expect(store.signedIn, isTrue);
+      // Registration never signs in: the login screen takes the user back
+      // to sign-in so the new credentials are entered deliberately.
+      expect(store.signedIn, isFalse);
+      expect(store.accountName, isNull);
+      expect(store.signInError, isNull);
+
+      final signedIn = await store.signIn('mark@example.com', 'secret123');
+      expect(signedIn, isTrue);
       expect(store.accountName, 'Mark');
       expect(store.accountEmail, 'mark@example.com');
-      expect(store.signInError, isNull);
     });
 
     test('the registered account can sign in again after sign-out', () async {
@@ -548,20 +622,42 @@ void main() {
     test('duplicate email is rejected', () async {
       final store = AppStore();
       addTearDown(store.dispose);
-      expect(await store.register('Mark', 'mark@example.com', 'secret123'), isTrue);
-      expect(await store.register('Other', 'mark@example.com', 'other123'), isFalse);
+      expect(
+        await store.register('Mark', 'mark@example.com', 'secret123'),
+        isTrue,
+      );
+      expect(
+        await store.register('Other', 'mark@example.com', 'other123'),
+        isFalse,
+      );
       expect(store.signInError, contains('already exists'));
     });
 
     test('bad input is rejected with a useful message', () async {
       final store = AppStore();
       addTearDown(store.dispose);
-      expect(await store.register('', 'mark@example.com', 'secret123'), isFalse);
+      expect(
+        await store.register('', 'mark@example.com', 'secret123'),
+        isFalse,
+      );
       expect(store.signInError, contains('name'));
-      expect(await store.register('Mark', 'not-an-email', 'secret123'), isFalse);
+      expect(
+        await store.register('Mark', 'not-an-email', 'secret123'),
+        isFalse,
+      );
       expect(store.signInError, contains('email'));
       expect(await store.register('Mark', 'mark@example.com', '123'), isFalse);
-      expect(store.signInError, contains('6 characters'));
+      expect(store.signInError, contains('8 characters'));
+      expect(
+        await store.register('Mark', 'mark@example.com', 'abcdefgh'),
+        isFalse,
+      );
+      expect(store.signInError, contains('letters and numbers'));
+      expect(
+        await store.register('Mark', 'mark@example.com', '12345678'),
+        isFalse,
+      );
+      expect(store.signInError, contains('letters and numbers'));
     });
 
     test('wrong password for a registered account is rejected', () async {
@@ -616,8 +712,10 @@ void main() {
     });
 
     test('it addresses the owner by first name, with a no-name fallback', () {
-      expect(prompt(now: DateTime(2026, 10, 13, 10), name: 'Marco'),
-          contains('Marco'));
+      expect(
+        prompt(now: DateTime(2026, 10, 13, 10), name: 'Marco'),
+        contains('Marco'),
+      );
       final anon = prompt(now: DateTime(2026, 10, 13, 10), name: '');
       expect(anon, contains('never invent one'));
       expect(anon, isNot(contains('Marco')));
@@ -641,18 +739,30 @@ void main() {
     test('Mon–Sat 9:00–18:00 is open, Sundays are closed', () {
       expect(Clinic.isOpenNow(DateTime(2026, 10, 12, 9)), isTrue); // Mon 9:00
       expect(Clinic.isOpenNow(DateTime(2026, 10, 17, 17, 59)), isTrue); // Sat
-      expect(Clinic.isOpenNow(DateTime(2026, 10, 12, 8, 59)), isFalse); // Mon early
-      expect(Clinic.isOpenNow(DateTime(2026, 10, 17, 18)), isFalse); // Sat evening
+      expect(
+        Clinic.isOpenNow(DateTime(2026, 10, 12, 8, 59)),
+        isFalse,
+      ); // Mon early
+      expect(
+        Clinic.isOpenNow(DateTime(2026, 10, 17, 18)),
+        isFalse,
+      ); // Sat evening
       expect(Clinic.isOpenNow(DateTime(2026, 10, 11, 12)), isFalse); // Sunday
     });
 
     test('nextOpening skips Sunday', () {
-      expect(Clinic.nextOpening(DateTime(2026, 10, 17, 20)),
-          DateTime(2026, 10, 19, 9)); // Sat night -> Mon 9:00
-      expect(Clinic.nextOpening(DateTime(2026, 10, 11, 12)),
-          DateTime(2026, 10, 12, 9)); // Sunday -> Mon 9:00
-      expect(Clinic.nextOpening(DateTime(2026, 10, 12, 7)),
-          DateTime(2026, 10, 12, 9)); // Mon early -> Mon 9:00
+      expect(
+        Clinic.nextOpening(DateTime(2026, 10, 17, 20)),
+        DateTime(2026, 10, 19, 9),
+      ); // Sat night -> Mon 9:00
+      expect(
+        Clinic.nextOpening(DateTime(2026, 10, 11, 12)),
+        DateTime(2026, 10, 12, 9),
+      ); // Sunday -> Mon 9:00
+      expect(
+        Clinic.nextOpening(DateTime(2026, 10, 12, 7)),
+        DateTime(2026, 10, 12, 9),
+      ); // Mon early -> Mon 9:00
     });
 
     test('the seed aliases match the config', () {
@@ -677,68 +787,249 @@ void main() {
 
       await ai.bootstrap();
       expect(ai.keyConfigured, isFalse, reason: 'starts with no key');
-      expect(ai.keyFromDevice, isFalse);
+      expect(ai.statusFor(AiProvider.gemini).keyFromDevice, isFalse);
 
-      await ai.useKey(key);
+      await ai.useKeyFor(AiProvider.gemini, key);
       expect(ai.keyConfigured, isTrue);
-      expect(ai.keyFromDevice, isTrue);
+      expect(ai.statusFor(AiProvider.gemini).keyFromDevice, isTrue);
 
       final prefs = await SharedPreferences.getInstance();
-      expect(prefs.getString(AiService.keyPrefName), key);
+      expect(prefs.getString(AiProvider.gemini.keyPref), key);
     });
 
-    test('a fresh service picks the stored key up on the next launch', () async {
-      final first = AiService();
-      addTearDown(first.dispose);
-      await first.useKey(key);
+    test(
+      'a fresh service picks the stored key up on the next launch',
+      () async {
+        final first = AiService();
+        addTearDown(first.dispose);
+        await first.useKeyFor(AiProvider.gemini, key);
 
-      // A brand new instance is what the app builds on the next cold start.
-      final next = AiService();
-      addTearDown(next.dispose);
-      await next.bootstrap();
+        // A brand new instance is what the app builds on the next cold start.
+        final next = AiService();
+        addTearDown(next.dispose);
+        await next.bootstrap();
 
-      expect(next.keyConfigured, isTrue);
-      expect(next.keyFromDevice, isTrue);
-    });
+        expect(next.keyConfigured, isTrue);
+        expect(next.statusFor(AiProvider.gemini).keyFromDevice, isTrue);
+      },
+    );
 
-    test('removing the key clears storage and returns to unavailable', () async {
-      final ai = AiService();
-      addTearDown(ai.dispose);
-      await ai.useKey(key);
-      expect(ai.keyConfigured, isTrue);
+    test(
+      'removing the key clears storage and returns to unavailable',
+      () async {
+        final ai = AiService();
+        addTearDown(ai.dispose);
+        await ai.useKeyFor(AiProvider.gemini, key);
+        expect(ai.keyConfigured, isTrue);
 
-      await ai.clearKey();
-      expect(ai.keyConfigured, isFalse);
-      expect(ai.keyFromDevice, isFalse);
-      expect(ai.status, AiStatus.unavailable);
-      expect(ai.failure, AiFailure.noKey);
+        await ai.clearKeyFor(AiProvider.gemini);
+        expect(ai.keyConfigured, isFalse);
+        expect(ai.statusFor(AiProvider.gemini).keyFromDevice, isFalse);
+        expect(ai.status, AiStatus.unavailable);
+        expect(ai.failure, AiFailure.noKey);
 
-      final prefs = await SharedPreferences.getInstance();
-      expect(prefs.getString(AiService.keyPrefName), isNull);
-    });
+        final prefs = await SharedPreferences.getInstance();
+        expect(prefs.getString(AiProvider.gemini.keyPref), isNull);
+      },
+    );
 
     test('a too-short or placeholder entry is refused, not stored', () async {
       final ai = AiService();
       addTearDown(ai.dispose);
 
       for (final bad in ['', '   ', 'AIzaShort', 'YOUR_GEMINI_API_KEY']) {
-        await ai.useKey(bad);
+        await ai.useKeyFor(AiProvider.gemini, bad);
         expect(ai.keyConfigured, isFalse, reason: 'should refuse: "$bad"');
-        expect(ai.keyFromDevice, isFalse);
+        expect(ai.statusFor(AiProvider.gemini).keyFromDevice, isFalse);
       }
       final prefs = await SharedPreferences.getInstance();
-      expect(prefs.getString(AiService.keyPrefName), isNull);
+      expect(prefs.getString(AiProvider.gemini.keyPref), isNull);
     });
 
     test('surrounding whitespace in a pasted key is trimmed', () async {
       final ai = AiService();
       addTearDown(ai.dispose);
 
-      await ai.useKey('  $key  ');
+      await ai.useKeyFor(AiProvider.gemini, '  $key  ');
       expect(ai.keyConfigured, isTrue);
 
       final prefs = await SharedPreferences.getInstance();
-      expect(prefs.getString(AiService.keyPrefName), key);
+      expect(prefs.getString(AiProvider.gemini.keyPref), key);
+    });
+  });
+
+  group('Multiple AI providers route with failover', () {
+    const triageJson =
+        '{"route":"book","urgency":1,"title":"Test","summary":"s",'
+        '"bullets":[],"redFlags":[],"homeCare":[],"nextStep":"n"}';
+
+    /// Gemini answers the models list and the probe, but fails real
+    /// requests; OpenAI answers everything. Drives request-time failover.
+    AiService failoverService() {
+      SharedPreferences.setMockInitialValues({});
+      final ai = AiService(client: _FailoverFake(triageJson));
+      addTearDown(ai.dispose);
+      return ai;
+    }
+
+    test('keys are stored per provider, independently', () async {
+      final ai = failoverService();
+      await ai.useKeyFor(AiProvider.gemini, 'gemini-key-00000000000000001');
+      await ai.useKeyFor(AiProvider.openai, 'openai-key-00000000000000001');
+
+      final prefs = await SharedPreferences.getInstance();
+      expect(
+        prefs.getString(AiProvider.gemini.keyPref),
+        'gemini-key-00000000000000001',
+      );
+      expect(
+        prefs.getString(AiProvider.openai.keyPref),
+        'openai-key-00000000000000001',
+      );
+      expect(prefs.getString(AiProvider.openrouter.keyPref), isNull);
+
+      expect(ai.statusFor(AiProvider.gemini).keyFromDevice, isTrue);
+      expect(ai.statusFor(AiProvider.openai).keyFromDevice, isTrue);
+      expect(ai.statusFor(AiProvider.openrouter).keyFromDevice, isFalse);
+    });
+
+    test('a failing provider fails over to the next one mid-request', () async {
+      final ai = failoverService();
+      await ai.useKeyFor(AiProvider.gemini, 'gemini-key-00000000000000001');
+      await ai.useKeyFor(AiProvider.openai, 'openai-key-00000000000000001');
+
+      // Gemini wins bootstrap (priority order) and goes live on the probe.
+      expect(ai.isLive, isTrue);
+      expect(ai.modelLabel, startsWith('Gemini'));
+
+      // The real request fails on Gemini and is retried on OpenAI.
+      final result = await ai.triage(
+        petName: 'Biscuit',
+        species: 'dog',
+        text: 'coughing',
+      );
+      expect(result.title, 'Test');
+      expect(ai.modelLabel, startsWith('OpenAI'));
+      expect(ai.isLive, isTrue);
+    });
+
+    test('a disabled provider is skipped by routing', () async {
+      final ai = failoverService();
+      await ai.useKeyFor(AiProvider.gemini, 'gemini-key-00000000000000001');
+      await ai.useKeyFor(AiProvider.openai, 'openai-key-00000000000000001');
+      await ai.setProviderEnabled(AiProvider.gemini, false);
+
+      expect(ai.isLive, isTrue);
+      expect(ai.modelLabel, startsWith('OpenAI'));
+      expect(ai.statusFor(AiProvider.gemini).enabled, isFalse);
+
+      // And the switch persists across restarts.
+      final next = AiService(client: _FailoverFake(triageJson));
+      addTearDown(next.dispose);
+      await next.bootstrap();
+      expect(next.modelLabel, startsWith('OpenAI'));
+    });
+
+    test('all providers failing surfaces the last error, honestly', () async {
+      SharedPreferences.setMockInitialValues({});
+      final ai = AiService(client: _FailoverFake(triageJson, openaiDown: true));
+      addTearDown(ai.dispose);
+      await ai.useKeyFor(AiProvider.gemini, 'gemini-key-00000000000000001');
+      await ai.useKeyFor(AiProvider.openai, 'openai-key-00000000000000001');
+
+      await expectLater(
+        ai.triage(petName: 'Biscuit', species: 'dog', text: 'coughing'),
+        throwsA(isA<AiException>()),
+      );
+      expect(ai.isLive, isFalse);
+      expect(ai.status, AiStatus.unavailable);
+      expect(ai.failure, isNotNull);
+    });
+
+    test('a garbled reply fails over to the next provider', () async {
+      SharedPreferences.setMockInitialValues({});
+      final ai = AiService(
+        client: _FailoverFake(triageJson, geminiGarbled: true),
+      );
+      addTearDown(ai.dispose);
+      await ai.useKeyFor(AiProvider.gemini, 'gemini-key-00000000000000001');
+      await ai.useKeyFor(AiProvider.openai, 'openai-key-00000000000000001');
+
+      // Gemini answers 200 but with non-JSON; the parse failure must route
+      // to OpenAI rather than surfacing as an unparseable-reply error.
+      final result = await ai.triage(
+        petName: 'Biscuit',
+        species: 'dog',
+        text: 'coughing',
+      );
+      expect(result.title, 'Test');
+      expect(ai.modelLabel, startsWith('OpenAI'));
+    });
+
+    test('useKeyFor is honest: only true when the provider answers', () async {
+      SharedPreferences.setMockInitialValues({});
+      final ai = AiService(client: _FailoverFake(triageJson, openaiDown: true));
+      addTearDown(ai.dispose);
+
+      // OpenAI's bootstrap probe fails here, so the key saves but the
+      // provider never goes live: the return must not claim "ready".
+      final ok = await ai.useKeyFor(
+        AiProvider.openai,
+        'openai-key-00000000000000001',
+      );
+      expect(ok, isFalse);
+      expect(
+        ai.statusFor(AiProvider.openai).keyConfigured,
+        isTrue,
+        reason: 'the key itself was saved',
+      );
+      expect(ai.statusFor(AiProvider.openai).isLive, isFalse);
+
+      // Gemini's probe succeeds: honest true.
+      final okGemini = await ai.useKeyFor(
+        AiProvider.gemini,
+        'gemini-key-00000000000000001',
+      );
+      expect(okGemini, isTrue);
+    });
+
+    test(
+      'a legacy single-provider Gemini key migrates on first launch',
+      () async {
+        const legacyKey = 'carepaws.gemini_api_key';
+        const migrated = 'AIza-legacy-key-00000000000000000001';
+        SharedPreferences.setMockInitialValues({legacyKey: migrated});
+
+        final ai = AiService(client: _FailoverFake(triageJson));
+        addTearDown(ai.dispose);
+        await ai.bootstrap();
+
+        // The key is picked up under the new per-provider name...
+        expect(ai.statusFor(AiProvider.gemini).keyFromDevice, isTrue);
+        final prefs = await SharedPreferences.getInstance();
+        expect(prefs.getString(AiProvider.gemini.keyPref), migrated);
+        // ...and the legacy entry is gone so the migration runs once.
+        expect(prefs.getString(legacyKey), isNull);
+      },
+    );
+
+    test('migration never overwrites a key saved under the new name', () async {
+      const legacyKey = 'carepaws.gemini_api_key';
+      SharedPreferences.setMockInitialValues({
+        legacyKey: 'AIza-legacy-key-00000000000000000001',
+        AiProvider.gemini.keyPref: 'AIza-new-key-0000000000000000000001',
+      });
+
+      final ai = AiService(client: _FailoverFake(triageJson));
+      addTearDown(ai.dispose);
+      await ai.bootstrap();
+
+      final prefs = await SharedPreferences.getInstance();
+      expect(
+        prefs.getString(AiProvider.gemini.keyPref),
+        'AIza-new-key-0000000000000000000001',
+      );
+      expect(prefs.getString(legacyKey), isNull);
     });
   });
 
@@ -761,7 +1052,13 @@ void main() {
       await ai.bootstrap();
       await expectLater(
         ai.triage(petName: 'Biscuit', species: 'dog', text: 'he is limping'),
-        throwsA(isA<AiException>().having((e) => e.failure, 'failure', AiFailure.noKey)),
+        throwsA(
+          isA<AiException>().having(
+            (e) => e.failure,
+            'failure',
+            AiFailure.noKey,
+          ),
+        ),
       );
     });
 
@@ -770,16 +1067,35 @@ void main() {
       addTearDown(ai.dispose);
       await ai.bootstrap();
       await expectLater(
-        ai.chat(petName: 'Biscuit', species: 'dog', question: 'what should he eat'),
-        throwsA(isA<AiException>().having((e) => e.failure, 'failure', AiFailure.noKey)),
+        ai.chat(
+          petName: 'Biscuit',
+          species: 'dog',
+          question: 'what should he eat',
+        ),
+        throwsA(
+          isA<AiException>().having(
+            (e) => e.failure,
+            'failure',
+            AiFailure.noKey,
+          ),
+        ),
       );
     });
 
     test('the unavailable UI copy names the failure and the fix', () {
       expect(aiUnavailableText(AiFailure.noKey), contains('no API key'));
-      expect(aiUnavailableText(AiFailure.noKey), contains('Settings → CarePaws AI'));
-      expect(aiUnavailableText(AiFailure.unreachable), contains("couldn't reach"));
-      expect(aiUnavailableText(AiFailure.serviceError), contains('returned an error'));
+      expect(
+        aiUnavailableText(AiFailure.noKey),
+        contains('Settings → CarePaws AI'),
+      );
+      expect(
+        aiUnavailableText(AiFailure.unreachable),
+        contains("couldn't reach"),
+      );
+      expect(
+        aiUnavailableText(AiFailure.serviceError),
+        contains('returned an error'),
+      );
     });
   });
 
@@ -788,12 +1104,73 @@ void main() {
 
     // A tiny 1x1 PNG — enough to prove bytes survive the round trip.
     final png = Uint8List.fromList([
-      0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D,
-      0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
-      0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4, 0x89, 0x00, 0x00, 0x00,
-      0x0A, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9C, 0x63, 0x00, 0x01, 0x00, 0x00,
-      0x05, 0x00, 0x01, 0x0D, 0x0A, 0x2D, 0xB4, 0x00, 0x00, 0x00, 0x00, 0x49,
-      0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82,
+      0x89,
+      0x50,
+      0x4E,
+      0x47,
+      0x0D,
+      0x0A,
+      0x1A,
+      0x0A,
+      0x00,
+      0x00,
+      0x00,
+      0x0D,
+      0x49,
+      0x48,
+      0x44,
+      0x52,
+      0x00,
+      0x00,
+      0x00,
+      0x01,
+      0x00,
+      0x00,
+      0x00,
+      0x01,
+      0x08,
+      0x06,
+      0x00,
+      0x00,
+      0x00,
+      0x1F,
+      0x15,
+      0xC4,
+      0x89,
+      0x00,
+      0x00,
+      0x00,
+      0x0A,
+      0x49,
+      0x44,
+      0x41,
+      0x54,
+      0x78,
+      0x9C,
+      0x63,
+      0x00,
+      0x01,
+      0x00,
+      0x00,
+      0x05,
+      0x00,
+      0x01,
+      0x0D,
+      0x0A,
+      0x2D,
+      0xB4,
+      0x00,
+      0x00,
+      0x00,
+      0x00,
+      0x49,
+      0x45,
+      0x4E,
+      0x44,
+      0xAE,
+      0x42,
+      0x60,
+      0x82,
     ]);
 
     test('a pet photo is written and restored', () async {
@@ -884,7 +1261,11 @@ void main() {
       expect(updated.hasPhoto, isTrue);
       // Clinic history must survive an owner-side edit.
       expect(updated.timeline.length, timelineBefore);
-      expect(store.petCount, countBefore, reason: 'editing must not duplicate the pet');
+      expect(
+        store.petCount,
+        countBefore,
+        reason: 'editing must not duplicate the pet',
+      );
     });
 
     test('a corrupt stored photo is dropped instead of crashing', () async {
@@ -905,4 +1286,102 @@ void main() {
       expect(store.pets.length, 2);
     });
   });
+}
+
+/// Fake transport for the failover tests: Gemini answers the models list and
+/// the liveness probe but 500s real requests; OpenAI answers everything
+/// unless [openaiDown]. Request bodies are JSON, so the probe is recognised
+/// by its "Reply with exactly this word: ok" text.
+class _FailoverFake extends http.BaseClient {
+  _FailoverFake(
+    this.triageJson, {
+    this.openaiDown = false,
+    this.geminiGarbled = false,
+  });
+
+  final String triageJson;
+  final bool openaiDown;
+
+  /// When true, Gemini's content requests return 200 with non-JSON text —
+  /// drives the malformed-reply failover path (not a transport error).
+  final bool geminiGarbled;
+
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) async {
+    final host = request.url.host;
+    final path = request.url.path;
+    var bodyText = '';
+    if (request is http.Request) bodyText = request.body;
+    final isProbe = bodyText.contains('Reply with exactly this word: ok');
+
+    Object? body;
+    var code = 200;
+    if (host.contains('generativelanguage')) {
+      if (path.endsWith('/models')) {
+        body = {
+          'models': [
+            {
+              'name': 'models/gemini-flash-test',
+              'displayName': 'Flash (test)',
+              'supportedGenerationMethods': ['generateContent'],
+            },
+          ],
+        };
+      } else if (isProbe) {
+        body = {
+          'candidates': [
+            {
+              'content': {
+                'parts': [
+                  {'text': 'ok'},
+                ],
+              },
+            },
+          ],
+        };
+      } else if (geminiGarbled) {
+        body = {
+          'candidates': [
+            {
+              'content': {
+                'parts': [
+                  {'text': 'definitely not JSON, just chatter'},
+                ],
+              },
+            },
+          ],
+        };
+      } else {
+        code = 500; // Real Gemini requests fail: failover must kick in.
+        body = {'error': 'overloaded'};
+      }
+    } else {
+      // OpenAI-compatible.
+      if (openaiDown) {
+        code = 500;
+        body = {'error': 'down'};
+      } else if (path.endsWith('/models')) {
+        body = {
+          'data': [
+            {'id': 'gpt-4o-mini'},
+          ],
+        };
+      } else {
+        body = {
+          'choices': [
+            {
+              'message': {'content': isProbe ? 'ok' : triageJson},
+            },
+          ],
+        };
+      }
+    }
+    final bytes = utf8.encode(jsonEncode(body));
+    return http.StreamedResponse(
+      Stream.value(bytes),
+      code,
+      request: request,
+      headers: {'content-type': 'application/json'},
+    );
+  }
 }

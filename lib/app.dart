@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/cupertino.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 
 import 'data/models.dart';
 import 'data/seed.dart';
@@ -31,13 +30,30 @@ class SplashScreen extends StatefulWidget {
   State<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _SplashScreenState extends State<SplashScreen> {
+class _SplashScreenState extends State<SplashScreen>
+    with SingleTickerProviderStateMixin {
   bool _ready = false;
+
+  /// Looping logo animation: a slow breathing scale + a halo ring that
+  /// expands and fades, forever. Reduced motion parks everything at rest.
+  late final AnimationController _loop = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 2600),
+  );
 
   @override
   void initState() {
     super.initState();
     _boot();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // MediaQuery (used by reduceMotionOf) is only safe to read here, not in
+    // initState. Guards the repeat so later dependency changes do not
+    // restart the loop.
+    if (!_loop.isAnimating && !reduceMotionOf(context)) _loop.repeat();
   }
 
   Future<void> _boot() async {
@@ -51,6 +67,12 @@ class _SplashScreenState extends State<SplashScreen> {
     // pushed the app after 420ms, which made the "Get started" button
     // impossible to actually press.
     setState(() => _ready = true);
+  }
+
+  @override
+  void dispose() {
+    _loop.dispose();
+    super.dispose();
   }
 
   /// Splash → onboarding (first launch) → sign-in. The app itself is only
@@ -104,7 +126,6 @@ class _SplashScreenState extends State<SplashScreen> {
   @override
   Widget build(BuildContext context) {
     final p = context.p;
-    final store = AppScope.of(context);
     return CupertinoPageScaffold(
       backgroundColor: p.background,
       child: Stack(
@@ -132,7 +153,7 @@ class _SplashScreenState extends State<SplashScreen> {
                     children: [
                       FadeIn(
                         duration: Motion.slow,
-                        child: const LogoMark(size: 132),
+                        child: _LoopingLogo(loop: _loop, size: 132),
                       ),
                       const SizedBox(height: T.s24),
                       FadeIn(
@@ -161,44 +182,6 @@ class _SplashScreenState extends State<SplashScreen> {
                   ),
                   const Spacer(flex: 3),
                   FadeIn(
-                    index: 3,
-                    child: GlassCard(
-                      padding: const EdgeInsets.all(T.s16),
-                      child: Row(
-                        children: [
-                          Ic.svg(
-                            store.ai.isLive ? Ic.checkCircle : Ic.sparkle,
-                            color: p.accent,
-                            size: 22,
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text(
-                                  store.ai.isLive
-                                      ? 'CarePaws AI ready'
-                                      : 'CarePaws AI · Unavailable',
-                                  style: Type.headline(p),
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  store.ai.isLive
-                                      ? 'Model ${store.ai.modelLabel ?? 'auto'} selected automatically.'
-                                      : 'Needs an API key. Add one any time in Settings → CarePaws AI.',
-                                  style: Type.footnote(p),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: T.s16),
-                  FadeIn(
                     index: 4,
                     child: SizedBox(
                       width: 200,
@@ -223,12 +206,26 @@ class _SplashScreenState extends State<SplashScreen> {
   }
 }
 
-/// The CarePaws logo mark — a paw print with a heart for its pad, paws for
-/// the patients and a heart for the care. Used on splash and auth only,
-/// per the one-mark rule. Matches the launcher icon (tool/icon/).
+/// The CarePaws logo mark — the launcher icon artwork itself: an orange
+/// gradient squircle with the sitting-dog + nested-cat mark, no text.
+/// Used on splash and auth only, per the one-mark rule. It renders the same
+/// artwork as tool/icon/app_icon.svg so the in-app logo and the app icon are
+/// one and the same mark.
 class LogoMark extends StatelessWidget {
   const LogoMark({super.key, this.size = 120});
   final double size;
+
+  /// Corner radius as a fraction of the tile, matching the launcher SVG
+  /// (rx 228 on a 1024 canvas).
+  static const _corner = 0.223;
+
+  /// Mark size as a fraction of the tile, matching the launcher SVG
+  /// (the 120-grid mark scaled to 600 on a 1024 canvas).
+  static const _mark = 0.586;
+
+  /// The launcher SVG paints the dog in #FEFBF4 (not T.cream #FEF3E2) — the
+  /// in-app mark must be pixel-identical to the app icon.
+  static const _logoCream = Color(0xFFFEFBF4);
 
   @override
   Widget build(BuildContext context) {
@@ -239,12 +236,14 @@ class LogoMark extends StatelessWidget {
         dimension: size,
         child: DecoratedBox(
           decoration: BoxDecoration(
-            gradient: LinearGradient(
+            // Same gradient geometry as the launcher SVG:
+            // x1=0,y1=0 → x2=0.35,y2=1 maps to Alignment(-1,-1) → (-0.3,1).
+            gradient: const LinearGradient(
               begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
+              end: Alignment(-0.3, 1),
               colors: [T.orange, T.terracotta],
             ),
-            shape: BoxShape.circle,
+            borderRadius: BorderRadius.circular(size * _corner),
             boxShadow: [
               BoxShadow(
                 color: T.orange.withValues(alpha: 0.35),
@@ -254,16 +253,63 @@ class LogoMark extends StatelessWidget {
             ],
           ),
           child: Center(
-            child: SvgPicture.string(
-              '<svg viewBox="0 0 24 24" fill="${Ic.hex(T.cream)}" xmlns="http://www.w3.org/2000/svg">'
-              '<path d="${Ic.pawHeart}"/></svg>',
-              width: size * 0.62,
-              height: size * 0.62,
-              semanticsLabel: null,
+            child: Ic.petPair(
+              size: size * _mark,
+              dog: _logoCream,
+              cat: T.terracotta,
             ),
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Splash-only wrapper: the logo mark breathes on a loop — a slow scale
+/// pulse plus a halo ring that expands and fades. Under reduced motion the
+/// controller never starts and the mark renders at rest.
+class _LoopingLogo extends StatelessWidget {
+  const _LoopingLogo({required this.loop, required this.size});
+  final Animation<double> loop;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: loop,
+      builder: (context, _) {
+        final t = loop.value;
+        // 0..1..0 breathing scale over the cycle.
+        final scale = 1.0 + 0.045 * math.sin(t * math.pi * 2);
+        // Halo: expands from the badge edge and fades, twice per cycle.
+        final haloT = (t * 2) % 1.0;
+        return SizedBox.square(
+          dimension: size * 1.5,
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              Opacity(
+                opacity: 0.35 * (1 - haloT),
+                child: Container(
+                  width: size * (1.02 + 0.30 * haloT),
+                  height: size * (1.02 + 0.30 * haloT),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: T.orange.withValues(alpha: 0.55),
+                      width: 2.5,
+                    ),
+                  ),
+                ),
+              ),
+              Transform.scale(
+                scale: scale,
+                child: LogoMark(size: size),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }

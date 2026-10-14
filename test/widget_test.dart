@@ -13,6 +13,7 @@ import 'package:carepaws/design/theme.dart';
 import 'package:carepaws/screens/add_pet_screen.dart';
 import 'package:carepaws/screens/appointments/book_flow.dart';
 import 'package:carepaws/screens/pets/pet_profile_screen.dart';
+import 'package:carepaws/screens/profile/settings_screens.dart';
 import 'package:carepaws/screens/triage_screen.dart';
 import 'package:carepaws/services/ai_service.dart';
 import 'package:carepaws/state/app_store.dart';
@@ -111,6 +112,16 @@ Future<void> revealHorizontal(
   }
 }
 
+/// Taps a target known to be visible without the scroll dance — for controls
+/// like the Appointments segment that sit inside tapInView's 104pt chrome
+/// dead-zone but are fully visible and directly tappable. scrollAndTap's
+/// scroll attempts oscillate on scrollable content here and end up tapping
+/// under the pinned header.
+Future<void> tapVisible(WidgetTester tester, Finder finder) async {
+  await tester.tap(finder);
+  await tester.pumpAndSettle();
+}
+
 /// Number of matches, tolerating finders such as `.first` that throw when empty.
 int countOf(Finder f) {
   try {
@@ -187,7 +198,10 @@ Future<AiService> _liveAi(Map<String, dynamic> triageJson) async {
   SharedPreferences.setMockInitialValues({});
   final ai = AiService(client: _FakeGemini(triageJson));
   addTearDown(ai.dispose);
-  final ok = await ai.useKey('test-key-that-is-long-enough-for-checks');
+  final ok = await ai.useKeyFor(
+    AiProvider.gemini,
+    'test-key-that-is-long-enough-for-checks',
+  );
   assert(ok && ai.isLive, 'fake service should reach live mode');
   return ai;
 }
@@ -315,7 +329,7 @@ void main() {
   group('Tab shell', () {
     testWidgets('boots on Home with the time-aware greeting', (tester) async {
       await pumpShell(tester);
-      expect(find.text('Good morning'), findsOneWidget);
+      expect(find.textContaining('Good morning'), findsOneWidget);
       expect(find.text('My Pets'), findsOneWidget);
       // The structural hero now sizes itself in flow (taller than the old
       // overflow-based one), so the reminders section starts just below the
@@ -356,6 +370,8 @@ void main() {
 
     testWidgets('shows both sample pets', (tester) async {
       await pumpShell(tester);
+      // The taller hero can leave the pet row just below the fold.
+      await scrollToText(tester, 'Biscuit');
       expect(find.text('Biscuit'), findsWidgets);
       expect(find.text('Mochi'), findsWidgets);
     });
@@ -451,9 +467,7 @@ void main() {
       expect(carouselPage(tester), 0);
     });
 
-    testWidgets('pauses while touched and resumes after idle', (
-      tester,
-    ) async {
+    testWidgets('pauses while touched and resumes after idle', (tester) async {
       await pumpShell(tester);
       final gesture = await tester.startGesture(
         tester.getCenter(find.byType(PageView)),
@@ -617,49 +631,52 @@ void main() {
   });
 
   group('Add pet', () {
-    testWidgets('back on step 2 returns to step 1 instead of discarding the form', (
-      tester,
-    ) async {
-      final store = AppStore(now: fixedNow());
-      await tester.binding.setSurfaceSize(const Size(390, 844));
-      await tester.pumpWidget(
-        AppScope(
-          store: store,
-          child: CupertinoApp(
-            theme: themeFor(AppPalette.light),
-            home: const AddPetScreen(),
+    testWidgets(
+      'back on step 2 returns to step 1 instead of discarding the form',
+      (tester) async {
+        final store = AppStore(now: fixedNow());
+        await tester.binding.setSurfaceSize(const Size(390, 844));
+        await tester.pumpWidget(
+          AppScope(
+            store: store,
+            child: CupertinoApp(
+              theme: themeFor(AppPalette.light),
+              home: const AddPetScreen(),
+            ),
           ),
-        ),
-      );
-      await tester.pumpAndSettle();
+        );
+        await tester.pumpAndSettle();
 
-      // Step 1: enter a name and continue.
-      await tester.enterText(find.byType(CupertinoTextField).first, 'Pepper');
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Continue'));
-      await tester.pumpAndSettle();
-      expect(find.text('Almost done'), findsOneWidget);
+        // Step 1: enter a name and continue.
+        await tester.enterText(find.byType(CupertinoTextField).first, 'Pepper');
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Continue'));
+        await tester.pumpAndSettle();
+        expect(find.text('Almost done'), findsOneWidget);
 
-      // Nav back goes to step 1, not out of the flow (regression: it used
-      // to pop the whole screen, discarding the entered data).
-      await tester.tap(
-        find.descendant(
-          of: find.byType(DetailNavBar),
-          matching: find.byType(CupertinoButton),
-        ).first,
-      );
-      await tester.pumpAndSettle();
-      expect(find.byType(AddPetScreen), findsOneWidget);
-      expect(find.text('Add pet'), findsOneWidget);
-      // The entered name is preserved.
-      expect(
-        (find.byType(CupertinoTextField).first.evaluate().single.widget
-                as CupertinoTextField)
-            .controller
-            ?.text,
-        'Pepper',
-      );
-    });
+        // Nav back goes to step 1, not out of the flow (regression: it used
+        // to pop the whole screen, discarding the entered data).
+        await tester.tap(
+          find
+              .descendant(
+                of: find.byType(DetailNavBar),
+                matching: find.byType(CupertinoButton),
+              )
+              .first,
+        );
+        await tester.pumpAndSettle();
+        expect(find.byType(AddPetScreen), findsOneWidget);
+        expect(find.text('Add pet'), findsOneWidget);
+        // The entered name is preserved.
+        expect(
+          (find.byType(CupertinoTextField).first.evaluate().single.widget
+                  as CupertinoTextField)
+              .controller
+              ?.text,
+          'Pepper',
+        );
+      },
+    );
   });
 
   group('Triage — all four routes', () {
@@ -965,7 +982,69 @@ void main() {
       await tester.tap(find.text('CarePaws AI').first);
       await tester.pumpAndSettle();
       expect(find.text('Start health check'), findsWidgets);
-      expect(find.textContaining('Labeled AI'), findsOneWidget);
+      expect(find.textContaining('AI assistant'), findsOneWidget);
+    });
+  });
+
+  group('AI provider settings', () {
+    Future<void> pumpAiSettings(WidgetTester tester) async {
+      SharedPreferences.setMockInitialValues({});
+      await tester.pumpWidget(
+        AppScope(
+          store: AppStore(now: fixedNow()),
+          child: CupertinoApp(
+            theme: themeFor(AppPalette.light),
+            home: const AiSettingsScreen(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('lists all three providers with their status chips', (
+      tester,
+    ) async {
+      await pumpAiSettings(tester);
+      expect(find.text('Gemini'), findsOneWidget);
+      expect(find.text('OpenAI'), findsOneWidget);
+      expect(find.text('OpenRouter'), findsOneWidget);
+      // No keys yet: every card shows the "No key" chip.
+      expect(find.text('No key'), findsNWidgets(3));
+      // The failover order is explained, not assumed.
+      expect(
+        find.textContaining('move to the next one automatically'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('tapping a provider card expands its key field', (
+      tester,
+    ) async {
+      await pumpAiSettings(tester);
+      expect(find.byType(CupertinoTextField), findsNothing);
+      await tester.tap(find.text('OpenAI'));
+      await tester.pumpAndSettle();
+      expect(find.byType(CupertinoTextField), findsOneWidget);
+      expect(find.text('Save key'), findsOneWidget);
+      // Tapping again collapses it.
+      await tester.tap(find.text('OpenAI'));
+      await tester.pumpAndSettle();
+      expect(find.byType(CupertinoTextField), findsNothing);
+    });
+
+    testWidgets('the enable switch turns a provider off', (tester) async {
+      await pumpAiSettings(tester);
+      // All three switches start on.
+      expect(
+        tester
+            .widgetList<CupertinoSwitch>(find.byType(CupertinoSwitch))
+            .every((s) => s.value),
+        isTrue,
+      );
+      await tester.tap(find.byType(CupertinoSwitch).first);
+      await tester.pumpAndSettle();
+      expect(find.text('Off'), findsOneWidget);
+      expect(find.textContaining('Turned off'), findsOneWidget);
     });
   });
 
@@ -1036,7 +1115,7 @@ void main() {
     ) async {
       await pumpShell(tester);
       await openTab(tester, 'Appointments');
-      await scrollAndTap(tester, find.text('Past').first);
+      await tapVisible(tester, find.text('Past').first);
       await scrollToText(tester, 'Rebook');
       expect(find.text('Rebook'), findsWidgets);
       expect(find.text('Completed'), findsWidgets);
@@ -1049,7 +1128,7 @@ void main() {
             .toList();
       await pumpShell(tester, store: store);
       await openTab(tester, 'Appointments');
-      await scrollAndTap(tester, find.text('Past').first);
+      await tapVisible(tester, find.text('Past').first);
       await scrollToText(tester, 'No past visits yet');
       expect(find.text('No past visits yet'), findsOneWidget);
       expect(find.text('Book appointment'), findsOneWidget);
@@ -1069,7 +1148,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 600));
       await tester.pumpAndSettle();
 
-      await scrollAndTap(tester, find.text('Past').first);
+      await tapVisible(tester, find.text('Past').first);
       await scrollToText(tester, 'Cancelled');
       expect(store.past.any((a) => a.status == ApptStatus.cancelled), isTrue);
       await scrollToText(tester, 'Cancelled');
@@ -1551,7 +1630,7 @@ void main() {
 
     testWidgets('reduce motion renders static final states', (tester) async {
       await pumpShell(tester, reduceMotion: true);
-      expect(find.text('Good morning'), findsOneWidget);
+      expect(find.textContaining('Good morning'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
   });

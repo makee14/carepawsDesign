@@ -65,9 +65,8 @@ class AuthStore {
     if (!_looksLikeEmail(cleanEmail)) {
       return 'That email address does not look right.';
     }
-    if (password.length < 6) {
-      return 'Use a password of at least 6 characters.';
-    }
+    final pwError = validatePassword(password);
+    if (pwError != null) return pwError;
 
     final users = await _readUsers();
     if (users.containsKey(cleanEmail)) {
@@ -91,6 +90,22 @@ class AuthStore {
     if (entry == null) return null;
     if (entry['password'] != password) return null;
     return entry['name'];
+  }
+
+  /// Password rule, shared by the create-account form and [register]:
+  /// at least 8 characters with at least one letter and one number.
+  /// Returns null when the password is acceptable, otherwise the
+  /// user-facing reason it is not.
+  static String? validatePassword(String password) {
+    if (password.length < 8) {
+      return 'Use at least 8 characters.';
+    }
+    final hasLetter = RegExp(r'[A-Za-z]').hasMatch(password);
+    final hasDigit = RegExp(r'[0-9]').hasMatch(password);
+    if (!hasLetter || !hasDigit) {
+      return 'Use letters and numbers together.';
+    }
+    return null;
   }
 
   static bool _looksLikeEmail(String s) {

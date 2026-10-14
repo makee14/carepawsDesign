@@ -201,9 +201,11 @@ class _PageState extends State<_Page> {
         child: ConstrainedBox(
           constraints: BoxConstraints(minHeight: constraints.maxHeight),
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(28, 16, 28, 8),
+            // The illustration rides high: the old centred group left the
+            // artwork sitting low, crowded against the title.
+            padding: const EdgeInsets.fromLTRB(28, 36, 28, 8),
             child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisAlignment: MainAxisAlignment.start,
               children: [
                 SizedBox(
                   height: slotH,

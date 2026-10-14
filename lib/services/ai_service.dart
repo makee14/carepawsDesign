@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -8,30 +9,98 @@ import '../data/clinic.dart';
 import '../data/models.dart';
 
 /// ---------------------------------------------------------------------------
-/// Gemini API key.
+/// AI API keys.
 ///
-/// Two sources, in priority order:
+/// Three providers are supported, tried in this priority order:
+///   1. Gemini (Google AI Studio key)
+///   2. OpenAI (platform.openai.com key)
+///   3. OpenRouter (openrouter.ai key — one key, many models)
+///
+/// Two sources per provider, in priority order:
 ///   1. A key typed into Settings ▸ CarePaws AI on the device (dev/test only —
 ///      it is stored in plaintext on the phone, so it never ships).
 ///   2. A key baked in at build time:
-///        flutter run --dart-define=GEMINI_API_KEY=your_key_here
+///        flutter run --dart-define=GEMINI_API_KEY=... \
+///                    --dart-define=OPENAI_API_KEY=... \
+///                    --dart-define=OPENROUTER_API_KEY=...
 ///
-/// This remains the only place a key is declared.
-/// ---------------------------------------------------------------------------
+/// This remains the only place keys are declared.
 // ignore: prefer_const_declarations
 const String geminiApiKey = String.fromEnvironment(
   'GEMINI_API_KEY',
   defaultValue: 'YOUR_GEMINI_API_KEY',
 );
 
+// ignore: prefer_const_declarations
+const String openaiApiKey = String.fromEnvironment(
+  'OPENAI_API_KEY',
+  defaultValue: 'YOUR_OPENAI_API_KEY',
+);
+
+// ignore: prefer_const_declarations
+const String openrouterApiKey = String.fromEnvironment(
+  'OPENROUTER_API_KEY',
+  defaultValue: 'YOUR_OPENROUTER_API_KEY',
+);
+
+/// The AI providers CarePaws can talk to, in routing priority order: when
+/// the active provider fails, requests automatically move to the next
+/// configured one.
+enum AiProvider { gemini, openai, openrouter }
+
+extension AiProviderInfo on AiProvider {
+  /// Display name shown in Settings and status lines.
+  String get label => switch (this) {
+    AiProvider.gemini => 'Gemini',
+    AiProvider.openai => 'OpenAI',
+    AiProvider.openrouter => 'OpenRouter',
+  };
+
+  /// Key format hint shown as the field placeholder in Settings.
+  String get keyHint => switch (this) {
+    AiProvider.gemini => 'AIza…',
+    AiProvider.openai => 'sk-…',
+    AiProvider.openrouter => 'sk-or-…',
+  };
+
+  /// Where the provider gets its key when none is on the device.
+  String get buildKey => switch (this) {
+    AiProvider.gemini => geminiApiKey,
+    AiProvider.openai => openaiApiKey,
+    AiProvider.openrouter => openrouterApiKey,
+  };
+
+  /// The placeholder is never a real key — it fails validation loudly.
+  String get placeholder => switch (this) {
+    AiProvider.gemini => 'YOUR_GEMINI_API_KEY',
+    AiProvider.openai => 'YOUR_OPENAI_API_KEY',
+    AiProvider.openrouter => 'YOUR_OPENROUTER_API_KEY',
+  };
+
+  /// Where an on-device key is kept between launches.
+  String get keyPref => 'carepaws.ai_key.$name';
+
+  /// Where the provider's on/off switch is kept between launches.
+  String get enabledPref => 'carepaws.ai_enabled.$name';
+}
+
 enum AiStatus { checking, live, unavailable }
 
 /// Why the assistant cannot answer right now. Surfaced verbatim in the
 /// "AI unavailable" UI, so each case names exactly what went wrong.
 enum AiFailure {
-  noKey('No API key is configured', 'Paste a key in Settings → CarePaws AI to turn it on.'),
-  unreachable("Couldn't reach the AI service", 'Check the connection and try again, or paste a fresh key in Settings → CarePaws AI.'),
-  serviceError('The AI service returned an error', 'The key may be invalid — paste a fresh one in Settings → CarePaws AI and try again.');
+  noKey(
+    'No API key is configured',
+    'Paste a key in Settings → CarePaws AI to turn it on.',
+  ),
+  unreachable(
+    "Couldn't reach the AI service",
+    'Check the connection and try again, or paste a fresh key in Settings → CarePaws AI.',
+  ),
+  serviceError(
+    'The AI service returned an error',
+    'The key may be invalid — paste a fresh one in Settings → CarePaws AI and try again.',
+  );
 
   const AiFailure(this.label, this.hint);
   final String label;
@@ -64,7 +133,10 @@ class AiException implements Exception {
 class VetPersona {
   const VetPersona._();
 
-  static String systemFor({required DateTime now, required String ownerFirstName}) {
+  static String systemFor({
+    required DateTime now,
+    required String ownerFirstName,
+  }) {
     final open = Clinic.isOpenNow(now);
     final nameLine = ownerFirstName.isEmpty
         ? 'The owner did not share a name — greet them plainly and never invent one.'
@@ -77,7 +149,9 @@ name and species come with each question; name the pet often.
 
 Voice: warm, plain-spoken, specific. Short sentences, contractions. One
 concrete thing to try tonight, not a list of ten. Never open with "As an AI".
-Never use jargon without explaining it in the same breath ("tartar — that
+Never open with a greeting ("Hi Mark!", "Great to hear from you") — the app
+already welcomed the owner, so a second greeting just repeats it. Answer
+directly. Never use jargon without explaining it in the same breath ("tartar — that
 brown crust along the gum line").
 
 Be honest about what you don't know:
@@ -133,54 +207,93 @@ managed at home.''';
       'Ask me about feeding, health, vaccines or a health check and I will take it from there.';
 }
 
-/// Talks to the Gemini API when a real key is configured. Without a key, or
-/// when the network or the API fails, every request throws [AiException] —
-/// there is no canned fallback, so the UI always says exactly what went wrong.
-class AiService {
-  AiService({http.Client? client, this.timeout = const Duration(seconds: 12)})
-    : _client = client ?? http.Client();
+/// One AI provider's key, switch and live model, as shown in Settings.
+/// A snapshot — read fresh via [AiService.statusFor] after any change.
+class AiProviderStatus {
+  const AiProviderStatus({
+    required this.provider,
+    required this.enabled,
+    required this.keyConfigured,
+    required this.keyFromDevice,
+    required this.isLive,
+    this.modelLabel,
+    this.failure,
+  });
+
+  final AiProvider provider;
+  final bool enabled;
+  final bool keyConfigured;
+  final bool keyFromDevice;
+  final bool isLive;
+  final String? modelLabel;
+  final AiFailure? failure;
+}
+
+/// The transport contract every provider implements. Bootstrapping validates
+/// the key and picks a model; [generate] answers one request. Neither ever
+/// throws for an expected failure — [bootstrap] records [failure] and
+/// [generate] throws [AiException] instead.
+abstract class AiBackend {
+  AiProvider get provider;
+  bool get isLive;
+  String? get modelId;
+  String? get modelLabel;
+  AiFailure? get failure;
+
+  Future<void> bootstrap();
+  void markDown(AiFailure failure);
+
+  Future<String> triage({
+    required String system,
+    required String prompt,
+    required String description,
+    Uint8List? photo,
+    String? photoMime,
+  });
+
+  Future<String> chat({required String system, required String userText});
+}
+
+/// Gemini, over the native `generateContent` API. Keeps the dynamic free-tier
+/// model probe: the models list is ranked best-first and each candidate is
+/// probed with a real minimal request, so the pick is the best *usable* model,
+/// not just the best-listed one.
+class GeminiBackend implements AiBackend {
+  GeminiBackend({
+    required this._client,
+    required this.timeout,
+    required this.key,
+  });
+
+  @override
+  AiProvider get provider => AiProvider.gemini;
 
   final http.Client _client;
   final Duration timeout;
+  final String key;
 
   static const _base = 'generativelanguage.googleapis.com';
   static const _v1beta = 'v1beta';
 
-  /// Where an on-device key is kept between launches.
-  static const keyPrefName = 'carepaws.gemini_api_key';
-  static const _keyPref = keyPrefName;
-  static const _placeholder = 'YOUR_GEMINI_API_KEY';
+  bool _live = false;
+  String? _modelId;
+  String? _modelLabel;
+  AiFailure? _failure;
 
-  /// Rejects blanks and the placeholder so a half-pasted key fails loudly
-  /// instead of silently leaving the assistant unavailable.
-  static bool _looksLikeKey(String? k) =>
-      k != null && k.trim().isNotEmpty && k.trim() != _placeholder && k.trim().length > 20;
+  @override
+  bool get isLive => _live;
+  @override
+  String? get modelId => _modelId;
+  @override
+  String? get modelLabel => _modelLabel;
+  @override
+  AiFailure? get failure => _failure;
 
-  /// Set from Settings. Null until the stored value is read.
-  String? _storedKey;
-
-  /// Device key first, then the build-time key.
-  String get _effectiveKey =>
-      _looksLikeKey(_storedKey) ? _storedKey!.trim() : geminiApiKey;
-
-  /// Starts unavailable when no key is configured so the UI is honest from the
-  /// very first frame, and only probes the network when a key exists.
-  AiStatus status = _looksLikeKey(geminiApiKey) ? AiStatus.checking : AiStatus.unavailable;
-
-  /// Why the last bootstrap or request failed. Null when live.
-  AiFailure? failure = _looksLikeKey(geminiApiKey) ? null : AiFailure.noKey;
-
-  String? modelId;
-  String? modelLabel;
-
-  bool get isLive => status == AiStatus.live;
-  bool get isUnavailable => status == AiStatus.unavailable;
-
-  bool get keyConfigured => _looksLikeKey(_effectiveKey);
-
-  /// True when the key came from the device rather than the build. Settings
-  /// uses this to warn that the value is stored in plaintext.
-  bool get keyFromDevice => _looksLikeKey(_storedKey);
+  @override
+  void markDown(AiFailure failure) {
+    _live = false;
+    _failure = failure;
+  }
 
   /// Free-tier text model IDs, newest family first. Only used when the
   /// models-list endpoint fails or lists nothing usable — the dynamic list
@@ -197,43 +310,31 @@ class AiService {
     'gemini-2.5-pro',
   ];
 
-  /// Runs at startup. Loads any on-device key, lists the API's models, then
-  /// probes each free-tier candidate with a real minimal request and keeps
-  /// the first one that actually answers. The list endpoint cannot report
-  /// quota or billing, so a model that is listed but not usable on the key's
-  /// tier is skipped automatically — this is what makes the pick the best
-  /// *free* model, not just the best-listed one. Safe to call again after a
-  /// key changes.
+  @override
   Future<void> bootstrap() async {
-    await _restoreKey();
-    if (!keyConfigured) {
-      _enterUnavailable(AiFailure.noKey);
-      return;
-    }
-    status = AiStatus.checking;
-    failure = null;
-    modelId = null;
-    modelLabel = null;
+    _live = false;
+    _modelId = null;
+    _modelLabel = null;
+    _failure = null;
     try {
       final candidates = await _candidates();
       for (final c in candidates) {
         if (await _probe(c.name)) {
-          modelId = c.name;
-          modelLabel = c.label;
-          status = AiStatus.live;
-          failure = null;
+          _modelId = c.name;
+          _modelLabel = c.label;
+          _live = true;
           debugPrint('[ai] live model: ${c.name}');
           return;
         }
         debugPrint('[ai] candidate ${c.name} did not answer, trying next');
       }
-      _enterUnavailable(AiFailure.serviceError);
+      _failure = AiFailure.serviceError;
     } on AiException catch (e) {
-      _enterUnavailable(e.failure);
+      _failure = e.failure;
     } on TimeoutException {
-      _enterUnavailable(AiFailure.unreachable);
+      _failure = AiFailure.unreachable;
     } catch (_) {
-      _enterUnavailable(AiFailure.unreachable);
+      _failure = AiFailure.unreachable;
     }
   }
 
@@ -269,11 +370,9 @@ class AiService {
   /// means "try the next candidate", never a crash.
   Future<bool> _probe(String id) async {
     try {
-      final uri = Uri.https(
-        _base,
-        '/$_v1beta/models/$id:generateContent',
-        {'key': _effectiveKey},
-      );
+      final uri = Uri.https(_base, '/$_v1beta/models/$id:generateContent', {
+        'key': key,
+      });
       final res = await _client
           .post(
             uri,
@@ -298,55 +397,11 @@ class AiService {
     }
   }
 
-  void _enterUnavailable(AiFailure why) {
-    status = AiStatus.unavailable;
-    failure = why;
-    modelId = null;
-    modelLabel = null;
-    debugPrint('[ai] unavailable: ${why.name}');
-  }
-
-  /// Reads the on-device key, if there is one. A missing plugin (unit tests,
-  /// desktop) is not an error: it just means there is no stored key.
-  Future<void> _restoreKey() async {
-    if (_storedKey != null) return;
-    final prefs = await _openPrefs();
-    _storedKey = prefs?.getString(_keyPref);
-  }
-
-  Future<SharedPreferences?> _openPrefs() async {
-    try {
-      return await SharedPreferences.getInstance();
-    } catch (_) {
-      return null;
-    }
-  }
-
-  /// Saves a key entered on the device and re-probes straight away, so the
-  /// Settings status flips without a restart. A blank value clears the key.
-  /// Returns whether a usable key is now configured.
-  Future<bool> useKey(String key) async {
-    final trimmed = key.trim();
-    final prefs = await _openPrefs();
-    if (_looksLikeKey(trimmed)) {
-      _storedKey = trimmed;
-      await prefs?.setString(_keyPref, trimmed);
-    } else {
-      _storedKey = null;
-      await prefs?.remove(_keyPref);
-    }
-    await bootstrap();
-    return keyConfigured;
-  }
-
-  /// Forgets the on-device key, leaving any build-time key in charge.
-  Future<bool> clearKey() => useKey('');
-
   /// Free-tier candidates that advertise multimodal input, flash family first.
   /// Throws [AiException]: unreachable on transport failure, serviceError on
   /// a non-200 answer.
   Future<List<_Model>> _listModels() async {
-    final uri = Uri.https(_base, '/$_v1beta/models', {'key': _effectiveKey});
+    final uri = Uri.https(_base, '/$_v1beta/models', {'key': key});
     http.Response res;
     try {
       res = await _client.get(uri).timeout(timeout);
@@ -418,216 +473,22 @@ class AiService {
   }
 
   Uri _generateUri() {
-    final id = modelId;
-    if (id == null) throw AiException(failure ?? AiFailure.noKey);
-    return Uri.https(_base, '/$_v1beta/models/$id:generateContent', {'key': _effectiveKey});
-  }
-
-  /// Throws [AiException] when the assistant cannot answer.
-  Never _requireLive() {
-    throw AiException(failure ?? AiFailure.noKey);
-  }
-
-  /// Health check for the selected pet. Throws [AiException] when there is no
-  /// key, the network fails, or the API answers with an error.
-  Future<TriageResult> triage({
-    required String petName,
-    required String species,
-    required String text,
-    Uint8List? photo,
-    String? photoMime,
-    String ownerFirstName = '',
-  }) async {
-    final raw = await _generateTriage(
-      prompt: _triagePrompt(petName, species, hasPhoto: photo != null),
-      text: text,
-      photo: photo,
-      photoMime: photoMime,
-      ownerFirstName: ownerFirstName,
-    );
-    final parsed = _parseTriage(raw);
-    if (parsed == null) {
-      throw const AiException(AiFailure.serviceError, 'unparseable reply');
-    }
-    return parsed;
-  }
-
-  /// Health check where the AI also identifies which pet the concern is about.
-  /// Returns the triage result plus the matched pet name exactly as the model
-  /// wrote it (null when the model could not determine it — never guessed).
-  /// Throws [AiException] when there is no key, the network fails, or the API
-  /// answers with an error.
-  Future<({TriageResult result, String? petName})> triageDetect({
-    required List<Pet> pets,
-    required String text,
-    Uint8List? photo,
-    String? photoMime,
-    String ownerFirstName = '',
-  }) async {
-    final raw = await _generateTriage(
-      prompt: _triageDetectPrompt(pets, hasPhoto: photo != null),
-      text: text,
-      photo: photo,
-      photoMime: photoMime,
-      ownerFirstName: ownerFirstName,
-    );
-    final parsed = _parseDetect(raw);
-    if (parsed == null) {
-      throw const AiException(AiFailure.serviceError, 'unparseable reply');
-    }
-    return parsed;
-  }
-
-  /// Sends one triage-style generation request and returns the model's raw
-  /// text. Throws [AiException] on any transport or API failure.
-  Future<String> _generateTriage({
-    required String prompt,
-    required String text,
-    Uint8List? photo,
-    String? photoMime,
-    required String ownerFirstName,
-  }) async {
-    if (!isLive) _requireLive();
-    try {
-      final parts = <Map<String, Object?>>[
-        <String, Object?>{'text': prompt},
-        if (text.isNotEmpty)
-          <String, Object?>{'text': "Owner's description: $text"},
-      ];
-      // Gemini image input uses camelCase `inlineData` — the old snake_case
-      // `inline_data` key was silently ignored, so photo triage behaved like
-      // text-only and photo answers looked "not working".
-      if (photo != null) {
-        parts.add({
-          'inlineData': {
-            'mimeType': photoMime ?? 'image/jpeg',
-            'data': base64Encode(photo),
-          },
-        });
-      } else if (text.isEmpty) {
-        parts.add({
-          'text':
-              'The pet shows a visible concern but no text description was given.',
-        });
-      }
-      final body = {
-        'systemInstruction': {
-          'parts': [
-            {'text': VetPersona.systemFor(now: DateTime.now(), ownerFirstName: ownerFirstName)},
-          ],
-        },
-        'contents': [
-          {
-            'role': 'user',
-            'parts': parts,
-          }
-        ],
-        'generationConfig': {'temperature': 0.3, 'maxOutputTokens': 700},
-        'safetySettings': <Map<String, Object?>>[
-          <String, Object?>{
-            'category': 'HARM_CATEGORY_DANGEROUS_CONTENT',
-            'threshold': 'BLOCK_ONLY_HIGH',
-          }
-        ],
-      };
-      final res = await _postChat(body);
-      return _content(res.body);
-    } on AiException {
-      rethrow;
-    } on TimeoutException {
-      throw const AiException(AiFailure.unreachable);
-    } on http.ClientException {
-      throw const AiException(AiFailure.unreachable);
-    } on FormatException {
-      throw const AiException(AiFailure.serviceError, 'unparseable reply');
-    } catch (_) {
-      throw const AiException(AiFailure.unreachable);
-    }
-  }
-
-  /// General pet-care chat answer. Throws [AiException] when the assistant
-  /// cannot answer.
-  Future<String> chat({
-    required String petName,
-    required String species,
-    required String question,
-    String ownerFirstName = '',
-  }) async {
-    if (!isLive) _requireLive();
-    try {
-      // The model returns a small envelope so scope is decided in the same
-      // round trip — no extra call, and no keyword regex that would misfire on
-      // legitimate answers like "what food should I feed my dog".
-      final body = {
-        'systemInstruction': {
-          'parts': [
-            {'text': VetPersona.systemFor(now: DateTime.now(), ownerFirstName: ownerFirstName)},
-          ],
-        },
-        'contents': [
-          {
-            'role': 'user',
-            'parts': [
-              {
-                'text':
-                    "The owner is asking about $petName, a $species, from home in the clinic's app.\n"
-                    'Answer in 3-5 short sentences, warm and practical.\n'
-                    'Reply with ONLY a JSON object, no markdown, exactly:\n'
-                    '{"inScope":true|false,"reply":"your answer"}\n'
-                    'Set inScope to false if the question is not about veterinary care '
-                    'for this pet.\n'
-                    'Question: $question',
-              }
-            ],
-          }
-        ],
-        'generationConfig': {
-          'temperature': 0.5,
-          'maxOutputTokens': 400,
-          'responseMimeType': 'application/json',
-          'responseJsonSchema': {
-            'type': 'object',
-            'properties': {
-              'inScope': {'type': 'boolean'},
-              'reply': {'type': 'string'},
-            },
-            'required': ['inScope', 'reply'],
-          },
-        },
-      };
-      final res = await _post(body);
-
-      final raw = _content(res.body).trim();
-      // A malformed reply is treated as in-scope and shown as-is: better to
-      // show an imperfect answer than to silently swallow a real question.
-      final parsed = _parseChat(raw);
-      if (parsed == null) {
-        if (raw.isEmpty) throw const AiException(AiFailure.serviceError, 'empty reply');
-        return raw;
-      }
-      if (!parsed.inScope) return VetPersona.redirect;
-      if (parsed.reply.trim().isEmpty) {
-        throw const AiException(AiFailure.serviceError, 'empty reply');
-      }
-      return parsed.reply.trim();
-    } on AiException {
-      rethrow;
-    } on TimeoutException {
-      throw const AiException(AiFailure.unreachable);
-    } on http.ClientException {
-      throw const AiException(AiFailure.unreachable);
-    } on FormatException {
-      throw const AiException(AiFailure.serviceError, 'unparseable reply');
-    } catch (_) {
-      throw const AiException(AiFailure.unreachable);
-    }
+    final id = _modelId;
+    if (id == null) throw AiException(_failure ?? AiFailure.noKey);
+    return Uri.https(_base, '/$_v1beta/models/$id:generateContent', {
+      'key': key,
+    });
   }
 
   /// POSTs to the selected model. Non-200 answers are service errors — the
   /// caller maps transport failures to [AiFailure.unreachable].
   Future<http.Response> _post(Map<String, Object?> body) async {
     final res = await _client
-        .post(_generateUri(), headers: {'Content-Type': 'application/json'}, body: jsonEncode(body))
+        .post(
+          _generateUri(),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode(body),
+        )
         .timeout(timeout);
     if (res.statusCode != 200) {
       throw AiException(AiFailure.serviceError, 'HTTP ${res.statusCode}');
@@ -649,12 +510,830 @@ class AiService {
       if (!badRequest) rethrow;
       debugPrint('[ai] model rejected JSON schema, retrying as plain text');
       final plain = Map<String, Object?>.from(withSchema);
-      final gc = Map<String, Object?>.from(
-        withSchema['generationConfig'] as Map<String, Object?>,
-      )..remove('responseMimeType')..remove('responseJsonSchema');
+      final gc =
+          Map<String, Object?>.from(
+              withSchema['generationConfig'] as Map<String, Object?>,
+            )
+            ..remove('responseMimeType')
+            ..remove('responseJsonSchema');
       plain['generationConfig'] = gc;
       return await _post(plain);
     }
+  }
+
+  @override
+  Future<String> triage({
+    required String system,
+    required String prompt,
+    required String description,
+    Uint8List? photo,
+    String? photoMime,
+  }) async {
+    try {
+      final parts = <Map<String, Object?>>[
+        <String, Object?>{'text': prompt},
+        if (description.isNotEmpty)
+          <String, Object?>{'text': "Owner's description: $description"},
+      ];
+      // Gemini image input uses camelCase `inlineData` — the old snake_case
+      // `inline_data` key was silently ignored, so photo triage behaved like
+      // text-only and photo answers looked "not working".
+      if (photo != null) {
+        parts.add({
+          'inlineData': {
+            'mimeType': photoMime ?? 'image/jpeg',
+            'data': base64Encode(photo),
+          },
+        });
+      } else if (description.isEmpty) {
+        parts.add({
+          'text': 'The pet shows a visible concern but no text description was given.',
+        });
+      }
+      final body = {
+        'systemInstruction': {
+          'parts': [
+            {'text': system},
+          ],
+        },
+        'contents': [
+          {'role': 'user', 'parts': parts},
+        ],
+        'generationConfig': {'temperature': 0.3, 'maxOutputTokens': 700},
+        'safetySettings': <Map<String, Object?>>[
+          <String, Object?>{
+            'category': 'HARM_CATEGORY_DANGEROUS_CONTENT',
+            'threshold': 'BLOCK_ONLY_HIGH',
+          },
+        ],
+      };
+      final res = await _post(body);
+      return _content(res.body);
+    } on AiException {
+      rethrow;
+    } on TimeoutException {
+      throw const AiException(AiFailure.unreachable);
+    } on http.ClientException {
+      throw const AiException(AiFailure.unreachable);
+    } on FormatException {
+      throw const AiException(AiFailure.serviceError, 'unparseable reply');
+    } catch (_) {
+      throw const AiException(AiFailure.unreachable);
+    }
+  }
+
+  @override
+  Future<String> chat({
+    required String system,
+    required String userText,
+  }) async {
+    try {
+      final body = {
+        'systemInstruction': {
+          'parts': [
+            {'text': system},
+          ],
+        },
+        'contents': [
+          {
+            'role': 'user',
+            'parts': [
+              {'text': userText},
+            ],
+          },
+        ],
+        'generationConfig': {
+          'temperature': 0.5,
+          'maxOutputTokens': 400,
+          'responseMimeType': 'application/json',
+          'responseJsonSchema': {
+            'type': 'object',
+            'properties': {
+              'inScope': {'type': 'boolean'},
+              'reply': {'type': 'string'},
+            },
+            'required': ['inScope', 'reply'],
+          },
+        },
+      };
+      final res = await _postChat(body);
+      return _content(res.body).trim();
+    } on AiException {
+      rethrow;
+    } on TimeoutException {
+      throw const AiException(AiFailure.unreachable);
+    } on http.ClientException {
+      throw const AiException(AiFailure.unreachable);
+    } on FormatException {
+      throw const AiException(AiFailure.serviceError, 'unparseable reply');
+    } catch (_) {
+      throw const AiException(AiFailure.unreachable);
+    }
+  }
+
+  String _content(String body) {
+    final j = jsonDecode(body) as Map<String, dynamic>;
+    final parts = (j['candidates'] as List? ?? const [])
+        .cast<Map<String, dynamic>>()
+        .firstOrNull;
+    final content = parts?['content'] as Map<String, dynamic>?;
+    final list = (content?['parts'] as List? ?? const [])
+        .cast<Map<String, dynamic>>();
+    return list.map((e) => e['text'] as String? ?? '').join('\n');
+  }
+}
+
+/// OpenAI and OpenRouter, over the OpenAI-compatible `/chat/completions` API.
+/// Photos travel as data URLs. `response_format: json_object` is requested
+/// for structured answers, with a plain-text retry when a model rejects it.
+class OpenAiBackend implements AiBackend {
+  OpenAiBackend({
+    required this.provider,
+    required this._client,
+    required this.timeout,
+    required this.key,
+  }) {
+    assert(
+      provider == AiProvider.openai || provider == AiProvider.openrouter,
+      'OpenAiBackend only serves OpenAI-compatible providers',
+    );
+  }
+
+  @override
+  final AiProvider provider;
+
+  final http.Client _client;
+  final Duration timeout;
+  final String key;
+
+  String get _host =>
+      provider == AiProvider.openai ? 'api.openai.com' : 'openrouter.ai';
+  String get _basePath => provider == AiProvider.openai ? '/v1' : '/api/v1';
+
+  /// Sensible default when the models list is unavailable or lacks it.
+  String get _preferredModel =>
+      provider == AiProvider.openai ? 'gpt-4o-mini' : 'google/gemini-2.5-flash';
+
+  bool _live = false;
+  String? _modelId;
+  AiFailure? _failure;
+
+  @override
+  bool get isLive => _live;
+  @override
+  String? get modelId => _modelId;
+  @override
+  String? get modelLabel => _modelId;
+  @override
+  AiFailure? get failure => _failure;
+
+  @override
+  void markDown(AiFailure failure) {
+    _live = false;
+    _failure = failure;
+  }
+
+  Map<String, String> get _headers => {
+    'Content-Type': 'application/json',
+    'Authorization': 'Bearer $key',
+    if (provider == AiProvider.openrouter)
+      'HTTP-Referer': 'https://carepaws.app',
+    if (provider == AiProvider.openrouter) 'X-Title': 'CarePaws',
+  };
+
+  @override
+  Future<void> bootstrap() async {
+    _live = false;
+    _modelId = null;
+    _failure = null;
+    List<String> ids;
+    try {
+      ids = await _listModels();
+    } on AiException catch (e) {
+      _failure = e.failure;
+      return;
+    }
+    final pick = ids.contains(_preferredModel)
+        ? _preferredModel
+        : _firstChatty(ids) ?? (ids.isNotEmpty ? ids.first : _preferredModel);
+    if (await _probe(pick)) {
+      _modelId = pick;
+      _live = true;
+      debugPrint('[ai] live model: $provider $pick');
+    } else {
+      _failure = AiFailure.serviceError;
+    }
+  }
+
+  /// First model id that looks like a chat model rather than an embedding,
+  /// image or audio model.
+  String? _firstChatty(List<String> ids) {
+    for (final id in ids) {
+      final n = id.toLowerCase();
+      if (n.contains('embedding') ||
+          n.contains('tts') ||
+          n.contains('whisper') ||
+          n.contains('dall-e') ||
+          n.contains('image')) {
+        continue;
+      }
+      return id;
+    }
+    return null;
+  }
+
+  Future<List<String>> _listModels() async {
+    final uri = Uri.https(_host, '$_basePath/models');
+    http.Response res;
+    try {
+      res = await _client.get(uri, headers: _headers).timeout(timeout);
+    } on TimeoutException {
+      throw const AiException(AiFailure.unreachable);
+    } on http.ClientException {
+      throw const AiException(AiFailure.unreachable);
+    } catch (_) {
+      throw const AiException(AiFailure.unreachable);
+    }
+    if (res.statusCode != 200) {
+      throw AiException(AiFailure.serviceError, 'HTTP ${res.statusCode}');
+    }
+    final body = jsonDecode(res.body) as Map<String, dynamic>;
+    final data = (body['data'] as List? ?? const []);
+    return [
+      for (final raw in data)
+        if (raw is Map<String, dynamic> &&
+            (raw['id'] as String? ?? '').isNotEmpty)
+          raw['id'] as String,
+    ];
+  }
+
+  /// One-word liveness probe: HTTP 200 plus any text in the reply.
+  Future<bool> _probe(String model) async {
+    try {
+      final res = await _postJson({
+        'model': model,
+        'messages': [
+          {'role': 'user', 'content': 'Reply with exactly this word: ok'},
+        ],
+        'temperature': 0,
+        'max_tokens': 8,
+      });
+      return _messageContent(res).trim().isNotEmpty;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// POSTs a chat-completions body. Non-200 answers are service errors —
+  /// the caller maps transport failures to [AiFailure.unreachable].
+  Future<Map<String, dynamic>> _postJson(Map<String, Object?> body) async {
+    final uri = Uri.https(_host, '$_basePath/chat/completions');
+    http.Response res;
+    try {
+      res = await _client
+          .post(uri, headers: _headers, body: jsonEncode(body))
+          .timeout(timeout);
+    } on TimeoutException {
+      throw const AiException(AiFailure.unreachable);
+    } on http.ClientException {
+      throw const AiException(AiFailure.unreachable);
+    } catch (_) {
+      throw const AiException(AiFailure.unreachable);
+    }
+    if (res.statusCode != 200) {
+      throw AiException(AiFailure.serviceError, 'HTTP ${res.statusCode}');
+    }
+    return jsonDecode(res.body) as Map<String, dynamic>;
+  }
+
+  String _messageContent(Map<String, dynamic> body) {
+    final choices = (body['choices'] as List? ?? const []);
+    if (choices.isEmpty) return '';
+    final message = (choices.first as Map<String, dynamic>)['message'];
+    if (message is! Map<String, dynamic>) return '';
+    final content = message['content'];
+    if (content is String) return content;
+    // Some providers return content blocks.
+    if (content is List) {
+      return content
+          .whereType<Map<String, dynamic>>()
+          .map((b) => b['text'] as String? ?? '')
+          .join('\n');
+    }
+    return '';
+  }
+
+  List<Map<String, Object?>> _userParts({
+    required String text,
+    Uint8List? photo,
+    String? photoMime,
+  }) {
+    final parts = <Map<String, Object?>>[
+      {'type': 'text', 'text': text},
+    ];
+    if (photo != null) {
+      parts.add({
+        'type': 'image_url',
+        'image_url': {
+          'url':
+              'data:${photoMime ?? 'image/jpeg'};base64,${base64Encode(photo)}',
+        },
+      });
+    }
+    return parts;
+  }
+
+  /// Sends one chat-completions request, asking for a JSON object when
+  /// [jsonMode] and retrying once as plain text when the model rejects it.
+  Future<String> _complete({
+    required String system,
+    required String text,
+    Uint8List? photo,
+    String? photoMime,
+    required double temperature,
+    required int maxTokens,
+    required bool jsonMode,
+  }) async {
+    final model = _modelId;
+    if (model == null) throw AiException(_failure ?? AiFailure.noKey);
+    Map<String, Object?> body({required bool structured}) => {
+      'model': model,
+      'messages': [
+        {'role': 'system', 'content': system},
+        {
+          'role': 'user',
+          'content': _userParts(text: text, photo: photo, photoMime: photoMime),
+        },
+      ],
+      'temperature': temperature,
+      'max_tokens': maxTokens,
+      if (structured) 'response_format': {'type': 'json_object'},
+    };
+    try {
+      final res = await _postJson(body(structured: jsonMode));
+      return _messageContent(res).trim();
+    } on AiException catch (e) {
+      final badRequest =
+          e.failure == AiFailure.serviceError &&
+          (e.detail ?? '').contains('400');
+      if (!jsonMode || !badRequest) rethrow;
+      debugPrint('[ai] model rejected json_object, retrying as plain text');
+      final res = await _postJson(body(structured: false));
+      return _messageContent(res).trim();
+    } on FormatException {
+      throw const AiException(AiFailure.serviceError, 'unparseable reply');
+    }
+  }
+
+  @override
+  Future<String> triage({
+    required String system,
+    required String prompt,
+    required String description,
+    Uint8List? photo,
+    String? photoMime,
+  }) async {
+    final text = description.isEmpty
+        ? (photo == null
+              ? '$prompt\n\nThe pet shows a visible concern but no text description was given.'
+              : prompt)
+        : '$prompt\n\nOwner\'s description: $description';
+    try {
+      return await _complete(
+        system: system,
+        text: text,
+        photo: photo,
+        photoMime: photoMime,
+        temperature: 0.3,
+        maxTokens: 700,
+        jsonMode: true,
+      );
+    } on AiException {
+      rethrow;
+    } on TimeoutException {
+      throw const AiException(AiFailure.unreachable);
+    } on http.ClientException {
+      throw const AiException(AiFailure.unreachable);
+    } catch (_) {
+      throw const AiException(AiFailure.unreachable);
+    }
+  }
+
+  @override
+  Future<String> chat({
+    required String system,
+    required String userText,
+  }) async {
+    try {
+      return await _complete(
+        system: system,
+        text: userText,
+        temperature: 0.5,
+        maxTokens: 400,
+        jsonMode: true,
+      );
+    } on AiException {
+      rethrow;
+    } on TimeoutException {
+      throw const AiException(AiFailure.unreachable);
+    } on http.ClientException {
+      throw const AiException(AiFailure.unreachable);
+    } catch (_) {
+      throw const AiException(AiFailure.unreachable);
+    }
+  }
+}
+
+/// One provider's slot in the routing table: its on-device key, its on/off
+/// switch, and the backend built from them on the last bootstrap.
+class _ProviderSlot {
+  _ProviderSlot(this.provider);
+
+  final AiProvider provider;
+  String? deviceKey;
+  bool enabled = true;
+  AiBackend? backend;
+
+  String get effectiveKey {
+    final d = deviceKey?.trim() ?? '';
+    return d.isNotEmpty ? d : provider.buildKey;
+  }
+
+  bool get keyConfigured => AiService.looksLikeKey(effectiveKey, provider);
+  bool get keyFromDevice => AiService.looksLikeKey(deviceKey, provider);
+
+  /// A slot only routes when it is switched on and holds a real key.
+  bool get configured => enabled && keyConfigured;
+}
+
+/// Talks to the configured AI providers with automatic failover. Without a
+/// key, or when every provider fails, requests throw [AiException] — there
+/// is no canned fallback, so the UI always says exactly what went wrong.
+class AiService {
+  AiService({http.Client? client, this.timeout = const Duration(seconds: 12)})
+    : _client = client ?? http.Client();
+
+  final http.Client _client;
+  final Duration timeout;
+
+  /// Routing table in priority order: Gemini, then OpenAI, then OpenRouter.
+  final List<_ProviderSlot> _slots = [
+    for (final p in AiProvider.values) _ProviderSlot(p),
+  ];
+
+  _ProviderSlot? _active;
+
+  /// Rejects blanks and the placeholder so a half-pasted key fails loudly
+  /// instead of silently leaving the provider unconfigured.
+  static bool looksLikeKey(String? k, AiProvider provider) =>
+      k != null &&
+      k.trim().isNotEmpty &&
+      k.trim() != provider.placeholder &&
+      k.trim().length > 20;
+
+  /// Starts unavailable when no provider has a key, so the UI is honest from
+  /// the very first frame, and only probes the network when a key exists.
+  AiStatus status = AiProvider.values.any((p) => looksLikeKey(p.buildKey, p))
+      ? AiStatus.checking
+      : AiStatus.unavailable;
+
+  /// Why the last bootstrap or request failed. Null when live.
+  AiFailure? failure = AiProvider.values.any((p) => looksLikeKey(p.buildKey, p))
+      ? null
+      : AiFailure.noKey;
+
+  bool get isLive => status == AiStatus.live;
+  bool get isUnavailable => status == AiStatus.unavailable;
+
+  /// The active backend's model id, e.g. `gemini-2.5-flash`.
+  String? get modelId => _active?.backend?.modelId;
+
+  /// What the UI shows, e.g. `Gemini · gemini-2.5-flash`.
+  String? get modelLabel {
+    final slot = _active;
+    final label = slot?.backend?.modelLabel;
+    if (slot == null || label == null) return null;
+    return '${slot.provider.label} · $label';
+  }
+
+  bool get keyConfigured => _slots.any((s) => s.configured);
+
+  /// The providers in routing priority order, for Settings.
+  List<AiProvider> get providers => AiProvider.values;
+
+  /// A snapshot of one provider's state for Settings.
+  AiProviderStatus statusFor(AiProvider provider) {
+    final slot = _slot(provider);
+    final backend = slot.backend;
+    return AiProviderStatus(
+      provider: provider,
+      enabled: slot.enabled,
+      keyConfigured: slot.keyConfigured,
+      keyFromDevice: slot.keyFromDevice,
+      isLive: backend?.isLive ?? false,
+      modelLabel: backend?.modelLabel,
+      failure: backend?.failure,
+    );
+  }
+
+  _ProviderSlot _slot(AiProvider provider) =>
+      _slots.firstWhere((s) => s.provider == provider);
+
+  AiBackend _buildBackend(_ProviderSlot slot) => switch (slot.provider) {
+    AiProvider.gemini => GeminiBackend(
+      client: _client,
+      timeout: timeout,
+      key: slot.effectiveKey,
+    ),
+    AiProvider.openai || AiProvider.openrouter => OpenAiBackend(
+      provider: slot.provider,
+      client: _client,
+      timeout: timeout,
+      key: slot.effectiveKey,
+    ),
+  };
+
+  /// Runs at startup and after every key or switch change. Restores on-device
+  /// keys, then bootstraps every configured provider in priority order — the
+  /// first live one answers requests, the rest stand by for failover.
+  /// Safe to call again any time.
+  Future<void> bootstrap() async {
+    await _restore();
+    _active = null;
+    status = AiStatus.checking;
+    failure = null;
+    var anyConfigured = false;
+    AiFailure? lastFailure;
+    for (final slot in _slots) {
+      if (!slot.configured) {
+        slot.backend = null;
+        continue;
+      }
+      anyConfigured = true;
+      final backend = _buildBackend(slot);
+      slot.backend = backend;
+      try {
+        await backend.bootstrap();
+      } catch (_) {
+        // Backends record their own failure; a throw here is unexpected.
+      }
+      if (backend.isLive) {
+        _active ??= slot;
+      } else {
+        lastFailure = backend.failure ?? lastFailure;
+      }
+    }
+    if (_active != null) {
+      status = AiStatus.live;
+      failure = null;
+      debugPrint('[ai] active provider: ${_active!.provider.label}');
+    } else {
+      _enterUnavailable(
+        anyConfigured
+            ? (lastFailure ?? AiFailure.serviceError)
+            : AiFailure.noKey,
+      );
+    }
+  }
+
+  /// Re-probes every configured provider. Settings calls this for
+  /// "Test connection".
+  Future<void> recheck() => bootstrap();
+
+  void _setActive(_ProviderSlot slot) {
+    _active = slot;
+    status = AiStatus.live;
+    failure = null;
+  }
+
+  void _enterUnavailable(AiFailure why) {
+    _active = null;
+    status = AiStatus.unavailable;
+    failure = why;
+    debugPrint('[ai] unavailable: ${why.name}');
+  }
+
+  /// Reads on-device keys and switches, if there are any. A missing plugin
+  /// (unit tests, desktop) is not an error: it just means nothing is stored.
+  /// Never overwrites values set in-memory via [useKeyFor] before a bootstrap.
+  Future<void> _restore() async {
+    final prefs = await _openPrefs();
+    for (final slot in _slots) {
+      slot.deviceKey ??= prefs?.getString(slot.provider.keyPref);
+      final enabled = prefs?.getBool(slot.provider.enabledPref);
+      if (enabled != null) slot.enabled = enabled;
+    }
+    // Pre-multi-provider installs stored the Gemini key under the old name.
+    // Migrate it so existing users do not silently lose their key. A key
+    // already saved under the new name wins; the legacy entry is removed
+    // either way so the migration runs once.
+    const legacyKey = 'carepaws.gemini_api_key';
+    final legacy = prefs?.getString(legacyKey);
+    if (legacy != null && legacy.isNotEmpty) {
+      final gemini = _slot(AiProvider.gemini);
+      if (gemini.deviceKey == null) {
+        gemini.deviceKey = legacy;
+        await prefs?.setString(AiProvider.gemini.keyPref, legacy);
+      }
+      await prefs?.remove(legacyKey);
+    }
+  }
+
+  Future<SharedPreferences?> _openPrefs() async {
+    try {
+      return await SharedPreferences.getInstance();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Saves a key entered on the device for one provider and re-probes
+  /// straight away, so the Settings status flips without a restart.
+  /// A blank value clears the key. Returns whether that provider is actually
+  /// answering now — not just whether a plausible-looking key was saved.
+  Future<bool> useKeyFor(AiProvider provider, String key) async {
+    final slot = _slot(provider);
+    final trimmed = key.trim();
+    final prefs = await _openPrefs();
+    if (looksLikeKey(trimmed, provider)) {
+      slot.deviceKey = trimmed;
+      await prefs?.setString(provider.keyPref, trimmed);
+    } else {
+      slot.deviceKey = null;
+      await prefs?.remove(provider.keyPref);
+    }
+    await bootstrap();
+    return slot.backend?.isLive ?? false;
+  }
+
+  /// Forgets one provider's on-device key, leaving any build-time key behind it.
+  Future<bool> clearKeyFor(AiProvider provider) => useKeyFor(provider, '');
+
+  /// Switches one provider on or off and re-probes.
+  Future<void> setProviderEnabled(AiProvider provider, bool enabled) async {
+    final slot = _slot(provider);
+    slot.enabled = enabled;
+    final prefs = await _openPrefs();
+    await prefs?.setBool(provider.enabledPref, enabled);
+    await bootstrap();
+  }
+
+  /// Routing order for a request: the active slot first, then the other live
+  /// slots, then configured-but-not-live slots (they get one fresh bootstrap
+  /// before their attempt). Priority order is kept inside each group because
+  /// the sort is stable.
+  List<_ProviderSlot> _routingOrder() {
+    final configured = _slots.where((s) => s.configured).toList();
+    int score(_ProviderSlot s) => s == _active
+        ? 0
+        : (s.backend?.isLive ?? false)
+        ? 1
+        : 2;
+    configured.sort((a, b) => score(a).compareTo(score(b)));
+    return configured;
+  }
+
+  /// Runs [attempt] against the routing table, moving to the next provider
+  /// whenever one fails. Throws the last [AiException] when every provider
+  /// is exhausted — and marks the service unavailable with its reason.
+  Future<T> _withFailover<T>(Future<T> Function(AiBackend) attempt) async {
+    final order = _routingOrder();
+    if (order.isEmpty) throw const AiException(AiFailure.noKey);
+    AiException? lastError;
+    for (final slot in order) {
+      var backend = slot.backend;
+      if (backend == null || !backend.isLive) {
+        backend = _buildBackend(slot);
+        slot.backend = backend;
+        try {
+          await backend.bootstrap();
+        } catch (_) {
+          // Recorded on the backend itself.
+        }
+      }
+      if (!backend.isLive) {
+        lastError = AiException(backend.failure ?? AiFailure.serviceError);
+        continue;
+      }
+      try {
+        final out = await attempt(backend);
+        _setActive(slot);
+        return out;
+      } on AiException catch (e) {
+        lastError = e;
+        backend.markDown(e.failure);
+        debugPrint(
+          '[ai] ${slot.provider.label} failed (${e.failure.name}), failing over',
+        );
+      }
+    }
+    final why = lastError?.failure ?? AiFailure.noKey;
+    _enterUnavailable(why);
+    throw lastError ?? const AiException(AiFailure.noKey);
+  }
+
+  /// Health check for the selected pet. Throws [AiException] when no provider
+  /// can answer. A provider whose reply does not parse counts as failed, so
+  /// the next provider gets a turn.
+  Future<TriageResult> triage({
+    required String petName,
+    required String species,
+    required String text,
+    Uint8List? photo,
+    String? photoMime,
+    String ownerFirstName = '',
+  }) async {
+    return _withFailover((b) async {
+      final raw = await b.triage(
+        system: VetPersona.systemFor(
+          now: DateTime.now(),
+          ownerFirstName: ownerFirstName,
+        ),
+        prompt: _triagePrompt(petName, species, hasPhoto: photo != null),
+        description: text,
+        photo: photo,
+        photoMime: photoMime,
+      );
+      final parsed = _parseTriage(raw);
+      if (parsed == null) {
+        throw const AiException(AiFailure.serviceError, 'unparseable reply');
+      }
+      return parsed;
+    });
+  }
+
+  /// Health check where the AI also identifies which pet the concern is about.
+  /// Returns the triage result plus the matched pet name exactly as the model
+  /// wrote it (null when the model could not determine it — never guessed).
+  /// Throws [AiException] when no provider can answer. An unparseable reply
+  /// counts as a failed attempt, so the next provider gets a turn.
+  Future<({TriageResult result, String? petName})> triageDetect({
+    required List<Pet> pets,
+    required String text,
+    Uint8List? photo,
+    String? photoMime,
+    String ownerFirstName = '',
+  }) async {
+    return _withFailover((b) async {
+      final raw = await b.triage(
+        system: VetPersona.systemFor(
+          now: DateTime.now(),
+          ownerFirstName: ownerFirstName,
+        ),
+        prompt: _triageDetectPrompt(pets, hasPhoto: photo != null),
+        description: text,
+        photo: photo,
+        photoMime: photoMime,
+      );
+      final parsed = _parseDetect(raw);
+      if (parsed == null) {
+        throw const AiException(AiFailure.serviceError, 'unparseable reply');
+      }
+      return parsed;
+    });
+  }
+
+  /// General pet-care chat answer. Throws [AiException] when no provider can
+  /// answer. An empty reply counts as a failed attempt so the next provider
+  /// gets a turn; a malformed-but-nonempty reply is shown as-is (better an
+  /// imperfect answer than a swallowed question).
+  Future<String> chat({
+    required String petName,
+    required String species,
+    required String question,
+    String ownerFirstName = '',
+  }) async {
+    // The model returns a small envelope so scope is decided in the same
+    // round trip — no extra call, and no keyword regex that would misfire on
+    // legitimate answers like "what food should I feed my dog".
+    final userText =
+        "The owner is asking about $petName, a $species, from home in the clinic's app.\n"
+        'Answer in 3-5 short sentences, warm and practical.\n'
+        'Reply with ONLY a JSON object, no markdown, exactly:\n'
+        '{"inScope":true|false,"reply":"your answer"}\n'
+        'Set inScope to false if the question is not about veterinary care '
+        'for this pet.\n'
+        'Question: $question';
+    final system = VetPersona.systemFor(
+      now: DateTime.now(),
+      ownerFirstName: ownerFirstName,
+    );
+    return _withFailover((b) async {
+      final raw = await b.chat(system: system, userText: userText);
+      if (raw.isEmpty) {
+        throw const AiException(AiFailure.serviceError, 'empty reply');
+      }
+
+      // A malformed reply is treated as in-scope and shown as-is: better to
+      // show an imperfect answer than to silently swallow a real question.
+      final parsed = _parseChat(raw);
+      if (parsed == null) return raw;
+      if (!parsed.inScope) return VetPersona.redirect;
+      if (parsed.reply.trim().isEmpty) {
+        throw const AiException(AiFailure.serviceError, 'empty reply');
+      }
+      return parsed.reply.trim();
+    });
   }
 
   /// Reads the `{"inScope":…,"reply":…}` envelope. Returns null when the model
@@ -677,107 +1356,107 @@ class AiService {
     }
   }
 
-  String _content(String body) {
-    final j = jsonDecode(body) as Map<String, dynamic>;
-    final parts = (j['candidates'] as List? ?? const [])
-        .cast<Map<String, dynamic>>()
-        .firstOrNull;
-    final content = parts?['content'] as Map<String, dynamic>?;
-    final list = (content?['parts'] as List? ?? const []).cast<Map<String, dynamic>>();
-    return list.map((e) => e['text'] as String? ?? '').join('\n');
-  }
+  void dispose() => _client.close();
+}
 
-  static String _triagePrompt(String petName, String species, {required bool hasPhoto}) =>
-      'You triage pet health concerns for a veterinary clinic app. The pet is $petName ($species). '
+String _triagePrompt(
+  String petName,
+  String species, {
+  required bool hasPhoto,
+}) =>
+    'You triage pet health concerns for a veterinary clinic app. The pet is $petName ($species). '
+    '${hasPhoto ? 'A photo of the pet is attached. ' : ''}'
+    'Reply with ONLY a JSON object, no markdown, using exactly these keys: '
+    '{"route":"book|chat|homeCare|emergency","urgency":0|1|2,"title":"short headline",'
+    '"summary":"2-3 sentences","bullets":["what we noticed"],'
+    '"redFlags":["danger signs that need a vet"],'
+    '"homeCare":["care instructions"],"nextStep":"one sentence"}'
+    'Choose route "emergency" for breathing difficulty, collapse, seizures, heavy bleeding, poisoning or severe pain. '
+    'Choose "homeCare" only for mild, low-risk concerns. Otherwise use "book". This is guidance, not a diagnosis. '
+    'Write warmly and reassuringly, like a calm vet nurse talking to a worried owner: plain words, no alarming '
+    'language ("emergency", "critical", "danger", "immediately") in the title or summary — say what is needed, kindly.';
+
+String _triageDetectPrompt(List<Pet> pets, {required bool hasPhoto}) {
+  final roster = pets
+      .map((p) => '${p.name} (${p.species.name}, ${p.breed})')
+      .join('; ');
+  return 'You triage pet health concerns for a veterinary clinic app. '
+      "The owner's pets are: $roster. "
       '${hasPhoto ? 'A photo of the pet is attached. ' : ''}'
+      'First identify which pet the concern is about from the description: use the exact name '
+      'from the list above. If there is only one pet, it is that one. If the description does not '
+      'identify a pet, use null for petName — never guess. '
       'Reply with ONLY a JSON object, no markdown, using exactly these keys: '
-      '{"route":"book|chat|homeCare|emergency","urgency":0|1|2,"title":"short headline",'
+      '{"petName":"exact name from the list or null","route":"book|chat|homeCare|emergency",'
+      '"urgency":0|1|2,"title":"short headline",'
       '"summary":"2-3 sentences","bullets":["what we noticed"],'
       '"redFlags":["danger signs that need a vet"],'
       '"homeCare":["care instructions"],"nextStep":"one sentence"}'
       'Choose route "emergency" for breathing difficulty, collapse, seizures, heavy bleeding, poisoning or severe pain. '
-      'Choose "homeCare" only for mild, low-risk concerns. Otherwise use "book". This is guidance, not a diagnosis.';
+      'Choose "homeCare" only for mild, low-risk concerns. Otherwise use "book". This is guidance, not a diagnosis. '
+      'Write warmly and reassuringly, like a calm vet nurse talking to a worried owner: plain words, no alarming '
+      'language ("emergency", "critical", "danger", "immediately") in the title or summary — say what is needed, kindly.';
+}
 
-  static String _triageDetectPrompt(List<Pet> pets,
-          {required bool hasPhoto}) {
-    final roster =
-        pets.map((p) => '${p.name} (${p.species.name}, ${p.breed})').join('; ');
-    return 'You triage pet health concerns for a veterinary clinic app. '
-        "The owner's pets are: $roster. "
-        '${hasPhoto ? 'A photo of the pet is attached. ' : ''}'
-        'First identify which pet the concern is about from the description: use the exact name '
-        'from the list above. If there is only one pet, it is that one. If the description does not '
-        'identify a pet, use null for petName — never guess. '
-        'Reply with ONLY a JSON object, no markdown, using exactly these keys: '
-        '{"petName":"exact name from the list or null","route":"book|chat|homeCare|emergency",'
-        '"urgency":0|1|2,"title":"short headline",'
-        '"summary":"2-3 sentences","bullets":["what we noticed"],'
-        '"redFlags":["danger signs that need a vet"],'
-        '"homeCare":["care instructions"],"nextStep":"one sentence"}'
-        'Choose route "emergency" for breathing difficulty, collapse, seizures, heavy bleeding, poisoning or severe pain. '
-        'Choose "homeCare" only for mild, low-risk concerns. Otherwise use "book". This is guidance, not a diagnosis.';
+/// Parses the model's JSON reply and clamps it into a valid TriageResult.
+TriageResult? _parseTriage(String raw) {
+  final j = _extractJson(raw);
+  return j == null ? null : _triageFromJson(j);
+}
+
+/// Parses a detect-mode reply: the triage result plus the model's pet
+/// identification (null when the model could not determine it).
+({TriageResult result, String? petName})? _parseDetect(String raw) {
+  final j = _extractJson(raw);
+  if (j == null) return null;
+  final result = _triageFromJson(j);
+  if (result == null) return null;
+  final petName = (j['petName'] as String?)?.trim();
+  return (
+    result: result,
+    petName: petName == null || petName.isEmpty ? null : petName,
+  );
+}
+
+Map<String, dynamic>? _extractJson(String raw) {
+  var s = raw.trim();
+  final start = s.indexOf('{');
+  final end = s.lastIndexOf('}');
+  if (start == -1 || end <= start) return null;
+  s = s.substring(start, end + 1);
+  try {
+    return jsonDecode(s) as Map<String, dynamic>;
+  } catch (_) {
+    return null;
   }
+}
 
-  /// Parses the model's JSON reply and clamps it into a valid TriageResult.
-  static TriageResult? _parseTriage(String raw) {
-    final j = _extractJson(raw);
-    return j == null ? null : _triageFromJson(j);
-  }
-
-  /// Parses a detect-mode reply: the triage result plus the model's pet
-  /// identification (null when the model could not determine it).
-  static ({TriageResult result, String? petName})? _parseDetect(String raw) {
-    final j = _extractJson(raw);
-    if (j == null) return null;
-    final result = _triageFromJson(j);
-    if (result == null) return null;
-    final petName = (j['petName'] as String?)?.trim();
-    return (
-      result: result,
-      petName: petName == null || petName.isEmpty ? null : petName,
+TriageResult? _triageFromJson(Map<String, dynamic> j) {
+  try {
+    final route = switch ((j['route'] as String? ?? '').toLowerCase()) {
+      'emergency' => TriageRoute.emergency,
+      'homecare' => TriageRoute.homeCare,
+      'chat' => TriageRoute.chat,
+      _ => TriageRoute.book,
+    };
+    final u = (j['urgency'] as num?)?.toInt().clamp(0, 2) ?? 1;
+    List<String> strs(String k) => (j[k] as List? ?? const [])
+        .map((e) => e.toString().trim())
+        .where((e) => e.isNotEmpty)
+        .toList();
+    return TriageResult(
+      route: route,
+      urgency: route == TriageRoute.emergency ? 2 : u,
+      title: ((j['title'] as String?) ?? 'Health check complete').trim(),
+      summary: ((j['summary'] as String?) ?? '').trim(),
+      bullets: strs('bullets'),
+      redFlags: strs('redFlags'),
+      homeCare: strs('homeCare'),
+      nextStep: (j['nextStep'] as String?)?.trim(),
     );
+  } catch (_) {
+    return null;
   }
-
-  static Map<String, dynamic>? _extractJson(String raw) {
-    var s = raw.trim();
-    final start = s.indexOf('{');
-    final end = s.lastIndexOf('}');
-    if (start == -1 || end <= start) return null;
-    s = s.substring(start, end + 1);
-    try {
-      return jsonDecode(s) as Map<String, dynamic>;
-    } catch (_) {
-      return null;
-    }
-  }
-
-  static TriageResult? _triageFromJson(Map<String, dynamic> j) {
-    try {
-      final route = switch ((j['route'] as String? ?? '').toLowerCase()) {
-        'emergency' => TriageRoute.emergency,
-        'homecare' => TriageRoute.homeCare,
-        'chat' => TriageRoute.chat,
-        _ => TriageRoute.book,
-      };
-      final u = (j['urgency'] as num?)?.toInt().clamp(0, 2) ?? 1;
-      List<String> strs(String k) =>
-          (j[k] as List? ?? const []).map((e) => e.toString().trim()).where((e) => e.isNotEmpty).toList();
-      return TriageResult(
-        route: route,
-        urgency: route == TriageRoute.emergency ? 2 : u,
-        title: ((j['title'] as String?) ?? 'Health check complete').trim(),
-        summary: ((j['summary'] as String?) ?? '').trim(),
-        bullets: strs('bullets'),
-        redFlags: strs('redFlags'),
-        homeCare: strs('homeCare'),
-        nextStep: (j['nextStep'] as String?)?.trim(),
-      );
-    } catch (_) {
-      return null;
-    }
-  }
-
-  void dispose() => _client.close();
 }
 
 class _Model {

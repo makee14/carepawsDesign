@@ -64,7 +64,8 @@ Future<void> callPhoneNumber(
   final uri = Uri(scheme: 'tel', path: number.replaceAll(' ', ''));
   var ok = false;
   try {
-    ok = await launchUrl(uri) ||
+    ok =
+        await launchUrl(uri) ||
         await launchUrl(uri, mode: LaunchMode.externalApplication);
   } catch (_) {
     ok = false;
@@ -153,10 +154,7 @@ class GlassCard extends StatelessWidget {
       button: true,
       label: semanticLabel,
       child: ExcludeSemantics(
-        child: PressScale(
-          onTap: onTap,
-          child: body,
-        ),
+        child: PressScale(onTap: onTap, child: body),
       ),
     );
   }
@@ -273,7 +271,12 @@ class _Slot extends StatelessWidget {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Ic.svg(icon, color: fg, size: 21, stroke: selected ? 2.2 : 1.9),
+                  Ic.svg(
+                    icon,
+                    color: fg,
+                    size: 21,
+                    stroke: selected ? 2.2 : 1.9,
+                  ),
                   const SizedBox(height: 3),
                   Text(
                     label,
@@ -311,8 +314,7 @@ class TabBarClearance extends InheritedWidget {
   final double height;
 
   static double of(BuildContext context) {
-    final m = context
-        .dependOnInheritedWidgetOfExactType<TabBarClearance>();
+    final m = context.dependOnInheritedWidgetOfExactType<TabBarClearance>();
     return m?.height ?? 0;
   }
 
@@ -509,7 +511,10 @@ class RowTile extends StatelessWidget {
           scale: 0.985,
           child: Container(
             constraints: const BoxConstraints(minHeight: 56),
-            padding: const EdgeInsets.symmetric(horizontal: T.s16, vertical: 11),
+            padding: const EdgeInsets.symmetric(
+              horizontal: T.s16,
+              vertical: 11,
+            ),
             child: Row(
               children: [
                 if (leadingPath != null) ...[
@@ -523,7 +528,9 @@ class RowTile extends StatelessWidget {
                     ),
                     child: Ic.svg(
                       leadingPath!,
-                      color: leadingColor ?? (destructive ? p.destructive : p.accent),
+                      color:
+                          leadingColor ??
+                          (destructive ? p.destructive : p.accent),
                       size: 18,
                     ),
                   ),
@@ -545,7 +552,12 @@ class RowTile extends StatelessWidget {
                 if (trailing != null) ...[const SizedBox(width: 8), trailing!],
                 if (onTap != null && showChevron) ...[
                   const SizedBox(width: 4),
-                  Ic.svg(Ic.chevronRight, color: p.textSecondary, size: 16, stroke: 2.2),
+                  Ic.svg(
+                    Ic.chevronRight,
+                    color: p.textSecondary,
+                    size: 16,
+                    stroke: 2.2,
+                  ),
                 ],
               ],
             ),
@@ -591,17 +603,21 @@ class StatusChip extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           if (icon != null) ...[
-            Ic.svg(icon!, color: fg ?? p.chipText, size: compact ? 11 : 13, stroke: 2.2),
+            Ic.svg(
+              icon!,
+              color: fg ?? p.chipText,
+              size: compact ? 11 : 13,
+              stroke: 2.2,
+            ),
             SizedBox(width: compact ? 3 : 5),
           ],
           Flexible(
             child: Text(
               label,
-              style:
-                  (compact ? Type.caption(p) : Type.footnote(p)).copyWith(
-                    color: fg ?? p.chipText,
-                    fontWeight: bold ? FontWeight.w700 : FontWeight.w500,
-                  ),
+              style: (compact ? Type.caption(p) : Type.footnote(p)).copyWith(
+                color: fg ?? p.chipText,
+                fontWeight: bold ? FontWeight.w700 : FontWeight.w500,
+              ),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
@@ -645,9 +661,7 @@ class FilterPill extends StatelessWidget {
             decoration: BoxDecoration(
               color: selected ? p.primaryFill : p.surface,
               borderRadius: BorderRadius.circular(T.rPill),
-              border: Border.all(
-                color: selected ? p.primaryFill : p.divider,
-              ),
+              border: Border.all(color: selected ? p.primaryFill : p.divider),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
@@ -705,12 +719,7 @@ class SectionHeader extends StatelessWidget {
             Ic.svg(icon!, color: p.accent, size: 18),
             const SizedBox(width: 8),
           ],
-          Expanded(
-            child: Text(
-              title,
-              style: Type.title2(p),
-            ),
-          ),
+          Expanded(child: Text(title, style: Type.title2(p))),
           if (actionLabel != null)
             CupertinoButton(
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
@@ -724,7 +733,12 @@ class SectionHeader extends StatelessWidget {
                     style: Type.footnoteEmph(p).copyWith(color: p.accentText),
                   ),
                   const SizedBox(width: 3),
-                  Ic.svg(Ic.chevronRight, color: p.accentText, size: 14, stroke: 2.2),
+                  Ic.svg(
+                    Ic.chevronRight,
+                    color: p.accentText,
+                    size: 14,
+                    stroke: 2.2,
+                  ),
                 ],
               ),
             ),
@@ -739,7 +753,10 @@ class StatStrip extends StatelessWidget {
   const StatStrip({
     super.key,
     required this.stats,
-    this.padding = const EdgeInsets.symmetric(horizontal: T.s16, vertical: T.s12),
+    this.padding = const EdgeInsets.symmetric(
+      horizontal: T.s16,
+      vertical: T.s12,
+    ),
     this.glass = true,
   });
 
@@ -754,7 +771,13 @@ class StatStrip extends StatelessWidget {
       children: [
         for (var i = 0; i < stats.length; i++) ...[
           if (i > 0)
-            Container(width: 1, height: 30, color: p.isDark ? T.card.withValues(alpha: 0.16) : T.taupe.withValues(alpha: 0.28)),
+            Container(
+              width: 1,
+              height: 30,
+              color: p.isDark
+                  ? T.card.withValues(alpha: 0.16)
+                  : T.taupe.withValues(alpha: 0.28),
+            ),
           Expanded(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -934,7 +957,12 @@ class PetAvatar extends StatelessWidget {
 
 /// The owner avatar: their photo when set, otherwise their initials.
 class OwnerAvatar extends StatelessWidget {
-  const OwnerAvatar({super.key, required this.initials, required this.size, this.photo});
+  const OwnerAvatar({
+    super.key,
+    required this.initials,
+    required this.size,
+    this.photo,
+  });
 
   final String initials;
   final double size;
@@ -970,11 +998,22 @@ class OwnerAvatar extends StatelessWidget {
       shape: BoxShape.circle,
       border: Border.all(color: p.accent.withValues(alpha: 0.35), width: 1.5),
     ),
-    child: Text(
-      text,
-      style: Type.title2(p).copyWith(color: p.primaryFill),
-    ),
+    child: Text(text, style: Type.title2(p).copyWith(color: p.primaryFill)),
   );
+}
+
+/// Initials for an owner avatar: first letters of the first two name parts,
+/// uppercased. Falls back to '?' when the name is empty.
+String initialsOf(String name) {
+  final parts = name
+      .trim()
+      .split(RegExp(r'\s+'))
+      .where((s) => s.isNotEmpty)
+      .toList();
+  if (parts.isEmpty) return '?';
+  String firstOf(String s) => String.fromCharCode(s.runes.first).toUpperCase();
+  if (parts.length == 1) return firstOf(parts.first);
+  return '${firstOf(parts.first)}${firstOf(parts[1])}';
 }
 
 class PetArt extends StatelessWidget {
@@ -1019,7 +1058,10 @@ class PetArt extends StatelessWidget {
             gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
-              colors: [tint.withValues(alpha: 0.95), tint.withValues(alpha: 0.62)],
+              colors: [
+                tint.withValues(alpha: 0.95),
+                tint.withValues(alpha: 0.62),
+              ],
             ),
           ),
           child: Center(
@@ -1065,8 +1107,14 @@ class ProductArt extends StatelessWidget {
   ];
 
   static const _tints = [
-    Color(0xFFFDEBD3), Color(0xFFFCE3C7), Color(0xFFF6E7D6), Color(0xFFFBEBD6),
-    Color(0xFFFDF3E3), Color(0xFFF7DCBE), Color(0xFFF9E8D0), Color(0xFFFCEDDA),
+    Color(0xFFFDEBD3),
+    Color(0xFFFCE3C7),
+    Color(0xFFF6E7D6),
+    Color(0xFFFBEBD6),
+    Color(0xFFFDF3E3),
+    Color(0xFFF7DCBE),
+    Color(0xFFF9E8D0),
+    Color(0xFFFCEDDA),
   ];
 
   @override
@@ -1213,7 +1261,9 @@ class PrimaryButton extends StatelessWidget {
       child: ExcludeSemantics(
         child: PressScale(
           onTap: enabled ? onPressed : null,
-          child: expand ? SizedBox(width: double.infinity, child: child) : child,
+          child: expand
+              ? SizedBox(width: double.infinity, child: child)
+              : child,
         ),
       ),
     );
@@ -1279,7 +1329,9 @@ class SecondaryButton extends StatelessWidget {
       child: ExcludeSemantics(
         child: PressScale(
           onTap: onPressed,
-          child: expand ? SizedBox(width: double.infinity, child: child) : child,
+          child: expand
+              ? SizedBox(width: double.infinity, child: child)
+              : child,
         ),
       ),
     );
@@ -1328,10 +1380,7 @@ class StickyCta extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               child,
-              if (extra != null) ...[
-                const SizedBox(height: 8),
-                extra!,
-              ],
+              if (extra != null) ...[const SizedBox(height: 8), extra!],
             ],
           ),
         ),
@@ -1364,7 +1413,10 @@ class EmptyState extends StatelessWidget {
     final p = context.p;
     return Center(
       child: Padding(
-        padding: EdgeInsets.symmetric(horizontal: T.s24, vertical: compact ? T.s24 : 48),
+        padding: EdgeInsets.symmetric(
+          horizontal: T.s24,
+          vertical: compact ? T.s24 : 48,
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -1376,18 +1428,31 @@ class EmptyState extends StatelessWidget {
                 shape: BoxShape.circle,
               ),
               child: Center(
-                child: Ic.svg(icon, color: p.accent, size: compact ? 30 : 38, stroke: 1.7),
+                child: Ic.svg(
+                  icon,
+                  color: p.accent,
+                  size: compact ? 30 : 38,
+                  stroke: 1.7,
+                ),
               ),
             ),
             SizedBox(height: compact ? T.s16 : T.s20),
             Text(title, style: Type.title2(p), textAlign: TextAlign.center),
             const SizedBox(height: 8),
-            Text(body, style: Type.body(p).copyWith(color: p.textSecondary), textAlign: TextAlign.center),
+            Text(
+              body,
+              style: Type.body(p).copyWith(color: p.textSecondary),
+              textAlign: TextAlign.center,
+            ),
             if (actionLabel != null) ...[
               const SizedBox(height: T.s20),
               SizedBox(
                 width: 260,
-                child: PrimaryButton(label: actionLabel!, onPressed: onAction, icon: 'arrowRight'),
+                child: PrimaryButton(
+                  label: actionLabel!,
+                  onPressed: onAction,
+                  icon: 'arrowRight',
+                ),
               ),
             ],
           ],
@@ -1442,11 +1507,7 @@ class AmountRow extends StatelessWidget {
           ),
           const SizedBox(width: 12),
           Flexible(
-            child: Text(
-              value,
-              style: style,
-              textAlign: TextAlign.right,
-            ),
+            child: Text(value, style: style, textAlign: TextAlign.right),
           ),
         ],
       ),
@@ -1524,7 +1585,10 @@ class SelectDot extends StatelessWidget {
     return Container(
       width: 22,
       height: 22,
-      decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: p.textSecondary, width: 1.6)),
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        border: Border.all(color: p.textSecondary, width: 1.6),
+      ),
     );
   }
 }

@@ -35,8 +35,7 @@ class Seed {
         petId: 'p1',
         date: DateTime(2026, 9, 25),
         title: 'Annual health check',
-        detail:
-            'Weight holding steady. Heart and lungs clear. Continue current food and keep the weekly joint walk.',
+        detail: 'Weight holding steady. Heart and lungs clear. Continue current food and keep the weekly joint walk.',
         role: StaffRole.vet,
         staffName: 'Dr. Rafael Alvarez',
       ),
@@ -45,8 +44,7 @@ class Seed {
         petId: 'p1',
         date: DateTime(2026, 9, 12),
         title: 'Nail trim and paw pads checked',
-        detail:
-            'Paw pads healthy, nails trimmed short. No cracks or tenderness reported.',
+        detail: 'Paw pads healthy, nails trimmed short. No cracks or tenderness reported.',
         role: StaffRole.groomer,
         staffName: 'Ana Reyes',
       ),
@@ -55,8 +53,7 @@ class Seed {
         petId: 'p1',
         date: DateTime(2026, 8, 30),
         title: 'Anti-tick drops applied',
-        detail:
-            'Spot-on applied between the shoulder blades. Next dose due in 4 weeks.',
+        detail: 'Spot-on applied between the shoulder blades. Next dose due in 4 weeks.',
         role: StaffRole.vetAssistant,
         staffName: 'Miguel Cruz',
       ),
@@ -106,8 +103,7 @@ class Seed {
         petId: 'p2',
         date: DateTime(2026, 10, 1),
         title: 'Fur matting removed',
-        detail:
-            'Light matting behind the ears. Suggested weekly brushing and a grooming slot before coat thickens.',
+        detail: 'Light matting behind the ears. Suggested weekly brushing and a grooming slot before coat thickens.',
         role: StaffRole.groomer,
         staffName: 'Ana Reyes',
       ),
@@ -128,7 +124,12 @@ class Seed {
         date: DateTime(2026, 7, 19),
         size: 336,
       ),
-      PetDoc(name: 'Spay record', kind: 'Certificate', date: DateTime(2024, 5, 3), size: 210),
+      PetDoc(
+        name: 'Spay record',
+        kind: 'Certificate',
+        date: DateTime(2024, 5, 3),
+        size: 210,
+      ),
     ],
   );
 
@@ -270,7 +271,10 @@ class Seed {
       durationMinutes: 60,
       status: ApptStatus.completed,
       price: 750,
-      grooming: GroomingIntake(size: 'Large (31.4 kg)', coat: 'Double coat, shedding'),
+      grooming: GroomingIntake(
+        size: 'Large (31.4 kg)',
+        coat: 'Double coat, shedding',
+      ),
     ),
     Appointment(
       id: 'a4',
@@ -300,8 +304,7 @@ class Seed {
       id: 'pr1',
       name: 'Grass-fed Lamb & Oat Adult Dog Food',
       tagline: '2 kg · chicken free',
-      description:
-          'Single-protein lamb recipe with oats for sensitive stomachs. No chicken, no fillers, and formulated for large-breed adults. Transition over seven days when switching from another food.',
+      description: 'Single-protein lamb recipe with oats for sensitive stomachs. No chicken, no fillers, and formulated for large-breed adults. Transition over seven days when switching from another food.',
       price: 1240,
       stock: 18,
       species: [Species.dog],
@@ -314,8 +317,7 @@ class Seed {
       id: 'pr2',
       name: 'Salmon & Sweet Potato Kitten Food',
       tagline: '400 g pouch',
-      description:
-          'Wet pouch for kittens and small breeds. High in protein with taurine for heart and eye health. Serve at room temperature or slightly warmed.',
+      description: 'Wet pouch for kittens and small breeds. High in protein with taurine for heart and eye health. Serve at room temperature or slightly warmed.',
       price: 285,
       stock: 40,
       species: [Species.cat],
@@ -328,8 +330,7 @@ class Seed {
       id: 'pr3',
       name: 'Freeze-dried Chicken Treats',
       tagline: '100 g · 8 ingredients',
-      description:
-          'Single-ingredient treats you can break into small pieces for training. Freeze-dried with nothing added, so it also works as a high-value reward during nail trims.',
+      description: 'Single-ingredient treats you can break into small pieces for training. Freeze-dried with nothing added, so it also works as a high-value reward during nail trims.',
       price: 320,
       stock: 24,
       species: [Species.dog, Species.cat],
@@ -341,8 +342,7 @@ class Seed {
       id: 'pr4',
       name: 'Oatmeal & Honey Pet Shampoo',
       tagline: '400 ml · tear free',
-      description:
-          'Gentle pH-balanced wash for dogs and cats. Colloidal oatmeal calms itchy skin and the honey complex helps restore the coat barrier after grooming.',
+      description: 'Gentle pH-balanced wash for dogs and cats. Colloidal oatmeal calms itchy skin and the honey complex helps restore the coat barrier after grooming.',
       price: 390,
       stock: 0,
       species: [Species.dog, Species.cat],
@@ -355,8 +355,7 @@ class Seed {
       id: 'pr5',
       name: 'Claw & Whisker Grooming Clippers',
       tagline: 'Low noise · 5 guards',
-      description:
-          'A quiet, low-vibration clipper that suits pets who are sensitive to grooming noise. Comes with five guide combs and a USB-C charging base.',
+      description: 'A quiet, low-vibration clipper that suits pets who are sensitive to grooming noise. Comes with five guide combs and a USB-C charging base.',
       price: 2190,
       stock: 6,
       species: [Species.dog, Species.cat],
@@ -368,8 +367,7 @@ class Seed {
       id: 'pr6',
       name: 'Flea & Tick Spot-On (3 doses)',
       tagline: 'Prescription required',
-      description:
-          'Monthly spot-on for dogs over 20 kg. Needs an active prescription signed by the veterinarian — the clinic can issue one at your next visit.',
+      description: 'Monthly spot-on for dogs over 20 kg. Needs an active prescription signed by the veterinarian — the clinic can issue one at your next visit.',
       price: 1150,
       stock: 9,
       species: [Species.dog],
@@ -383,8 +381,7 @@ class Seed {
       id: 'pr7',
       name: 'Rope Knot Chew Toy',
       tagline: 'Medium · dishwasher safe',
-      description:
-          'Durable cotton-rope toy with a knot at each end for tugging games. Supervise play and replace the toy once the fibres start to loosen.',
+      description: 'Durable cotton-rope toy with a knot at each end for tugging games. Supervise play and replace the toy once the fibres start to loosen.',
       price: 295,
       stock: 31,
       species: [Species.dog],
@@ -396,8 +393,7 @@ class Seed {
       id: 'pr8',
       name: 'Reflective Walking Harness',
       tagline: 'S–XL · adjustable fit',
-      description:
-          'Padded harness with a reflective stripe for night walks and a quick-release buckle. Machine washable on a gentle cycle.',
+      description: 'Padded harness with a reflective stripe for night walks and a quick-release buckle. Machine washable on a gentle cycle.',
       price: 760,
       stock: 12,
       species: [Species.dog, Species.cat],
@@ -425,10 +421,7 @@ class Seed {
     Order(
       id: 'o1',
       placedAt: DateTime(2026, 10, 6, 14, 12),
-      lines: [
-        OrderLine('pr3', 2, 320),
-        OrderLine('pr2', 3, 285),
-      ],
+      lines: [OrderLine('pr3', 2, 320), OrderLine('pr2', 3, 285)],
       status: OrderStatus.paid,
       pickupCode: 'PC-4820',
       method: 'GCash',
@@ -475,7 +468,8 @@ class Seed {
     AppNotification(
       id: 'n1',
       title: 'Appointment confirmed',
-      body: 'Biscuit · Vet Consultation · Thu 16 Oct, 10:00 AM with Dr. Alvarez.',
+      body:
+          'Biscuit · Vet Consultation · Thu 16 Oct, 10:00 AM with Dr. Alvarez.',
       at: DateTime(2026, 10, 12, 9, 2),
       icon: 'calendar',
     ),
@@ -521,16 +515,14 @@ class Seed {
       id: 'm1',
       threadId: 'th_ai',
       author: ChatAuthor.ai,
-      text:
-          'Hi there. I can answer questions about feeding, grooming, vaccines and general care. For anything that needs a physical exam, run a health check and I will point you to the right next step.',
+      text: 'Hi! Ask me anything about everyday pet care — feeding, grooming, vaccines — or tap Start health check below and I will point you to the right next step.',
       at: DateTime(2026, 10, 12, 20, 5),
     ),
     ChatMessage(
       id: 'm2',
       threadId: 'th_clinic',
       author: ChatAuthor.vetAssistant,
-      text:
-          'Good morning, Marco! Miguel here. Mochi has her grooming slot on Tuesday at 9:00 AM — is the intake note about the matting behind her ears still current?',
+      text: 'Good morning, Marco! Miguel here. Mochi has her grooming slot on Tuesday at 9:00 AM — is the intake note about the matting behind her ears still current?',
       at: DateTime(2026, 10, 13, 8, 14),
       petId: 'p2',
     ),
@@ -538,8 +530,7 @@ class Seed {
       id: 'm3',
       threadId: 'th_clinic',
       author: ChatAuthor.ai,
-      text:
-          'Auto-reply: the clinic team is offline until 9:00 AM. Your message is queued and Miguel will see it first thing.',
+      text: 'Auto-reply: the clinic team is offline until 9:00 AM. Your message is queued and Miguel will see it first thing.',
       at: DateTime(2026, 10, 12, 21, 40),
       kind: ChatKind.system,
     ),

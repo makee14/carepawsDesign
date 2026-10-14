@@ -68,9 +68,17 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
             ),
           ),
           SliverPadding(
-            padding: EdgeInsets.fromLTRB(20, 8, 20, 40 + TabBarClearance.of(context)),
+            padding: EdgeInsets.fromLTRB(
+              20,
+              8,
+              20,
+              40 + TabBarClearance.of(context),
+            ),
             sliver: _seg == 0
-                ? _UpcomingList(store: store, onBook: () => _book(context, store))
+                ? _UpcomingList(
+                    store: store,
+                    onBook: () => _book(context, store),
+                  )
                 : _PastList(store: store, onBook: () => _book(context, store)),
           ),
         ],
@@ -79,14 +87,17 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
   }
 
   void _book(BuildContext context, AppStore store) {
-    Navigator.of(context).push(
-      appRoute(BookFlow(initialPetId: store.pets.firstOrNull?.id)),
-    );
+    Navigator.of(context)
+        .push(appRoute(BookFlow(initialPetId: store.pets.firstOrNull?.id)));
   }
 }
 
 class _Segmented extends StatelessWidget {
-  const _Segmented({required this.index, required this.labels, required this.onChanged});
+  const _Segmented({
+    required this.index,
+    required this.labels,
+    required this.onChanged,
+  });
 
   final int index;
   final List<String> labels;
@@ -170,7 +181,8 @@ class _UpcomingList extends StatelessWidget {
     return SliverList.separated(
       itemCount: list.length,
       separatorBuilder: (_, _) => const SizedBox(height: 14),
-      itemBuilder: (context, i) => UpcomingCard(appointment: list[i], store: store),
+      itemBuilder: (context, i) =>
+          UpcomingCard(appointment: list[i], store: store),
     );
   }
 }
@@ -200,19 +212,23 @@ class _PastList extends StatelessWidget {
     return SliverList.separated(
       itemCount: list.length,
       separatorBuilder: (_, _) => const SizedBox(height: 14),
-      itemBuilder: (context, i) => PastCard(appointment: list[i], store: store, onRebook: onBook),
+      itemBuilder: (context, i) =>
+          PastCard(appointment: list[i], store: store, onRebook: onBook),
     );
   }
 }
 
 /// Status chip colour always accompanies the text label.
 Color statusFg(AppStatus s, bool dark) => switch (s) {
-  AppStatus.confirmed || AppStatus.completed => dark ? const Color(0xFF7FD3A0) : const Color(0xFF1F5C33),
+  AppStatus.confirmed || AppStatus.completed =>
+    dark ? const Color(0xFF7FD3A0) : const Color(0xFF1F5C33),
   AppStatus.booked => dark ? T.amber : const Color(0xFF7A4A1B),
-  AppStatus.requestPending => dark ? const Color(0xFFFFC08A) : const Color(0xFF7A4A1B),
+  AppStatus.requestPending =>
+    dark ? const Color(0xFFFFC08A) : const Color(0xFF7A4A1B),
   AppStatus.beingGroomed => dark ? T.amber : const Color(0xFF7A4A1B),
   AppStatus.readyForPickup => dark ? T.amber : const Color(0xFF8A4A10),
-  AppStatus.cancelled => dark ? const Color(0xFFFF9A92) : const Color(0xFF9B1C1C),
+  AppStatus.cancelled =>
+    dark ? const Color(0xFFFF9A92) : const Color(0xFF9B1C1C),
 };
 
 Color statusBg(AppStatus s, bool dark) => switch (s) {
@@ -222,7 +238,8 @@ Color statusBg(AppStatus s, bool dark) => switch (s) {
     dark ? T.amber.withValues(alpha: 0.16) : const Color(0xFFFBEBD6),
   AppStatus.requestPending || AppStatus.readyForPickup =>
     dark ? T.orange.withValues(alpha: 0.18) : const Color(0xFFFDE3C7),
-  AppStatus.cancelled => dark ? const Color(0x1FFF9A92) : const Color(0xFFFDE2E2),
+  AppStatus.cancelled =>
+    dark ? const Color(0x1FFF9A92) : const Color(0xFFFDE2E2),
 };
 
 String statusIcon(AppStatus s) => switch (s) {
@@ -238,7 +255,11 @@ String statusIcon(AppStatus s) => switch (s) {
 typedef AppStatus = ApptStatus;
 
 class UpcomingCard extends StatelessWidget {
-  const UpcomingCard({super.key, required this.appointment, required this.store});
+  const UpcomingCard({
+    super.key,
+    required this.appointment,
+    required this.store,
+  });
 
   final Appointment appointment;
   final AppStore store;
@@ -253,73 +274,102 @@ class UpcomingCard extends StatelessWidget {
 
     return SoftCard(
       padding: EdgeInsets.zero,
-      onTap: () => Navigator.of(context).push(
-        appRoute(AppointmentDetailScreen(appointmentId: a.id)),
-      ),
+      onTap: () =>
+          Navigator.of(context)
+              .push(appRoute(AppointmentDetailScreen(appointmentId: a.id))),
       semanticLabel:
           '${pet?.name}, ${service.name}, ${mediumDate(a.start)}, ${staff.name}, status ${a.status.label}',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(14, 14, 14, 0),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
+          // Hero band: open pet-art space, echoing the home hero card.
+          SizedBox(
+            height: 104,
+            width: double.infinity,
+            child: Stack(
               children: [
-                PetArt(
-                  seed: (pet?.id.hashCode.abs() ?? 0) % 4,
-                  species: pet?.species,
-                  radius: 14,
-                  iconSize: 38,
-                  label: '${pet?.name} portrait',
+                Positioned.fill(
+                  child: pet == null
+                      ? PetArt(
+                          seed: 0,
+                          species: null,
+                          iconSize: 72,
+                          label: 'Pet portrait',
+                        )
+                      : PetAvatar(
+                          pet: pet,
+                          iconSize: 72,
+                          label: '${pet.name} portrait',
+                        ),
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(service.name, style: Type.headline(p)),
-                      const SizedBox(height: 2),
-                      Text(
-                        '${pet?.name} · ${staff.name}',
-                        style: Type.footnote(p),
-                      ),
-                    ],
+                Positioned(
+                  left: 14,
+                  top: 12,
+                  child: StatusChip(
+                    label: a.status.label,
+                    icon: statusIcon(a.status),
+                    compact: true,
+                    fg: statusFg(a.status, p.isDark),
+                    bg: statusBg(a.status, p.isDark),
                   ),
                 ),
-                Ic.svg(Ic.chevronRight, color: p.textSecondary, size: 16, stroke: 2.2),
               ],
             ),
           ),
-          const SizedBox(height: 12),
+          // Info panel: floats fully inside the card, inset from the edges.
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 14),
-            child: Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                StatusChip(
-                  label: mediumDate(a.start),
-                  icon: Ic.calendar,
-                  compact: true,
-                  fg: p.accentText,
-                  bg: p.accent.withValues(alpha: 0.12),
-                ),
-                StatusChip(
-                  label: a.status.label,
-                  icon: statusIcon(a.status),
-                  compact: true,
-                  fg: statusFg(a.status, p.isDark),
-                  bg: statusBg(a.status, p.isDark),
-                ),
-                if (service.grooming)
-                  StatusChip(
-                    label: service.durationLabel,
-                    icon: Ic.clock,
-                    compact: true,
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+            child: SoftCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(service.name, style: Type.headline(p)),
+                            const SizedBox(height: 2),
+                            Text(
+                              '${pet?.name} · ${staff.name}',
+                              style: Type.footnote(p),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Ic.svg(
+                        Ic.chevronRight,
+                        color: p.textSecondary,
+                        size: 16,
+                        stroke: 2.2,
+                      ),
+                    ],
                   ),
-              ],
+                  const SizedBox(height: 10),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      StatusChip(
+                        label: mediumDate(a.start),
+                        icon: Ic.calendar,
+                        compact: true,
+                        fg: p.accentText,
+                        bg: p.accent.withValues(alpha: 0.12),
+                      ),
+                      if (service.grooming)
+                        StatusChip(
+                          label: service.durationLabel,
+                          icon: Ic.clock,
+                          compact: true,
+                        ),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ),
           const SizedBox(height: 12),
@@ -367,8 +417,7 @@ class UpcomingCard extends StatelessWidget {
     );
   }
 
-  static TriageResult? _triageFor(Appointment a) =>
-      a.triageSummary == null
+  static TriageResult? _triageFor(Appointment a) => a.triageSummary == null
       ? null
       : TriageResult(
           route: TriageRoute.book,
@@ -417,9 +466,9 @@ class PastCard extends StatelessWidget {
 
     return SoftCard(
       padding: EdgeInsets.zero,
-      onTap: () => Navigator.of(context).push(
-        appRoute(AppointmentDetailScreen(appointmentId: a.id)),
-      ),
+      onTap: () =>
+          Navigator.of(context)
+              .push(appRoute(AppointmentDetailScreen(appointmentId: a.id))),
       semanticLabel:
           '${pet?.name}, ${service.name}, ${mediumDate(a.start)}, status ${a.status.label}',
       child: Column(

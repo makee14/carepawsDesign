@@ -486,7 +486,7 @@ class TriageResult {
   final String? nextStep;
 
   String get urgencyLabel => switch (urgency) {
-    2 => 'Urgent',
+    2 => 'Needs care soon',
     1 => 'Needs a visit',
     _ => 'Can be managed at home',
   };

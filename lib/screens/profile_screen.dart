@@ -28,15 +28,22 @@ class ProfileScreen extends StatelessWidget {
         slivers: [
           const LargeTitleBar(title: 'Profile'),
           SliverPadding(
-            padding: EdgeInsets.fromLTRB(20, 12, 20, 40 + TabBarClearance.of(context)),
+            padding: EdgeInsets.fromLTRB(
+              20,
+              12,
+              20,
+              40 + TabBarClearance.of(context),
+            ),
             sliver: SliverList.list(
               children: [
                 // The settings action lives on the header's trailing edge next to
                 // the chevron, so it costs no extra row above the fold.
                 SoftCard(
-                  onTap: () => Navigator.of(context).push(appRoute(const EditProfileScreen())),
+                  onTap: () =>
+                      Navigator.of(context)
+                          .push(appRoute(const EditProfileScreen())),
                   semanticLabel:
-                      'Marco Dela Cruz. ${Seed.ownerContact}. Tap to edit your profile',
+                      '${store.ownerName}. ${Seed.ownerContact}. Tap to edit your profile',
                   child: Row(
                     children: [
                       Container(
@@ -52,7 +59,7 @@ class ProfileScreen extends StatelessWidget {
                           ),
                         ),
                         child: OwnerAvatar(
-                          initials: 'MD',
+                          initials: initialsOf(store.ownerName),
                           size: 62,
                           photo: store.ownerPhoto,
                         ),
@@ -63,27 +70,33 @@ class ProfileScreen extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Text(Seed.ownerName, style: Type.title2(p)),
+                            Text(store.ownerName, style: Type.title2(p)),
                             const SizedBox(height: 3),
                             Text(Seed.ownerContact, style: Type.footnote(p)),
                             const SizedBox(height: 6),
                             StatusChip(
-                              label: '${store.petCount} pets · ${store.upcoming.length} upcoming',
+                              label:
+                                  '${store.petCount} pets · ${store.upcoming.length} upcoming',
                               icon: Ic.paw,
                               compact: true,
                             ),
                           ],
                         ),
                       ),
-                      Ic.svg(Ic.chevronRight, color: p.textSecondary, size: 16, stroke: 2.2),
+                      Ic.svg(
+                        Ic.chevronRight,
+                        color: p.textSecondary,
+                        size: 16,
+                        stroke: 2.2,
+                      ),
                       const SizedBox(width: 2),
                       IconTap(
                         path: Ic.settings,
                         label: 'Settings',
                         color: p.primaryFill,
-                        onPressed: () => Navigator.of(context).push(
-                          appRoute(const SettingsScreen()),
-                        ),
+                        onPressed: () =>
+                            Navigator.of(context)
+                                .push(appRoute(const SettingsScreen())),
                       ),
                     ],
                   ),
@@ -102,7 +115,9 @@ class ProfileScreen extends StatelessWidget {
                             ? 'No orders yet'
                             : '${store.orders.length} orders · ${peso(store.orders.fold(0.0, (a, o) => a + o.total))} lifetime',
                         leadingPath: Ic.bag,
-                        onTap: () => Navigator.of(context).push(appRoute(const OrdersScreen())),
+                        onTap: () =>
+                            Navigator.of(context)
+                                .push(appRoute(const OrdersScreen())),
                       ),
                       Divider(height: 1, color: p.divider, indent: 58),
                       RowTile(
@@ -132,48 +147,49 @@ class ProfileScreen extends StatelessWidget {
                             ? 'Checking for a key…'
                             : 'Unavailable · tap to add a key',
                         leadingPath: Ic.sparkle,
-                        onTap: () => Navigator.of(context).push(
-                          appRoute(const AiSettingsScreen()),
-                        ),
+                        onTap: () =>
+                            Navigator.of(context)
+                                .push(appRoute(const AiSettingsScreen())),
                       ),
                       Divider(height: 1, color: p.divider, indent: 58),
                       RowTile(
                         title: 'Notifications',
-                        subtitle: store.reminderOn(ReminderKind.medication) ||
+                        subtitle:
+                            store.reminderOn(ReminderKind.medication) ||
                                 store.reminderOn(ReminderKind.vaccine)
                             ? 'Reminders on'
                             : 'All reminders off',
                         leadingPath: Ic.bell,
-                        onTap: () => Navigator.of(context).push(
-                          appRoute(const RemindersScreen()),
-                        ),
+                        onTap: () =>
+                            Navigator.of(context)
+                                .push(appRoute(const RemindersScreen())),
                       ),
                       Divider(height: 1, color: p.divider, indent: 58),
                       RowTile(
                         title: 'Language',
                         subtitle: store.language,
                         leadingPath: Ic.globe,
-                        onTap: () => Navigator.of(context).push(
-                          appRoute(const LanguageScreen()),
-                        ),
+                        onTap: () =>
+                            Navigator.of(context)
+                                .push(appRoute(const LanguageScreen())),
                       ),
                       Divider(height: 1, color: p.divider, indent: 58),
                       RowTile(
                         title: 'Appearance',
                         subtitle: store.themeMode.label,
                         leadingPath: store.darkMode ? Ic.moon : Ic.sun,
-                        onTap: () => Navigator.of(context).push(
-                          appRoute(const AppearanceScreen()),
-                        ),
+                        onTap: () =>
+                            Navigator.of(context)
+                                .push(appRoute(const AppearanceScreen())),
                       ),
                       Divider(height: 1, color: p.divider, indent: 58),
                       RowTile(
                         title: 'Privacy',
                         subtitle: 'Export data, delete account',
                         leadingPath: Ic.lock,
-                        onTap: () => Navigator.of(context).push(
-                          appRoute(const PrivacyScreen()),
-                        ),
+                        onTap: () =>
+                            Navigator.of(context)
+                                .push(appRoute(const PrivacyScreen())),
                       ),
                     ],
                   ),
@@ -190,7 +206,9 @@ class ProfileScreen extends StatelessWidget {
                         title: 'Help centre',
                         subtitle: 'Guides for booking, orders and records',
                         leadingPath: Ic.info,
-                        onTap: () => Navigator.of(context).push(appRoute(const HelpScreen())),
+                        onTap: () =>
+                            Navigator.of(context)
+                                .push(appRoute(const HelpScreen())),
                       ),
                       Divider(height: 1, color: p.divider, indent: 58),
                       RowTile(
@@ -204,7 +222,9 @@ class ProfileScreen extends StatelessWidget {
                         title: 'FAQs',
                         subtitle: 'Answers about visits, vaccines and pickup',
                         leadingPath: Ic.doc,
-                        onTap: () => Navigator.of(context).push(appRoute(const FaqScreen())),
+                        onTap: () =>
+                            Navigator.of(context)
+                                .push(appRoute(const FaqScreen())),
                       ),
                     ],
                   ),
@@ -298,7 +318,9 @@ class ProfileScreen extends StatelessWidget {
                             ),
                           ),
                           StatusChip(
-                            label: rx.activeAt(store.now) ? 'Active' : 'Expired',
+                            label: rx.activeAt(store.now)
+                                ? 'Active'
+                                : 'Expired',
                             compact: true,
                             fg: rx.activeAt(store.now)
                                 ? context.p.success
@@ -319,7 +341,10 @@ class ProfileScreen extends StatelessWidget {
                 ),
               ),
             const SizedBox(height: T.s12),
-            PrimaryButton(label: 'Done', onPressed: () => dismissSheet(context)),
+            PrimaryButton(
+              label: 'Done',
+              onPressed: () => dismissSheet(context),
+            ),
           ],
         ),
       ),
@@ -337,9 +362,17 @@ class ProfileScreen extends StatelessWidget {
           children: [
             Text('Contact the clinic', style: Type.title2(context.p)),
             const SizedBox(height: 10),
-            Text(Seed.clinicPhone, style: Type.largeTitle(context.p).copyWith(color: context.p.accentText)),
+            Text(
+              Seed.clinicPhone,
+              style: Type.largeTitle(context.p)
+                  .copyWith(color: context.p.accentText),
+            ),
             const SizedBox(height: 8),
-            Text(Seed.clinicHours, style: Type.footnote(context.p), textAlign: TextAlign.center),
+            Text(
+              Seed.clinicHours,
+              style: Type.footnote(context.p),
+              textAlign: TextAlign.center,
+            ),
             const SizedBox(height: 6),
             Text(
               'After hours: ${Seed.afterHoursName}\n${Seed.afterHoursPhone}',
@@ -356,7 +389,10 @@ class ProfileScreen extends StatelessWidget {
               },
             ),
             const SizedBox(height: 8),
-            SecondaryButton(label: 'Close', onPressed: () => dismissSheet(context)),
+            SecondaryButton(
+              label: 'Close',
+              onPressed: () => dismissSheet(context),
+            ),
           ],
         ),
       ),
@@ -382,13 +418,23 @@ class ProfileScreen extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Ic.svg(Ic.checkCircle, color: context.p.success, size: 40, stroke: 1.9),
+            Ic.svg(
+              Ic.checkCircle,
+              color: context.p.success,
+              size: 40,
+              stroke: 1.9,
+            ),
             const SizedBox(height: 12),
-            Text('Signed out', style: Type.title2(context.p), textAlign: TextAlign.center),
+            Text(
+              'Signed out',
+              style: Type.title2(context.p),
+              textAlign: TextAlign.center,
+            ),
             const SizedBox(height: 8),
             Text(
               'This is a prototype build, so the session stays open. Log back in to continue.',
-              style: Type.body(context.p).copyWith(color: context.p.textSecondary),
+              style: Type.body(context.p)
+                  .copyWith(color: context.p.textSecondary),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: T.s20),

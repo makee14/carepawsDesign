@@ -279,6 +279,33 @@ class Ic {
       'M17.5 9.8a1.9 1.9 0 1 0 0-3.8 1.9 1.9 0 0 0 0 3.8Z'
       'M10.3 6.8a1.9 1.9 0 1 0 0-3.8 1.9 1.9 0 0 0 0 3.8Z'
       'M13.7 6.8a1.9 1.9 0 1 0 0-3.8 1.9 1.9 0 0 0 0 3.8Z';
+
+  /// The CarePaws mark v2 (2026-10-14): a sitting dog in side profile with a
+  /// cat nested in its chest, redrawn from the clinic's PetCare logo — no
+  /// text, no heart. Replaces [pawHeart] as the brand mark. Authored on a
+  /// 120x120 grid; two fills because the animals are different colours.
+  static Widget petPair({
+    required double size,
+    required Color dog,
+    required Color cat,
+  }) => SvgPicture.string(
+    '<svg viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">'
+    '<g fill="${hex(dog)}">'
+    '<path d="M16 62L40 56C44 54 46 50 48 44L54 40L60 18L68 40C72 44 74 48 74 54C74 66 75 76 74 86C77 90 82 94 86 98L86 108L54 108C53 100 52 94 52 88C50 84 47 81 44 78C40 76 36 75 32 74C26 72 20 68 16 62Z"/>'
+    '<path d="M74 88C84 84 92 74 92 62C92 58 88 58 87 62C86 72 80 80 72 84Z"/>'
+    '</g>'
+    '<g fill="${hex(cat)}">'
+    '<ellipse cx="54" cy="95" rx="9" ry="13"/>'
+    '<circle cx="54" cy="76" r="8"/>'
+    '<path d="M47 70L44 60L52 66Z"/>'
+    '<path d="M56 66L62 58L63 69Z"/>'
+    '<path d="M62 106C69 104 72 98 70 92C69 88 65 88 65 92C65 96 62 99 59 100Z"/>'
+    '</g>'
+    '</svg>',
+    width: size,
+    height: size,
+    semanticsLabel: null,
+  );
   static const qr =
       'M4 4h6v6H4ZM14 4h6v6h-6ZM4 14h6v6H4ZM14 14h2.8v2.8H14ZM17.2 17.2H20V20h-2.8Z';
   static const wallet =

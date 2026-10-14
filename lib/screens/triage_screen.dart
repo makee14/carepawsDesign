@@ -207,16 +207,13 @@ class _TriageScreenState extends State<TriageScreen> {
 
     return CupertinoPageScaffold(
       backgroundColor: p.background,
-      navigationBar: DetailNavBar(
-        title: 'AI Health Check',
-        showBack: true,
-      ),
+      navigationBar: DetailNavBar(title: 'AI Health Check', showBack: true),
       child: SafeArea(
         child: result == null
             ? _input(store, pet)
             : _ambiguousPet
-                ? _disambiguate(store)
-                : _resultView(store, result, pet),
+            ? _disambiguate(store)
+            : _resultView(store, result, pet),
       ),
     );
   }
@@ -242,9 +239,9 @@ class _TriageScreenState extends State<TriageScreen> {
                 const SizedBox(height: 16),
                 PrimaryButton(
                   label: 'Add a pet',
-                  onPressed: () => Navigator.of(context).push(
-                    appRoute(const AddPetScreen()),
-                  ),
+                  onPressed: () =>
+                      Navigator.of(context)
+                          .push(appRoute(const AddPetScreen())),
                 ),
               ],
             ),
@@ -252,11 +249,15 @@ class _TriageScreenState extends State<TriageScreen> {
         ],
       );
     }
-    final canSubmit = !_busy && (_text.text.trim().isNotEmpty || _photo != null);
+    final canSubmit =
+        !_busy && (_text.text.trim().isNotEmpty || _photo != null);
     // Bootstrap state (no key / unreachable / API error) and a request that
     // just failed both land here — one card, never a dead end.
     final failure =
-        _aiFailure ?? (store.ai.status == AiStatus.unavailable ? store.ai.failure ?? AiFailure.noKey : null);
+        _aiFailure ??
+        (store.ai.status == AiStatus.unavailable
+            ? store.ai.failure ?? AiFailure.noKey
+            : null);
     return ListView(
       padding: EdgeInsets.fromLTRB(
         20,
@@ -268,9 +269,8 @@ class _TriageScreenState extends State<TriageScreen> {
         if (failure != null) ...[
           AiUnavailableCard(
             failure: failure,
-            onOpenSettings: () => Navigator.of(context).push(
-              appRoute(const AiSettingsScreen()),
-            ),
+            onOpenSettings: () =>
+                Navigator.of(context).push(appRoute(const AiSettingsScreen())),
             onBook: widget.onComplete == null
                 ? () => Navigator.of(context).push(appRoute(const BookFlow()))
                 : null,
@@ -307,7 +307,8 @@ class _TriageScreenState extends State<TriageScreen> {
         CupertinoTextField(
           controller: _text,
           onChanged: (_) => setState(() {}),
-          placeholder: 'e.g. Vomited twice this morning and will not eat breakfast',
+          placeholder:
+              'e.g. Vomited twice this morning and will not eat breakfast',
           placeholderStyle: Type.body(p).copyWith(color: p.textSecondary),
           style: Type.body(p),
           minLines: 4,
@@ -434,7 +435,8 @@ class _TriageScreenState extends State<TriageScreen> {
     );
   }
 
-  Widget _resultView(AppStore store, TriageResult result, Pet? pet) {    // Emergency outcome: the call CTA is rendered first, above the fold.
+  Widget _resultView(AppStore store, TriageResult result, Pet? pet) {
+    // Emergency outcome: the call CTA is rendered first, above the fold.
     if (result.route == TriageRoute.emergency) {
       return EmergencyTriageView(result: result, pet: pet, entry: widget.entry);
     }
@@ -453,10 +455,26 @@ class _TriageScreenState extends State<TriageScreen> {
     }
 
     return switch (result.route) {
-      TriageRoute.book => BookTriageView(result: result, pet: pet, entry: widget.entry),
-      TriageRoute.chat => ChatTriageView(result: result, pet: pet, handoff: handoff),
-      TriageRoute.homeCare => HomeCareTriageView(result: result, pet: pet, entry: widget.entry),
-      TriageRoute.emergency => EmergencyTriageView(result: result, pet: pet, entry: widget.entry),
+      TriageRoute.book => BookTriageView(
+        result: result,
+        pet: pet,
+        entry: widget.entry,
+      ),
+      TriageRoute.chat => ChatTriageView(
+        result: result,
+        pet: pet,
+        handoff: handoff,
+      ),
+      TriageRoute.homeCare => HomeCareTriageView(
+        result: result,
+        pet: pet,
+        entry: widget.entry,
+      ),
+      TriageRoute.emergency => EmergencyTriageView(
+        result: result,
+        pet: pet,
+        entry: widget.entry,
+      ),
     };
   }
 }
@@ -475,7 +493,12 @@ class _PhotoPreview extends StatelessWidget {
         children: [
           ClipRRect(
             borderRadius: BorderRadius.circular(T.rCard),
-            child: Image.memory(bytes, width: double.infinity, height: 190, fit: BoxFit.cover),
+            child: Image.memory(
+              bytes,
+              width: double.infinity,
+              height: 190,
+              fit: BoxFit.cover,
+            ),
           ),
           Positioned(
             right: 8,
@@ -506,7 +529,11 @@ class _PhotoPreview extends StatelessWidget {
 }
 
 class _PhotoPickTile extends StatelessWidget {
-  const _PhotoPickTile({required this.icon, required this.label, required this.onTap});
+  const _PhotoPickTile({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
   final String icon;
   final String label;
   final VoidCallback? onTap;
@@ -595,18 +622,22 @@ class _OutcomeShell extends StatelessWidget {
   Widget build(BuildContext context) {
     final p = context.p;
     return ListView(
-      padding: EdgeInsets.fromLTRB(20, 16, 20, 40 + MediaQuery.paddingOf(context).bottom),
+      padding: EdgeInsets.fromLTRB(
+        20,
+        16,
+        20,
+        40 + MediaQuery.paddingOf(context).bottom,
+      ),
       children: [
         Row(
           children: [
             Container(
               width: 52,
               height: 52,
-              decoration: BoxDecoration(
-                color: tone.bg,
-                shape: BoxShape.circle,
+              decoration: BoxDecoration(color: tone.bg, shape: BoxShape.circle),
+              child: Center(
+                child: Ic.svg(icon, color: tone.fg, size: 26, stroke: 2),
               ),
-              child: Center(child: Ic.svg(icon, color: tone.fg, size: 26, stroke: 2)),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -646,7 +677,12 @@ class Tone {
 }
 
 class _Bullets extends StatelessWidget {
-  const _Bullets({required this.items, required this.icon, required this.tone, this.heading});
+  const _Bullets({
+    required this.items,
+    required this.icon,
+    required this.tone,
+    this.heading,
+  });
   final List<String> items;
   final String icon;
   final Tone tone;
@@ -686,7 +722,12 @@ class _Bullets extends StatelessWidget {
 
 /// Outcome: book an appointment.
 class BookTriageView extends StatelessWidget {
-  const BookTriageView({super.key, required this.result, required this.pet, required this.entry});
+  const BookTriageView({
+    super.key,
+    required this.result,
+    required this.pet,
+    required this.entry,
+  });
 
   final TriageResult result;
   final Pet? pet;
@@ -717,7 +758,7 @@ class BookTriageView extends StatelessWidget {
                   items: result.redFlags,
                   icon: Ic.alert,
                   tone: Tone.alert,
-                  heading: 'See a vet immediately if',
+                  heading: 'Contact us sooner if you notice',
                 ),
                 if (result.nextStep != null) ...[
                   const SizedBox(height: T.s16),
@@ -740,15 +781,11 @@ class BookTriageView extends StatelessWidget {
           child: PrimaryButton(
             label: 'Book appointment',
             icon: Ic.calendar,
-            onPressed: () => Navigator.of(context).push(
-              appRoute(
-                BookFlow(
-                  initialPetId: pet?.id,
-                  triage: result,
-                ),
-              ),
-            ),
-          )),
+            onPressed: () => Navigator.of(
+              context,
+            ).push(appRoute(BookFlow(initialPetId: pet?.id, triage: result))),
+          ),
+        ),
       ],
     );
   }
@@ -793,18 +830,20 @@ class ChatTriageView extends StatelessWidget {
                   items: result.redFlags,
                   icon: Ic.alert,
                   tone: Tone.alert,
-                  heading: 'See a vet immediately if',
+                  heading: 'Contact us sooner if you notice',
                 ),
                 const SizedBox(height: T.s16),
                 _NoteBox(
                   text: store.staffOnline()
                       ? 'The clinic team is online now and usually replies within 10 minutes.'
-                      : store.offlineNote ?? 'The clinic team replies during clinic hours.',
+                      : store.offlineNote ??
+                            'The clinic team replies during clinic hours.',
                   icon: Ic.clock,
                 ),
                 const SizedBox(height: 12),
                 _NoteBox(
-                  text: '${pet?.name ?? 'Your pet'} and this summary travel with the message — no retyping.',
+                  text:
+                      '${pet?.name ?? 'Your pet'} and this summary travel with the message — no retyping.',
                   icon: Ic.info,
                 ),
                 const SizedBox(height: T.s16),
@@ -817,15 +856,16 @@ class ChatTriageView extends StatelessWidget {
           extra: SecondaryButton(
             label: 'Book instead',
             icon: Ic.calendar,
-            onPressed: () => Navigator.of(context).push(
-              appRoute(BookFlow(initialPetId: pet?.id, triage: result)),
-            ),
+            onPressed: () => Navigator.of(
+              context,
+            ).push(appRoute(BookFlow(initialPetId: pet?.id, triage: result))),
           ),
           child: PrimaryButton(
             label: 'Chat clinic team about this',
             icon: Ic.send,
             onPressed: handoff,
-          )),
+          ),
+        ),
       ],
     );
   }
@@ -833,7 +873,12 @@ class ChatTriageView extends StatelessWidget {
 
 /// Outcome: home care, with a red-flag list and a "Book anyway" secondary.
 class HomeCareTriageView extends StatelessWidget {
-  const HomeCareTriageView({super.key, required this.result, required this.pet, required this.entry});
+  const HomeCareTriageView({
+    super.key,
+    required this.result,
+    required this.pet,
+    required this.entry,
+  });
 
   final TriageResult result;
   final Pet? pet;
@@ -864,7 +909,7 @@ class HomeCareTriageView extends StatelessWidget {
                   items: result.redFlags,
                   icon: Ic.alert,
                   tone: Tone.alert,
-                  heading: 'Book straight away if you see',
+                  heading: 'Book a visit if you notice',
                 ),
                 const SizedBox(height: T.s16),
                 _NotADiagnosis(),
@@ -876,9 +921,9 @@ class HomeCareTriageView extends StatelessWidget {
           extra: SecondaryButton(
             label: 'Book anyway',
             icon: Ic.calendar,
-            onPressed: () => Navigator.of(context).push(
-              appRoute(BookFlow(initialPetId: pet?.id, triage: result)),
-            ),
+            onPressed: () => Navigator.of(
+              context,
+            ).push(appRoute(BookFlow(initialPetId: pet?.id, triage: result))),
           ),
           child: PrimaryButton(
             label: 'Chat clinic team about this',
@@ -887,10 +932,16 @@ class HomeCareTriageView extends StatelessWidget {
               final store = AppScope.read(context);
               store.handOffToClinic(pet: pet!, result: result);
               Navigator.of(context).pushReplacement(
-                appRoute(ChatThreadScreen(threadId: 'th_clinic', openedWithPetId: pet!.id)),
+                appRoute(
+                  ChatThreadScreen(
+                    threadId: 'th_clinic',
+                    openedWithPetId: pet!.id,
+                  ),
+                ),
               );
             },
-          )),
+          ),
+        ),
       ],
     );
   }
@@ -936,7 +987,12 @@ class EmergencyTriageView extends StatelessWidget {
                       shape: BoxShape.circle,
                     ),
                     child: Center(
-                      child: Ic.svg(Ic.alert, color: p.destructive, size: 26, stroke: 2.1),
+                      child: Ic.svg(
+                        Ic.alert,
+                        color: p.destructive,
+                        size: 26,
+                        stroke: 2.1,
+                      ),
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -945,10 +1001,12 @@ class EmergencyTriageView extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text('Possible emergency', style: Type.title2(p)),
+                        Text('Needs a vet right away', style: Type.title2(p)),
                         const SizedBox(height: 4),
                         StatusChip(
-                          label: open ? 'Clinic open now' : 'Clinic closed — after hours',
+                          label: open
+                              ? 'Clinic open now'
+                              : 'Clinic closed — after hours',
                           icon: Ic.clock,
                           compact: true,
                           fg: open ? p.success : p.destructive,
@@ -976,12 +1034,18 @@ class EmergencyTriageView extends StatelessWidget {
                   children: [
                     Row(
                       children: [
-                        Ic.svg(Ic.phone, color: p.onPrimaryFill, size: 20, stroke: 2.2),
+                        Ic.svg(
+                          Ic.phone,
+                          color: p.onPrimaryFill,
+                          size: 20,
+                          stroke: 2.2,
+                        ),
                         const SizedBox(width: 9),
                         Expanded(
                           child: Text(
                             open ? 'Call the clinic now' : 'Call $name',
-                            style: Type.headline(p).copyWith(color: p.onPrimaryFill),
+                            style: Type.headline(p)
+                                .copyWith(color: p.onPrimaryFill),
                           ),
                         ),
                       ],
@@ -989,23 +1053,24 @@ class EmergencyTriageView extends StatelessWidget {
                     const SizedBox(height: 6),
                     Text(
                       number,
-                      style: Type.title2(p).copyWith(
-                        color: p.onPrimaryFill,
-                        letterSpacing: 0.4,
-                      ),
+                      style: Type.title2(p)
+                          .copyWith(color: p.onPrimaryFill, letterSpacing: 0.4),
                     ),
                     const SizedBox(height: 4),
                     Text(
                       open
-                          ? "Ask for the vet on duty. Keep ${pet?.name ?? 'your pet'} quiet and warm on the way."
-                          : 'This hospital is open 24 hours. Go now — do not wait for CarePaws to reopen.',
-                      style: Type.footnote(p).copyWith(color: p.onPrimaryFill.withValues(alpha: 0.92)),
+                          ? "Ask for the vet on duty \u2014 keeping ${pet?.name ?? 'your pet'} calm and warm on the way helps."
+                          : 'They are open 24 hours \u2014 head over when you are ready, and drive safe.',
+                      style: Type.footnote(p).copyWith(
+                        color: p.onPrimaryFill.withValues(alpha: 0.92),
+                      ),
                     ),
                     const SizedBox(height: 14),
                     PrimaryButton(
                       label: open ? 'Call the clinic now' : 'Call $name',
                       icon: Ic.phone,
-                      onPressed: () => callPhoneNumber(context, number: number, name: name),
+                      onPressed: () =>
+                          callPhoneNumber(context, number: number, name: name),
                     ),
                   ],
                 ),
@@ -1014,13 +1079,13 @@ class EmergencyTriageView extends StatelessWidget {
                 items: result.redFlags,
                 icon: Ic.alert,
                 tone: Tone.alert,
-                heading: 'Serious signs we are acting on',
+                heading: 'Why we suggest this',
               ),
               _Bullets(
                 items: result.bullets,
                 icon: Ic.info,
                 tone: Tone.mid,
-                heading: 'While you travel',
+                heading: 'On the way',
               ),
               const SizedBox(height: T.s16),
               _NotADiagnosis(),
@@ -1037,15 +1102,21 @@ class EmergencyTriageView extends StatelessWidget {
             label: open ? 'Call the clinic now' : 'Call $name',
             icon: Ic.phone,
             destructive: true,
-            onPressed: () => callPhoneNumber(context, number: number, name: name),
-          )),
+            onPressed: () =>
+                callPhoneNumber(context, number: number, name: name),
+          ),
+        ),
       ],
     );
   }
 }
 
 /// Shared AI -> clinic handoff. No-ops safely when there is no pet yet.
-Future<void> _handoff(BuildContext context, Pet? pet, TriageResult result) async {
+Future<void> _handoff(
+  BuildContext context,
+  Pet? pet,
+  TriageResult result,
+) async {
   if (pet == null) return;
   AppScope.read(context).handOffToClinic(pet: pet, result: result);
   if (!context.mounted) return;

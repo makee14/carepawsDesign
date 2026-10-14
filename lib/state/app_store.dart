@@ -120,31 +120,33 @@ class AppStore extends ChangeNotifier {
   /// Appointments list and reminders rely on the same ordering. Visits whose
   /// pet is no longer on the account are skipped, so removing a pet (or the
   /// whole account) can never leave a dangling reference on screen.
-  List<Appointment> get upcomingAppointments => (appointments
-        .where(
-          (a) =>
-              a.status.isActive &&
-              a.end.isAfter(now) &&
-              pet(a.petId) != null,
-        )
-        .toList())
-      ..sort((a, b) => a.start.compareTo(b.start));
+  List<Appointment> get upcomingAppointments =>
+      (appointments
+            .where(
+              (a) =>
+                  a.status.isActive &&
+                  a.end.isAfter(now) &&
+                  pet(a.petId) != null,
+            )
+            .toList())
+        ..sort((a, b) => a.start.compareTo(b.start));
 
   /// Alias kept for existing callers.
   List<Appointment> get upcoming => upcomingAppointments;
 
-  List<Appointment> get past => appointments
-      .where((a) => !a.status.isActive || a.end.isBefore(now))
-      .toList()
-      ..sort((a, b) => b.start.compareTo(a.start));
+  List<Appointment> get past =>
+      appointments
+          .where((a) => !a.status.isActive || a.end.isBefore(now))
+          .toList()
+        ..sort((a, b) => b.start.compareTo(a.start));
 
   Pet? pet(String id) => pets.where((p) => p.id == id).firstOrNull;
 
-  Appointment? appt(String id) => appointments.where((a) => a.id == id).firstOrNull;
+  Appointment? appt(String id) =>
+      appointments.where((a) => a.id == id).firstOrNull;
 
-  Appointment? apptForProduct(String productId) => appointments
-      .where((a) => a.petId == 'p1')
-      .firstOrNull;
+  Appointment? apptForProduct(String productId) =>
+      appointments.where((a) => a.petId == 'p1').firstOrNull;
 
   Staff staffOf(String id) => Seed.staff.firstWhere((s) => s.id == id);
 
@@ -183,9 +185,7 @@ class AppStore extends ChangeNotifier {
   /// Replaces a pet in place, keeping its identity, timeline and documents.
   /// Used by the pet editor — only the editable fields change.
   void updatePet(Pet updated) {
-    pets = pets
-        .map((p) => p.id == updated.id ? updated : p)
-        .toList();
+    pets = pets.map((p) => p.id == updated.id ? updated : p).toList();
     if (updated.hasPhoto) {
       PhotoStore.save(PhotoStore.petKey(updated.id), updated.photo!);
     } else {
@@ -196,9 +196,7 @@ class AppStore extends ChangeNotifier {
 
   /// Sets or clears one pet's portrait. Passing null restores the generated art.
   Future<void> setPetPhoto(String petId, Uint8List? bytes) async {
-    pets = pets
-        .map((p) => p.id == petId ? _withPhoto(p, bytes) : p)
-        .toList();
+    pets = pets.map((p) => p.id == petId ? _withPhoto(p, bytes) : p).toList();
     if (bytes == null) {
       await PhotoStore.remove(PhotoStore.petKey(petId));
     } else {
@@ -327,14 +325,16 @@ class AppStore extends ChangeNotifier {
   );
 
   /// Auto-assign staff by service line (no vet-selection step).
-  String autoAssignStaff(String serviceId) => Seed.service(serviceId).role == StaffRole.groomer
+  String autoAssignStaff(String serviceId) =>
+      Seed.service(serviceId).role == StaffRole.groomer
       ? Seed.groomer.id
       : serviceOf(serviceId).role == StaffRole.vet
       ? Seed.vet.id
       : Seed.assistant.id;
 
   // ------------------------------------------------------------------ cart
-  int qtyOf(String productId) => cart.where((c) => c.productId == productId).fold(0, (a, b) => a + b.qty);
+  int qtyOf(String productId) =>
+      cart.where((c) => c.productId == productId).fold(0, (a, b) => a + b.qty);
 
   void setQty(String productId, int qty) {
     if (qty <= 0) {
@@ -366,14 +366,17 @@ class AppStore extends ChangeNotifier {
 
   int get cartCount => cart.fold(0, (a, b) => a + b.qty);
 
-  double get cartTotal => cart.fold(0.0, (a, c) => a + productOf(c.productId).price * c.qty);
+  double get cartTotal =>
+      cart.fold(0.0, (a, c) => a + productOf(c.productId).price * c.qty);
 
-  double get cartWeight => cart.fold(0.0, (a, c) => a + productOf(c.productId).price * c.qty);
+  double get cartWeight =>
+      cart.fold(0.0, (a, c) => a + productOf(c.productId).price * c.qty);
 
   /// Restricted items need an active prescription signed by the veterinarian.
   List<String> get blockedRestricted => [
     for (final c in cart)
-      if (productOf(c.productId).restricted && !hasPrescription(c.productId)) c.productId,
+      if (productOf(c.productId).restricted && !hasPrescription(c.productId))
+        c.productId,
   ];
 
   bool hasPrescription(String productId) =>
@@ -396,7 +399,8 @@ class AppStore extends ChangeNotifier {
     notifyListeners();
   }
 
-  List<ChatMessage> thread(String id) => messages.where((m) => m.threadId == id).toList();
+  List<ChatMessage> thread(String id) =>
+      messages.where((m) => m.threadId == id).toList();
 
   // ------------------------------------------------------------- settings
   void setLanguage(String l) {
@@ -414,7 +418,8 @@ class AppStore extends ChangeNotifier {
 
   /// Kept for the Appearance rows and existing tests: a boolean choice always
   /// means an explicit override, never "follow the system".
-  void setDarkMode(bool v) => setThemeMode(v ? ThemeMode.dark : ThemeMode.light);
+  void setDarkMode(bool v) =>
+      setThemeMode(v ? ThemeMode.dark : ThemeMode.light);
 
   void setReduceMotion(bool v) {
     reduceMotionOverride = v;
@@ -481,8 +486,11 @@ class AppStore extends ChangeNotifier {
   /// Email of the signed-in account, normalized to lowercase.
   String? accountEmail;
 
-  /// Registers a new local account and signs in immediately. Returns true
-  /// on success; on failure [signInError] names the problem.
+  /// Registers a new local account and returns true on success; on failure
+  /// [signInError] names the problem.
+  ///
+  /// Registration never signs in: the login screen takes the user back to
+  /// sign-in so they enter the credentials they just created.
   Future<bool> register(String name, String email, String password) async {
     signingIn = true;
     signInError = null;
@@ -503,9 +511,6 @@ class AppStore extends ChangeNotifier {
       notifyListeners();
       return false;
     }
-    signedIn = true;
-    accountName = name.trim();
-    accountEmail = email.trim().toLowerCase();
     signInError = null;
     notifyListeners();
     return true;
@@ -524,7 +529,6 @@ class AppStore extends ChangeNotifier {
 
     // Registered accounts take precedence over the demo login.
     final registeredName = await AuthStore.authenticate(email, password);
-    final emailExists = await AuthStore.exists(email);
     final okEmail = email.trim().toLowerCase() == demoEmail;
     final okPass = password == demoPassword;
 
@@ -537,9 +541,10 @@ class AppStore extends ChangeNotifier {
     } else {
       accountName = null;
       accountEmail = null;
-      signInError = emailExists || okEmail
-          ? 'That password is not right. Try again.'
-          : 'No account matches that email.';
+      // One neutral message either way: naming which half was wrong would
+      // confirm that the email exists on this device.
+      signInError =
+          'That email and password do not match. Check both and try again.';
     }
     notifyListeners();
     return signedIn;
@@ -556,18 +561,31 @@ class AppStore extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Stores a Gemini key entered in Settings and re-probes the API so the
-  /// live/demo status updates without a restart. Returns whether a usable key
-  /// is now configured.
-  Future<bool> setAiKey(String key) async {
-    final ok = await ai.useKey(key);
+  /// Stores a key entered in Settings for one AI provider and re-probes, so
+  /// the live status updates without a restart. Returns whether that
+  /// provider is actually answering now.
+  Future<bool> setAiKeyFor(AiProvider provider, String key) async {
+    final ok = await ai.useKeyFor(provider, key);
     notifyListeners();
     return ok;
   }
 
-  /// Forgets the on-device key; the app falls back to demo mode or to a
-  /// build-time key, whichever is still in play.
-  Future<void> clearAiKey() => setAiKey('');
+  /// Forgets one provider's on-device key; the app falls back to a
+  /// build-time key or to the next ready provider, whichever is in play.
+  Future<void> clearAiKeyFor(AiProvider provider) => setAiKeyFor(provider, '');
+
+  /// Switches one AI provider on or off and re-probes.
+  Future<void> setAiProviderEnabled(AiProvider provider, bool enabled) async {
+    await ai.setProviderEnabled(provider, enabled);
+    notifyListeners();
+  }
+
+  /// Re-probes every configured AI provider. Settings calls this for
+  /// "Test connection".
+  Future<void> recheckAi() async {
+    await ai.recheck();
+    notifyListeners();
+  }
 
   /// AI → clinic handoff carries the pet and the triage result, so the user
   /// never retypes anything.

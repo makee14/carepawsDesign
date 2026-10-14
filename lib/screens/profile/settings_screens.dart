@@ -12,7 +12,8 @@ import '../../state/app_store.dart';
 import '../../widgets/common.dart';
 import '../onboarding_screen.dart';
 import 'privacy_screen.dart';
-import '../../services/ai_service.dart' show AiFailure, AiStatus;
+import '../../services/ai_service.dart'
+    show AiFailure, AiProvider, AiProviderInfo, AiStatus;
 
 /// Consolidated settings surface reachable from the Profile nav bar.
 class SettingsScreen extends StatelessWidget {
@@ -37,23 +38,29 @@ class SettingsScreen extends StatelessWidget {
                 children: [
                   RowTile(
                     title: 'Edit profile',
-                    subtitle: Seed.ownerName,
+                    subtitle: store.ownerName,
                     leadingPath: Ic.person,
-                    onTap: () => Navigator.of(context).push(appRoute(const EditProfileScreen())),
+                    onTap: () =>
+                        Navigator.of(context)
+                            .push(appRoute(const EditProfileScreen())),
                   ),
                   Divider(height: 1, color: p.divider, indent: 58),
                   RowTile(
                     title: 'Language',
                     subtitle: store.language,
                     leadingPath: Ic.globe,
-                    onTap: () => Navigator.of(context).push(appRoute(const LanguageScreen())),
+                    onTap: () =>
+                        Navigator.of(context)
+                            .push(appRoute(const LanguageScreen())),
                   ),
                   Divider(height: 1, color: p.divider, indent: 58),
                   RowTile(
                     title: 'Appearance',
                     subtitle: store.themeMode.label,
                     leadingPath: store.darkMode ? Ic.moon : Ic.sun,
-                    onTap: () => Navigator.of(context).push(appRoute(const AppearanceScreen())),
+                    onTap: () =>
+                        Navigator.of(context)
+                            .push(appRoute(const AppearanceScreen())),
                   ),
                   Divider(height: 1, color: p.divider, indent: 58),
                   RowTile(
@@ -62,7 +69,8 @@ class SettingsScreen extends StatelessWidget {
                         ? 'Animations are off'
                         : 'Following the system setting',
                     leadingPath: Ic.refresh,
-                    onTap: () => store.setReduceMotion(!store.reduceMotionOverride),
+                    onTap: () =>
+                        store.setReduceMotion(!store.reduceMotionOverride),
                     trailing: CupertinoSwitch(
                       value: store.reduceMotionOverride,
                       activeTrackColor: p.accent,
@@ -75,7 +83,19 @@ class SettingsScreen extends StatelessWidget {
             const SizedBox(height: T.s20),
             Text('CarePaws AI', style: Type.headline(p)),
             const SizedBox(height: 10),
-            const AiSettingsCard(),
+            SoftCard(
+              padding: EdgeInsets.zero,
+              child: RowTile(
+                title: 'AI providers',
+                subtitle: store.ai.isLive
+                    ? 'Live · ${store.ai.modelLabel}'
+                    : 'Unavailable — add a key',
+                leadingPath: Ic.sparkle,
+                onTap: () =>
+                    Navigator.of(context)
+                        .push(appRoute(const AiSettingsScreen())),
+              ),
+            ),
             const SizedBox(height: T.s20),
             Text('Data', style: Type.headline(p)),
             const SizedBox(height: 10),
@@ -87,14 +107,18 @@ class SettingsScreen extends StatelessWidget {
                     title: 'Privacy',
                     subtitle: 'Export data, delete account',
                     leadingPath: Ic.lock,
-                    onTap: () => Navigator.of(context).push(appRoute(const PrivacyScreen())),
+                    onTap: () =>
+                        Navigator.of(context)
+                            .push(appRoute(const PrivacyScreen())),
                   ),
                   Divider(height: 1, color: p.divider, indent: 58),
                   RowTile(
                     title: 'Export my data',
                     subtitle: 'Pets, visits and orders as JSON',
                     leadingPath: Ic.download,
-                    onTap: () => Navigator.of(context).push(appRoute(const ExportScreen())),
+                    onTap: () =>
+                        Navigator.of(context)
+                            .push(appRoute(const ExportScreen())),
                   ),
                   Divider(height: 1, color: p.divider, indent: 58),
                   RowTile(
@@ -115,16 +139,17 @@ class SettingsScreen extends StatelessWidget {
   }
 }
 
-/// A standalone destination for [AiSettingsCard].
+/// A standalone destination for the AI provider list.
 ///
-/// Reachable straight from the Profile tab so the Gemini key never has to be
-/// hunted for inside the full Settings screen.
+/// Reachable straight from the Profile tab so a key never has to be hunted
+/// for inside the full Settings screen.
 class AiSettingsScreen extends StatelessWidget {
   const AiSettingsScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
     final p = context.p;
+    final store = AppScope.of(context);
     return CupertinoPageScaffold(
       backgroundColor: p.background,
       navigationBar: const DetailNavBar(title: 'CarePaws AI'),
@@ -137,11 +162,25 @@ class AiSettingsScreen extends StatelessWidget {
             40 + MediaQuery.paddingOf(context).bottom,
           ),
           children: [
-            const AiSettingsCard(),
+            const _AiStatusCard(),
             const SizedBox(height: T.s20),
+            Text('Providers', style: Type.headline(p)),
+            const SizedBox(height: 10),
+            for (final provider in store.ai.providers) ...[
+              _ProviderCard(provider: provider),
+              const SizedBox(height: 12),
+            ],
+            const SizedBox(height: T.s8),
             Text(
-              'The key decides whether health checks and chat can run on a real model. '
-              'Without one, CarePaws AI stays unavailable — everything else about the app works the same.',
+              'Requests try each ready provider in order — Gemini, then OpenAI, '
+              'then OpenRouter — and move to the next one automatically if a '
+              'request fails.',
+              style: Type.footnote(p).copyWith(color: p.textSecondary),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Testing only — keys are stored in plaintext on this device. '
+              'Remove them before shipping a build.',
               style: Type.footnote(p).copyWith(color: p.textSecondary),
             ),
           ],
@@ -151,20 +190,78 @@ class AiSettingsScreen extends StatelessWidget {
   }
 }
 
-/// Mirrors the AI service status and lets a tester paste a key straight onto
-/// the device — no rebuild, no `--dart-define`. The value is kept in
-/// SharedPreferences in plaintext, so this is a testing affordance only.
-class AiSettingsCard extends StatefulWidget {
-  const AiSettingsCard({super.key});
+/// Overall status: which provider answers first right now, and the routing
+/// order behind it.
+class _AiStatusCard extends StatelessWidget {
+  const _AiStatusCard();
 
   @override
-  State<AiSettingsCard> createState() => _AiSettingsCardState();
+  Widget build(BuildContext context) {
+    final p = context.p;
+    final ai = AppScope.of(context).ai;
+    return SoftCard(
+      child: Row(
+        children: [
+          Ic.svg(
+            ai.isLive ? Ic.checkCircle : Ic.sparkle,
+            color: ai.isLive ? p.success : p.accent,
+            size: 22,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  ai.isLive ? 'Live model connected' : 'AI unavailable',
+                  style: Type.headline(p),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  ai.isLive
+                      ? '${ai.modelLabel} answers first. If a request fails, it moves to the next ready provider automatically.'
+                      : '${(ai.failure ?? AiFailure.noKey).label}. ${(ai.failure ?? AiFailure.noKey).hint}',
+                  style: Type.footnote(p).copyWith(color: p.textSecondary),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          StatusChip(
+            label: ai.status == AiStatus.checking
+                ? 'Checking'
+                : ai.isLive
+                ? 'Live'
+                : 'Unavailable',
+            compact: true,
+            fg: ai.isLive ? p.success : p.warning,
+            bg: ai.isLive
+                ? const Color(0xFFDDF2E3)
+                : T.amber.withValues(alpha: 0.28),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
-class _AiSettingsCardState extends State<AiSettingsCard> {
+/// One provider row: name, live model or key state, on/off switch. Tapping
+/// expands the key field — paste, show/hide, save, remove, test — so each
+/// provider is managed independently.
+class _ProviderCard extends StatefulWidget {
+  const _ProviderCard({required this.provider});
+  final AiProvider provider;
+
+  @override
+  State<_ProviderCard> createState() => _ProviderCardState();
+}
+
+class _ProviderCardState extends State<_ProviderCard> {
   final _controller = TextEditingController();
   bool _busy = false;
   bool _hidden = true;
+  bool _expanded = false;
 
   @override
   void dispose() {
@@ -185,7 +282,7 @@ class _AiSettingsCardState extends State<AiSettingsCard> {
   Future<void> _save() async {
     setState(() => _busy = true);
     final store = AppScope.read(context);
-    final ok = await store.setAiKey(_controller.text);
+    final ok = await store.setAiKeyFor(widget.provider, _controller.text);
     if (!mounted) return;
     setState(() => _busy = false);
     if (ok) {
@@ -193,6 +290,10 @@ class _AiSettingsCardState extends State<AiSettingsCard> {
       setState(() => _hidden = true);
     }
     if (!context.mounted) return;
+    final status = store.ai.statusFor(widget.provider);
+    // ok means the provider answered. A saved-but-silent key is reported
+    // honestly instead of as "ready".
+    final keySaved = status.keyConfigured;
     await showAppSheet(
       context,
       child: Padding(
@@ -200,138 +301,216 @@ class _AiSettingsCardState extends State<AiSettingsCard> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Ic.svg(ok ? Ic.checkCircle : Ic.alert, color: ok ? context.p.success : context.p.destructive, size: 26),
+            Ic.svg(
+              ok ? Ic.checkCircle : Ic.alert,
+              color: ok ? context.p.success : context.p.destructive,
+              size: 26,
+            ),
             const SizedBox(height: 10),
             Text(
-              ok ? 'Live AI is on' : 'That key was not accepted',
+              ok
+                  ? '${widget.provider.label} is ready'
+                  : keySaved
+                  ? 'Key saved'
+                  : 'That key was not accepted',
               style: Type.title2(context.p),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 8),
             Text(
               ok
-                  ? 'Health checks and chat now run on ${store.ai.modelLabel}.'
-                  : '${(store.ai.failure ?? AiFailure.noKey).label}, so CarePaws AI stayed unavailable. '
-                        '${(store.ai.failure ?? AiFailure.noKey).hint}',
+                  ? 'Answering on ${status.modelLabel}.'
+                  : keySaved
+                  ? 'The provider did not answer just now — it will be retried automatically.'
+                  : '${(status.failure ?? AiFailure.serviceError).label}. ${(status.failure ?? AiFailure.serviceError).hint}',
               style: Type.footnote(context.p),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: T.s20),
-            PrimaryButton(label: 'Done', onPressed: () => dismissSheet(context)),
+            PrimaryButton(
+              label: 'Done',
+              onPressed: () => dismissSheet(context),
+            ),
           ],
         ),
       ),
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final p = context.p;
-    final store = AppScope.of(context);
-    final ai = store.ai;
-
-    return SoftCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Ic.svg(Ic.sparkle, color: p.accent, size: 20),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  ai.isLive ? 'Live model connected' : 'AI unavailable',
-                  style: Type.headline(p),
-                ),
-              ),
-              StatusChip(
-                label: ai.status == AiStatus.checking
-                    ? 'Checking'
-                    : ai.isLive
-                    ? 'Live'
-                    : 'Unavailable',
-                compact: true,
-                fg: ai.isLive ? p.success : p.warning,
-                bg: ai.isLive ? const Color(0xFFDDF2E3) : T.amber.withValues(alpha: 0.28),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Text(
-            ai.isLive
-                ? 'Model ${ai.modelLabel} was selected automatically from the available free-tier models that accept text and images.'
-                : '${(ai.failure ?? AiFailure.noKey).label}. ${(ai.failure ?? AiFailure.noKey).hint}',
-            style: Type.body(p).copyWith(color: p.textSecondary),
-          ),
-          const SizedBox(height: T.s16),
-          CupertinoTextField(
-            controller: _controller,
-            obscureText: _hidden,
-            autocorrect: false,
-            enableSuggestions: false,
-            placeholder: 'AIza…',
-            placeholderStyle: Type.body(p).copyWith(color: p.textSecondary),
-            style: Type.body(p),
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-            cursorColor: p.primaryFill,
-            decoration: BoxDecoration(
-              color: p.fieldBg,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: p.divider),
-            ),
-          ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              Expanded(
-                child: PrimaryButton(
-                  label: ai.keyFromDevice ? 'Replace key' : 'Save key',
-                  icon: Ic.check,
-                  busy: _busy,
-                  onPressed: _busy ? null : _save,
-                ),
-              ),
-              const SizedBox(width: 10),
-              IconTap(
-                path: Ic.eye,
-                label: _hidden ? 'Show key' : 'Hide key',
-                onPressed: () => setState(() => _hidden = !_hidden),
-              ),
-              const SizedBox(width: 6),
-              IconTap(
-                path: Ic.close,
-                label: 'Paste key',
-                onPressed: _busy ? null : _paste,
-              ),
-            ],
-          ),
-          if (ai.keyFromDevice) ...[
-            const SizedBox(height: 10),
-            SecondaryButton(
-              label: 'Remove key from this device',
-              icon: Ic.trash,
-              onPressed: _busy ? null : _clear,
-            ),
-          ],
-          const SizedBox(height: 10),
-          Text(
-            'Testing only — the key is stored in plaintext on this device. '
-            'Remove it before shipping a build.',
-            style: Type.footnote(p).copyWith(color: p.textSecondary),
-          ),
-        ],
-      ),
-    );
-  }
-
   Future<void> _clear() async {
     setState(() => _busy = true);
-    await AppScope.read(context).clearAiKey();
+    await AppScope.read(context).clearAiKeyFor(widget.provider);
     if (!mounted) return;
     setState(() {
       _busy = false;
       _controller.clear();
     });
+  }
+
+  Future<void> _test() async {
+    setState(() => _busy = true);
+    await AppScope.read(context).recheckAi();
+    if (!mounted) return;
+    setState(() => _busy = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.p;
+    final store = AppScope.of(context);
+    final status = store.ai.statusFor(widget.provider);
+
+    final String subtitle;
+    final String chipLabel;
+    final Color chipFg;
+    final Color chipBg;
+    if (!status.enabled) {
+      subtitle = 'Turned off';
+      chipLabel = 'Off';
+      chipFg = p.textSecondary;
+      chipBg = p.fieldBg;
+    } else if (status.isLive) {
+      subtitle = status.modelLabel ?? 'Connected';
+      chipLabel = 'Live';
+      chipFg = p.success;
+      chipBg = const Color(0xFFDDF2E3);
+    } else if (status.keyConfigured) {
+      subtitle = status.failure?.label ?? 'Key saved';
+      chipLabel = 'Key saved';
+      chipFg = p.warning;
+      chipBg = T.amber.withValues(alpha: 0.28);
+    } else {
+      subtitle = 'No key yet';
+      chipLabel = 'No key';
+      chipFg = p.textSecondary;
+      chipBg = p.fieldBg;
+    }
+
+    return SoftCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          PressScale(
+            onTap: () => setState(() => _expanded = !_expanded),
+            child: Row(
+              children: [
+                Container(
+                  width: 34,
+                  height: 34,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: p.accent.withValues(alpha: 0.12),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Text(
+                    widget.provider.label.substring(0, 1),
+                    style: Type.headline(p).copyWith(color: p.accentText),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(widget.provider.label, style: Type.headline(p)),
+                      const SizedBox(height: 2),
+                      Text(
+                        subtitle,
+                        style: Type.footnote(p)
+                            .copyWith(color: p.textSecondary),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+                StatusChip(
+                  label: chipLabel,
+                  compact: true,
+                  fg: chipFg,
+                  bg: chipBg,
+                ),
+                const SizedBox(width: 8),
+                CupertinoSwitch(
+                  value: status.enabled,
+                  activeTrackColor: p.accent,
+                  onChanged: _busy
+                      ? null
+                      : (v) => store.setAiProviderEnabled(widget.provider, v),
+                ),
+              ],
+            ),
+          ),
+          if (_expanded) ...[
+            const SizedBox(height: T.s16),
+            CupertinoTextField(
+              controller: _controller,
+              obscureText: _hidden,
+              autocorrect: false,
+              enableSuggestions: false,
+              placeholder: widget.provider.keyHint,
+              placeholderStyle: Type.body(p).copyWith(color: p.textSecondary),
+              style: Type.body(p),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+              cursorColor: p.primaryFill,
+              decoration: BoxDecoration(
+                color: p.fieldBg,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: p.divider),
+              ),
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: PrimaryButton(
+                    label: status.keyFromDevice ? 'Replace key' : 'Save key',
+                    icon: Ic.check,
+                    busy: _busy,
+                    onPressed: _busy ? null : _save,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                IconTap(
+                  path: Ic.eye,
+                  label: _hidden ? 'Show key' : 'Hide key',
+                  onPressed: () => setState(() => _hidden = !_hidden),
+                ),
+                const SizedBox(width: 6),
+                IconTap(
+                  path: Ic.close,
+                  label: 'Paste key',
+                  onPressed: _busy ? null : _paste,
+                ),
+              ],
+            ),
+            if (status.keyFromDevice) ...[
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Expanded(
+                    child: SecondaryButton(
+                      label: 'Remove key',
+                      icon: Ic.trash,
+                      onPressed: _busy ? null : _clear,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: SecondaryButton(
+                      label: 'Test connection',
+                      icon: Ic.refresh,
+                      onPressed: _busy ? null : _test,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ],
+        ],
+      ),
+    );
   }
 }
 
@@ -457,9 +636,17 @@ class _PhotoTextAction extends StatelessWidget {
 }
 
 class _EditProfileScreenState extends State<EditProfileScreen> {
-  late final _name = TextEditingController(text: Seed.ownerName);
-  late final _contact = TextEditingController(text: Seed.ownerContact);
+  late final TextEditingController _name;
+  late final TextEditingController _contact;
   bool _picking = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final store = AppScope.read(context);
+    _name = TextEditingController(text: store.ownerName);
+    _contact = TextEditingController(text: Seed.ownerContact);
+  }
 
   Future<void> _pickPhoto() async {
     setState(() => _picking = true);
@@ -501,7 +688,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                           clipBehavior: Clip.none,
                           children: [
                             OwnerAvatar(
-                              initials: 'MD',
+                              initials: initialsOf(store.ownerName),
                               size: 96,
                               photo: store.ownerPhoto,
                             ),
@@ -543,9 +730,17 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                     ),
                   ),
                   const SizedBox(height: T.s24),
-                  _Field(label: 'Full name', controller: _name, icon: Ic.person),
+                  _Field(
+                    label: 'Full name',
+                    controller: _name,
+                    icon: Ic.person,
+                  ),
                   const SizedBox(height: T.s16),
-                  _Field(label: 'Contact', controller: _contact, icon: Ic.phone),
+                  _Field(
+                    label: 'Contact',
+                    controller: _contact,
+                    icon: Ic.phone,
+                  ),
                   const SizedBox(height: T.s16),
                   SoftCard(
                     child: Row(
@@ -591,9 +786,18 @@ class ScaffoldlessNotice {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Ic.svg(Ic.checkCircle, color: context.p.success, size: 40, stroke: 1.9),
+            Ic.svg(
+              Ic.checkCircle,
+              color: context.p.success,
+              size: 40,
+              stroke: 1.9,
+            ),
             const SizedBox(height: 12),
-            Text(message, style: Type.headline(context.p), textAlign: TextAlign.center),
+            Text(
+              message,
+              style: Type.headline(context.p),
+              textAlign: TextAlign.center,
+            ),
             const SizedBox(height: T.s20),
             PrimaryButton(label: 'OK', onPressed: () => dismissSheet(context)),
           ],
@@ -604,7 +808,11 @@ class ScaffoldlessNotice {
 }
 
 class _Field extends StatelessWidget {
-  const _Field({required this.label, required this.controller, required this.icon});
+  const _Field({
+    required this.label,
+    required this.controller,
+    required this.icon,
+  });
   final String label;
   final TextEditingController controller;
   final String icon;
@@ -796,9 +1004,7 @@ class _ThemeRow extends StatelessWidget {
               width: 42,
               height: 42,
               decoration: BoxDecoration(
-                color: selected
-                    ? p.accent.withValues(alpha: 0.14)
-                    : p.fieldBg,
+                color: selected ? p.accent.withValues(alpha: 0.14) : p.fieldBg,
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Center(
@@ -885,9 +1091,7 @@ class HelpScreen extends StatelessWidget {
                   AppScope.read(context).replayOnboarding();
                   Navigator.of(context).push(
                     appRoute(
-                      OnboardingScreen(
-                        onDone: () => dismissSheet(context),
-                      ),
+                      OnboardingScreen(onDone: () => dismissSheet(context)),
                     ),
                   );
                 },
@@ -913,7 +1117,10 @@ class HelpScreen extends StatelessWidget {
                         ],
                       ),
                       const SizedBox(height: 6),
-                      Text(e.$2, style: Type.body(p).copyWith(color: p.textSecondary)),
+                      Text(
+                        e.$2,
+                        style: Type.body(p).copyWith(color: p.textSecondary),
+                      ),
                     ],
                   ),
                 ),
@@ -937,7 +1144,10 @@ class HelpScreen extends StatelessWidget {
             const SizedBox(height: 10),
             Text(a, style: Type.body(context.p), textAlign: TextAlign.center),
             const SizedBox(height: T.s20),
-            PrimaryButton(label: 'Got it', onPressed: () => dismissSheet(context)),
+            PrimaryButton(
+              label: 'Got it',
+              onPressed: () => dismissSheet(context),
+            ),
           ],
         ),
       ),
@@ -1000,7 +1210,10 @@ class FaqScreen extends StatelessWidget {
               children: [
                 Text(faqs[i].$1, style: Type.headline(p)),
                 const SizedBox(height: 6),
-                Text(faqs[i].$2, style: Type.body(p).copyWith(color: p.textSecondary)),
+                Text(
+                  faqs[i].$2,
+                  style: Type.body(p).copyWith(color: p.textSecondary),
+                ),
               ],
             ),
           ),

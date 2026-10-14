@@ -40,12 +40,16 @@ class PrivacyScreen extends StatelessWidget {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Text('Your records, your control', style: Type.headline(p)),
+                              Text(
+                                'Your records, your control',
+                                style: Type.headline(p),
+                              ),
                               const SizedBox(height: 6),
                               Text(
                                 'Pet records, visit notes and orders stay on your account. '
                                 'Export a copy any time, or delete the account and everything in it.',
-                                style: Type.body(p).copyWith(color: p.textSecondary),
+                                style: Type.body(p)
+                                    .copyWith(color: p.textSecondary),
                               ),
                             ],
                           ),
@@ -62,11 +66,12 @@ class PrivacyScreen extends StatelessWidget {
                       children: [
                         RowTile(
                           title: 'Export my data',
-                          subtitle: 'Pets, visits, orders and prescriptions as JSON',
+                          subtitle:
+                              'Pets, visits, orders and prescriptions as JSON',
                           leadingPath: Ic.download,
-                          onTap: () => Navigator.of(context).push(
-                            appRoute(const ExportScreen()),
-                          ),
+                          onTap: () =>
+                              Navigator.of(context)
+                                  .push(appRoute(const ExportScreen())),
                         ),
                       ],
                     ),
@@ -130,7 +135,9 @@ class PrivacyScreen extends StatelessWidget {
     // Prototype behaviour: clear local data and confirm in-app.
     store.clearPets();
     store.orders = [];
-    store.appointments = store.appointments.where((a) => a.status.isActive).toList();
+    store.appointments = store.appointments
+        .where((a) => a.status.isActive)
+        .toList();
     if (!context.mounted) return;
     dismissSheet(context);
     if (!context.mounted) return;
@@ -142,20 +149,27 @@ class PrivacyScreen extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Ic.svg(Ic.checkCircle, color: context.p.success, size: 40, stroke: 1.9),
+            Ic.svg(
+              Ic.checkCircle,
+              color: context.p.success,
+              size: 40,
+              stroke: 1.9,
+            ),
             const SizedBox(height: 12),
-            Text('Account deleted', style: Type.headline(context.p), textAlign: TextAlign.center),
+            Text(
+              'Account deleted',
+              style: Type.headline(context.p),
+              textAlign: TextAlign.center,
+            ),
             const SizedBox(height: 8),
             Text(
               'Your pets, appointments and orders have been removed from this device.',
-              style: Type.body(context.p).copyWith(color: context.p.textSecondary),
+              style: Type.body(context.p)
+                  .copyWith(color: context.p.textSecondary),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: T.s20),
-            PrimaryButton(
-              label: 'OK',
-              onPressed: () => dismissSheet(context),
-            ),
+            PrimaryButton(label: 'OK', onPressed: () => dismissSheet(context)),
           ],
         ),
       ),
@@ -191,12 +205,17 @@ class ExportScreen extends StatelessWidget {
                           children: [
                             Ic.svg(Ic.doc, color: p.accent, size: 20),
                             const SizedBox(width: 10),
-                            Expanded(child: Text('Your export', style: Type.headline(p))),
+                            Expanded(
+                              child: Text(
+                                'Your export',
+                                style: Type.headline(p),
+                              ),
+                            ),
                           ],
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          'A machine-readable copy of everything CarePaws holds for ${Seed.ownerName}. '
+                          'A machine-readable copy of everything CarePaws holds for ${store.ownerName}. '
                           'Generated ${shortDate(store.now)}.',
                           style: Type.body(p).copyWith(color: p.textSecondary),
                         ),
@@ -239,7 +258,12 @@ class ExportScreen extends StatelessWidget {
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Ic.svg(Ic.checkCircle, color: context.p.success, size: 40, stroke: 1.9),
+                          Ic.svg(
+                            Ic.checkCircle,
+                            color: context.p.success,
+                            size: 40,
+                            stroke: 1.9,
+                          ),
                           const SizedBox(height: 12),
                           Text('Copied', style: Type.headline(context.p)),
                           const SizedBox(height: 8),
@@ -269,7 +293,7 @@ class ExportScreen extends StatelessWidget {
   static String _buildJson(AppStore store) {
     final data = {
       'account': {
-        'name': Seed.ownerName,
+        'name': store.ownerName,
         'contact': Seed.ownerContact,
         'exported': isoDay(store.now),
       },
