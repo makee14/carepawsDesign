@@ -426,6 +426,7 @@ class ChatMessage {
     this.petId,
     this.kind = ChatKind.text,
     this.triageSummary,
+    this.imageBytes,
   });
   final String id;
   final String threadId;
@@ -436,9 +437,12 @@ class ChatMessage {
   final String? petId;
   final ChatKind kind;
   final String? triageSummary;
+
+  /// Set for [ChatKind.image]: the downscaled photo bytes. Text stays empty.
+  final Uint8List? imageBytes;
 }
 
-enum ChatKind { text, triageHandoff, system }
+enum ChatKind { text, image, triageHandoff, system }
 
 @immutable
 class Thread {

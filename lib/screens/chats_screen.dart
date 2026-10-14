@@ -114,6 +114,11 @@ class _ThreadRow extends StatelessWidget {
     final p = context.p;
     final msgs = store.thread(thread.id);
     final last = msgs.isEmpty ? null : msgs.last;
+    final lastLabel = last == null
+        ? 'No messages yet'
+        : last.kind == ChatKind.image
+        ? 'Last message: a photo'
+        : 'Last message: ${last.text}';
     final preview = thread.isAi
         ? 'Answers feeding, grooming, vaccines and general care.'
         : (store.offlineNote ??
@@ -121,8 +126,7 @@ class _ThreadRow extends StatelessWidget {
 
     return Semantics(
       button: true,
-      label:
-          '${thread.title}. ${thread.subtitle}. ${last == null ? 'No messages yet' : 'Last message: ${last.text}'}',
+      label: '${thread.title}. ${thread.subtitle}. $lastLabel',
       child: ExcludeSemantics(
         child: PressScale(
           scale: 0.985,

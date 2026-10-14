@@ -4,6 +4,10 @@
          tooling - without it in main, a release build has no network access at
          all and silently falls back to demo-AI mode. -->
     <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- Chat + triage photo input. image_picker requests this at runtime
+         itself for ImageSource.camera; the gallery uses the system photo
+         picker and needs no permission. -->
+    <uses-permission android:name="android.permission.CAMERA"/>
     <application
         android:label="CarePaws"
         android:name="${applicationName}"

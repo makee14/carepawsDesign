@@ -20,6 +20,11 @@ import '../design/tokens.dart';
 /// replacement for [showCupertinoModalPopup] (bottom sheets) and
 /// [showCupertinoDialog] (centered alerts, pass `centered: true` and
 /// `barrierDismissible: false`).
+///
+/// Popups open on the *nearest* navigator ([useRootNavigator] false), not the
+/// root one: [dismissSheet] pops `Navigator.of(context)`, so a sheet parked
+/// on the root navigator would leave its Done button popping the page *under*
+/// the sheet instead of the sheet itself.
 Future<R?> showPopup<R>(
   BuildContext context, {
   required WidgetBuilder builder,
@@ -33,6 +38,7 @@ Future<R?> showPopup<R>(
       barrierDismissible: barrierDismissible,
       barrierLabel: 'Dismiss',
       transitionDuration: Duration.zero,
+      useRootNavigator: false,
       pageBuilder: (ctx, _, _) => Align(
         alignment: centered ? Alignment.center : Alignment.bottomCenter,
         child: builder(ctx),
@@ -43,6 +49,7 @@ Future<R?> showPopup<R>(
     return showCupertinoDialog<R>(
       context: context,
       barrierDismissible: barrierDismissible,
+      useRootNavigator: false,
       builder: builder,
     );
   }
@@ -50,6 +57,7 @@ Future<R?> showPopup<R>(
     context: context,
     barrierColor: const Color(0x66000000),
     barrierDismissible: barrierDismissible,
+    useRootNavigator: false,
     builder: builder,
   );
 }

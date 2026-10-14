@@ -1,4 +1,7 @@
+import 'dart:typed_data';
+
 import 'package:flutter/cupertino.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../app.dart';
 import '../data/clinic.dart';
@@ -8,6 +11,7 @@ import '../design/icons.dart';
 import '../design/theme.dart';
 import '../design/tokens.dart';
 import '../services/ai_service.dart';
+import '../services/photo_store.dart';
 import '../state/app_store.dart';
 import '../widgets/ai_unavailable.dart';
 import '../widgets/common.dart';
@@ -91,7 +95,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
         petName: pet?.name ?? 'your pet',
         species: pet?.breed ?? 'dog',
         question: text,
-        ownerFirstName: store.ownerFirstName,
+        ownerFirstName: _safeFirstName(store),
       );
     } on AiException catch (e) {
       return aiUnavailableText(e.failure);
@@ -99,8 +103,17 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
   }
 
   static String _thanks(AppStore store) {
-    final first = store.ownerFirstName;
+    final first = _safeFirstName(store);
     return first.isEmpty ? 'Thanks' : 'Thanks, $first';
+  }
+
+  /// The registered first name, or '' when there is no usable one. A "name"
+  /// that looks like an email address (the user typed their email into the
+  /// name field) is never used as a name — the copy falls back to a plain
+  /// greeting instead of addressing them by raw email.
+  static String _safeFirstName(AppStore store) {
+    final first = store.ownerFirstName;
+    return first.contains('@') ? '' : first;
   }
 
   Future<void> _send() => _sendText(_input.text.trim());
@@ -131,10 +144,13 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
     final reply = _isAi
         ? await _askAi(store, pet, text)
         : (store.staffOnline()
-              ? '${_thanks(store)} — noted on ${pet?.name ?? 'that'}. I will check the chart and come back '
-                    'to you with a recommendation. If anything changes in the meantime, call the clinic.'
-              : 'Got your message. The clinic team is offline until 9:00 AM, so reply may take a few '
-                    'hours. For anything urgent, call ${Seed.clinicPhone}.');
+              ? '${_thanks(store)}! Got your message about ${pet?.name ?? 'your pet'} — '
+                    'I\'ll check the chart and reply here with a recommendation. '
+                    'If anything changes in the meantime, call the clinic and '
+                    'we\'ll sort it out right away.'
+              : '${_thanks(store)}! Your message is with us — we\'re closed right now '
+                    'and back at 9:00 AM. I\'ll pick this up first thing and reply here. '
+                    'If it\'s urgent, call ${Seed.clinicPhone} any time.');
 
     if (!mounted) return;
     setState(() => _sending = false);
@@ -145,6 +161,131 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
         author: _isAi ? ChatAuthor.ai : ChatAuthor.vetAssistant,
         text: reply,
         at: store.now.add(const Duration(minutes: 1)),
+        petId: pet?.id,
+      ),
+    );
+    _scrollToEnd();
+  }
+
+  /// Photo flow for the clinic thread: source sheet → system picker →
+  /// preview sheet → image message. The AI thread has no photo button.
+  Future<void> _pickPhoto() async {
+    final p = context.p;
+    await showAppSheet(
+      context,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('Add a photo', style: Type.title2(p)),
+            const SizedBox(height: T.s16),
+            SecondaryButton(
+              label: 'Photo library',
+              icon: Ic.image,
+              onPressed: () {
+                dismissSheet(context);
+                _pick(ImageSource.gallery);
+              },
+            ),
+            const SizedBox(height: 8),
+            SecondaryButton(
+              label: 'Camera',
+              icon: Ic.camera,
+              onPressed: () {
+                dismissSheet(context);
+                _pick(ImageSource.camera);
+              },
+            ),
+            const SizedBox(height: T.s16),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pick(ImageSource source) async {
+    final bytes = await PhotoStore.pick(source);
+    if (bytes == null || !mounted) return;
+    await showAppSheet(
+      context,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(T.rCard),
+              child: Image.memory(
+                bytes,
+                height: 260,
+                width: double.infinity,
+                fit: BoxFit.cover,
+              ),
+            ),
+            const SizedBox(height: T.s16),
+            Row(
+              children: [
+                Expanded(
+                  child: SecondaryButton(
+                    label: 'Retake',
+                    onPressed: () {
+                      dismissSheet(context);
+                      _pickPhoto();
+                    },
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: PrimaryButton(
+                    label: 'Send',
+                    icon: Ic.send,
+                    onPressed: () {
+                      dismissSheet(context);
+                      _sendImage(bytes);
+                    },
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: T.s8),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Sends the photo as an image bubble, then the clinic's warm receipt
+  /// reply — mirroring the text auto-reply so a photo never sits unanswered.
+  void _sendImage(Uint8List bytes) {
+    final store = AppScope.read(context);
+    final pet = store.pet(store.pets.firstOrNull?.id ?? '');
+    final at = store.now;
+    store.pushMessage(
+      ChatMessage(
+        id: 'u${at.microsecondsSinceEpoch}',
+        threadId: widget.threadId,
+        author: ChatAuthor.vetAssistant,
+        text: '',
+        kind: ChatKind.image,
+        imageBytes: bytes,
+        at: at,
+        sentByMe: true,
+        petId: pet?.id,
+      ),
+    );
+    _scrollToEnd();
+    final reply = store.staffOnline()
+        ? '${_thanks(store)}! Photo received — I\'ll take a look and get back to you here.'
+        : '${_thanks(store)}! Photo received — we\'re closed right now, but I\'ll '
+            'review it first thing at 9:00 AM and reply here.';
+    store.pushMessage(
+      ChatMessage(
+        id: 'a${at.microsecondsSinceEpoch + 1}',
+        threadId: widget.threadId,
+        author: ChatAuthor.vetAssistant,
+        text: reply,
+        at: at.add(const Duration(minutes: 1)),
         petId: pet?.id,
       ),
     );
@@ -241,6 +382,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
             _Composer(
               controller: _input,
               onSend: _send,
+              onPickPhoto: _isAi ? null : _pickPhoto,
               hint: _isAi
                   ? 'Ask about feeding, grooming or vaccines'
                   : 'Message the clinic team',
@@ -562,6 +704,54 @@ class _Bubble extends StatelessWidget {
     }
 
     final fromAi = message.author == ChatAuthor.ai;
+    final mineLabel = mine
+        ? 'You'
+        : fromAi
+        ? 'CarePaws AI'
+        : _roleName(message.author);
+
+    if (message.kind == ChatKind.image && message.imageBytes != null) {
+      final radius = BorderRadius.only(
+        topLeft: const Radius.circular(18),
+        topRight: const Radius.circular(18),
+        bottomLeft: Radius.circular(mine ? 18 : 5),
+        bottomRight: Radius.circular(mine ? 5 : 18),
+      );
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 10),
+        child: Column(
+          crossAxisAlignment: mine
+              ? CrossAxisAlignment.end
+              : CrossAxisAlignment.start,
+          children: [
+            _authorTag(p, mine, fromAi),
+            Semantics(
+              label: '$mineLabel sent a photo',
+              child: ExcludeSemantics(
+                child: Container(
+                  constraints: const BoxConstraints(
+                    maxWidth: 260,
+                    maxHeight: 320,
+                  ),
+                  decoration: BoxDecoration(
+                    borderRadius: radius,
+                    border: Border.all(
+                      color: mine ? p.primaryFill : p.divider,
+                    ),
+                  ),
+                  clipBehavior: Clip.antiAlias,
+                  child: Image.memory(
+                    message.imageBytes!,
+                    fit: BoxFit.cover,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
     final bg = mine
         ? p.primaryFill
         : fromAi
@@ -576,31 +766,9 @@ class _Bubble extends StatelessWidget {
             ? CrossAxisAlignment.end
             : CrossAxisAlignment.start,
         children: [
-          if (!mine)
-            Padding(
-              padding: const EdgeInsets.only(left: 4, bottom: 4),
-              child: Row(
-                children: [
-                  if (fromAi)
-                    Ic.svg(Ic.sparkle, color: p.accent, size: 13, stroke: 2.2)
-                  else
-                    Ic.svg(Ic.chat, color: p.textSecondary, size: 13),
-                  const SizedBox(width: 5),
-                  Text(
-                    fromAi ? 'CarePaws AI' : _roleName(message.author),
-                    style: Type.caption(p)
-                        .copyWith(fontWeight: FontWeight.w700),
-                  ),
-                ],
-              ),
-            ),
+          _authorTag(p, mine, fromAi),
           Semantics(
-            label:
-                '${mine
-                    ? 'You'
-                    : fromAi
-                    ? 'CarePaws AI'
-                    : _roleName(message.author)} said: ${message.text}',
+            label: '$mineLabel said: ${message.text}',
             child: ExcludeSemantics(
               child: Container(
                 constraints: const BoxConstraints(maxWidth: 320),
@@ -636,6 +804,28 @@ class _Bubble extends StatelessWidget {
     ChatAuthor.groomer => 'Ana · Groomer',
     ChatAuthor.ai => 'CarePaws AI',
   };
+
+  /// The "Miguel · Vet Assistant" tag above incoming bubbles. Shared by the
+  /// text and image bubble layouts.
+  Widget _authorTag(AppPalette p, bool mine, bool fromAi) {
+    if (mine) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(left: 4, bottom: 4),
+      child: Row(
+        children: [
+          if (fromAi)
+            Ic.svg(Ic.sparkle, color: p.accent, size: 13, stroke: 2.2)
+          else
+            Ic.svg(Ic.chat, color: p.textSecondary, size: 13),
+          const SizedBox(width: 5),
+          Text(
+            fromAi ? 'CarePaws AI' : _roleName(message.author),
+            style: Type.caption(p).copyWith(fontWeight: FontWeight.w700),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _Composer extends StatelessWidget {
@@ -643,11 +833,15 @@ class _Composer extends StatelessWidget {
     required this.controller,
     required this.onSend,
     required this.hint,
+    this.onPickPhoto,
   });
 
   final TextEditingController controller;
   final VoidCallback onSend;
   final String hint;
+
+  /// Null hides the photo button (the AI thread is text-only).
+  final VoidCallback? onPickPhoto;
 
   @override
   Widget build(BuildContext context) {
@@ -667,6 +861,34 @@ class _Composer extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
+          if (onPickPhoto != null) ...[
+            Semantics(
+              button: true,
+              label: 'Attach a photo',
+              child: ExcludeSemantics(
+                child: PressScale(
+                  onTap: onPickPhoto,
+                  child: Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: p.fieldBg,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Center(
+                      child: Ic.svg(
+                        Ic.image,
+                        color: p.textSecondary,
+                        size: 20,
+                        stroke: 2.1,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+          ],
           Expanded(
             child: CupertinoTextField(
               controller: controller,
