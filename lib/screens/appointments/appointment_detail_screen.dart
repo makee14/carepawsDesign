@@ -52,7 +52,9 @@ class AppointmentDetailScreen extends StatelessWidget {
                   icon: Ic.gift,
                   compact: true,
                   fg: p.warning,
-                  bg: const Color(0xFFFDE3C7),
+                  bg: p.isDark
+                      ? T.amber.withValues(alpha: 0.16)
+                      : const Color(0xFFFDE3C7),
                 ),
               ),
             ),

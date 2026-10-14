@@ -305,12 +305,16 @@ class UpcomingCard extends StatelessWidget {
                 Positioned(
                   left: 14,
                   top: 12,
+                  // The chip floats over the (always light) PetArt hero band,
+                  // so it always uses the light pair — the dark pair is
+                  // light-on-light there (1.1:1). Same principle as the home
+                  // hero's solid cream pill.
                   child: StatusChip(
                     label: a.status.label,
                     icon: statusIcon(a.status),
                     compact: true,
-                    fg: statusFg(a.status, p.isDark),
-                    bg: statusBg(a.status, p.isDark),
+                    fg: statusFg(a.status, false),
+                    bg: statusBg(a.status, false),
                   ),
                 ),
               ],

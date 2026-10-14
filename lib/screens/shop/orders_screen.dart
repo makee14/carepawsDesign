@@ -54,9 +54,11 @@ class _OrderCard extends StatelessWidget {
     final store = AppScope.of(context);
     final p = context.p;
     final cancelled = order.status == OrderStatus.cancelled;
-    final refundable = !cancelled &&
+    final refundable =
+        !cancelled &&
         !order.refunded &&
-        (order.status == OrderStatus.paid || order.status == OrderStatus.pendingPayment);
+        (order.status == OrderStatus.paid ||
+            order.status == OrderStatus.pendingPayment);
 
     return SoftCard(
       padding: EdgeInsets.zero,
@@ -117,9 +119,16 @@ class _OrderCard extends StatelessWidget {
                       bg: order.refunded
                           ? T.amber.withValues(alpha: 0.24)
                           : switch (order.status) {
-                              OrderStatus.paid => const Color(0xFFDDF2E3),
-                              OrderStatus.pendingPayment => T.amber.withValues(alpha: 0.28),
-                              OrderStatus.pickedUp => T.amber.withValues(alpha: 0.24),
+                              OrderStatus.paid =>
+                                p.isDark
+                                    ? p.success.withValues(alpha: 0.12)
+                                    : const Color(0xFFDDF2E3),
+                              OrderStatus.pendingPayment => T.amber.withValues(
+                                alpha: 0.28,
+                              ),
+                              OrderStatus.pickedUp => T.amber.withValues(
+                                alpha: 0.24,
+                              ),
                               OrderStatus.cancelled => const Color(0x1FDC2626),
                             },
                     ),
@@ -136,7 +145,11 @@ class _OrderCard extends StatelessWidget {
                     padding: const EdgeInsets.only(bottom: 4),
                     child: Row(
                       children: [
-                        ProductArt(art: store.productOf(l.productId).art, radius: 8, size: 30),
+                        ProductArt(
+                          art: store.productOf(l.productId).art,
+                          radius: 8,
+                          size: 30,
+                        ),
                         const SizedBox(width: 9),
                         Expanded(
                           child: Text(
@@ -160,9 +173,8 @@ class _OrderCard extends StatelessWidget {
                 child: _Action(
                   label: 'Receipt',
                   icon: Ic.doc,
-                  onTap: () => Navigator.of(context).push(
-                    appRoute(OrderSuccessScreen(orderId: order.id)),
-                  ),
+                  onTap: () => Navigator.of(context)
+                      .push(appRoute(OrderSuccessScreen(orderId: order.id))),
                 ),
               ),
               if (refundable) ...[

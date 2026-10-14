@@ -336,7 +336,11 @@ class ProfileScreen extends StatelessWidget {
                                 ? context.p.success
                                 : context.p.destructive,
                             bg: rx.activeAt(store.now)
-                                ? const Color(0xFFDDF2E3)
+                                ? (context.p.isDark
+                                      ? context.p.success.withValues(
+                                          alpha: 0.12,
+                                        )
+                                      : const Color(0xFFDDF2E3))
                                 : const Color(0x1FDC2626),
                           ),
                         ],

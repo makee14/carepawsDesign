@@ -93,7 +93,9 @@ class AppPalette {
     divider: Color(0x1FFFFFFF),
     destructive: Color(0xFFFF8A80),
     success: Color(0xFF7BD88F),
-    warning: Color(0xFFF4AE52),
+    // Brightened from #F4AE52: warning text on the amber-tint chips
+    // (countdown, "Key saved") was 4.26:1, now 5.16:1.
+    warning: Color(0xFFFFC46B),
     glassTint: Color(0xD9261D18),
     glassBorder: Color(0x33FFFFFF),
     glassShadow: Color(0x66000000),
@@ -106,8 +108,7 @@ class AppPalette {
 }
 
 extension PaletteX on BuildContext {
-  AppPalette get p =>
-      CupertinoTheme.of(this).brightness == Brightness.dark
+  AppPalette get p => CupertinoTheme.of(this).brightness == Brightness.dark
       ? AppPalette.dark
       : AppPalette.light;
 }
@@ -179,32 +180,90 @@ CupertinoThemeData themeFor(AppPalette p) {
 /// Regular, Caption 1 12 Medium, Caption 2 11 Regular.
 class Type {
   const Type._();
-  static TextStyle largeTitle(AppPalette p) =>
-      TextStyle(fontSize: 34, fontWeight: FontWeight.w700, color: p.title, letterSpacing: -0.6, height: 1.12);
-  static TextStyle title1(AppPalette p) =>
-      TextStyle(fontSize: 28, fontWeight: FontWeight.w700, color: p.title, letterSpacing: -0.4, height: 1.16);
-  static TextStyle title2(AppPalette p) =>
-      TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: p.title, height: 1.2);
-  static TextStyle title3(AppPalette p) =>
-      TextStyle(fontSize: 20, fontWeight: FontWeight.w600, color: p.title, height: 1.25);
-  static TextStyle headline(AppPalette p) =>
-      TextStyle(fontSize: 17, fontWeight: FontWeight.w600, color: p.text, height: 1.28);
-  static TextStyle body(AppPalette p) =>
-      TextStyle(fontSize: 17, fontWeight: FontWeight.w400, color: p.text, height: 1.42);
-  static TextStyle callout(AppPalette p) =>
-      TextStyle(fontSize: 16, fontWeight: FontWeight.w400, color: p.text, height: 1.35);
-  static TextStyle subheadline(AppPalette p) =>
-      TextStyle(fontSize: 15, fontWeight: FontWeight.w400, color: p.text, height: 1.35);
-  static TextStyle footnote(AppPalette p) =>
-      TextStyle(fontSize: 13, fontWeight: FontWeight.w400, color: p.textSecondary, height: 1.35);
-  static TextStyle footnoteEmph(AppPalette p) =>
-      TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: p.text, height: 1.35);
-  static TextStyle caption(AppPalette p) =>
-      TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: p.textSecondary, height: 1.3);
-  static TextStyle caption2(AppPalette p) =>
-      TextStyle(fontSize: 11, fontWeight: FontWeight.w400, color: p.textSecondary, height: 1.3);
-  static TextStyle captionEmph(AppPalette p) =>
-      TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: p.textSecondary, height: 1.3);
-  static TextStyle button(AppPalette p) =>
-      TextStyle(fontSize: 17, fontWeight: FontWeight.w600, color: p.onPrimaryFill, height: 1.2);
+  static TextStyle largeTitle(AppPalette p) => TextStyle(
+    fontSize: 34,
+    fontWeight: FontWeight.w700,
+    color: p.title,
+    letterSpacing: -0.6,
+    height: 1.12,
+  );
+  static TextStyle title1(AppPalette p) => TextStyle(
+    fontSize: 28,
+    fontWeight: FontWeight.w700,
+    color: p.title,
+    letterSpacing: -0.4,
+    height: 1.16,
+  );
+  static TextStyle title2(AppPalette p) => TextStyle(
+    fontSize: 22,
+    fontWeight: FontWeight.w700,
+    color: p.title,
+    height: 1.2,
+  );
+  static TextStyle title3(AppPalette p) => TextStyle(
+    fontSize: 20,
+    fontWeight: FontWeight.w600,
+    color: p.title,
+    height: 1.25,
+  );
+  static TextStyle headline(AppPalette p) => TextStyle(
+    fontSize: 17,
+    fontWeight: FontWeight.w600,
+    color: p.text,
+    height: 1.28,
+  );
+  static TextStyle body(AppPalette p) => TextStyle(
+    fontSize: 17,
+    fontWeight: FontWeight.w400,
+    color: p.text,
+    height: 1.42,
+  );
+  static TextStyle callout(AppPalette p) => TextStyle(
+    fontSize: 16,
+    fontWeight: FontWeight.w400,
+    color: p.text,
+    height: 1.35,
+  );
+  static TextStyle subheadline(AppPalette p) => TextStyle(
+    fontSize: 15,
+    fontWeight: FontWeight.w400,
+    color: p.text,
+    height: 1.35,
+  );
+  static TextStyle footnote(AppPalette p) => TextStyle(
+    fontSize: 13,
+    fontWeight: FontWeight.w400,
+    color: p.textSecondary,
+    height: 1.35,
+  );
+  static TextStyle footnoteEmph(AppPalette p) => TextStyle(
+    fontSize: 13,
+    fontWeight: FontWeight.w600,
+    color: p.text,
+    height: 1.35,
+  );
+  static TextStyle caption(AppPalette p) => TextStyle(
+    fontSize: 12,
+    fontWeight: FontWeight.w500,
+    color: p.textSecondary,
+    height: 1.3,
+  );
+  static TextStyle caption2(AppPalette p) => TextStyle(
+    fontSize: 11,
+    fontWeight: FontWeight.w400,
+    color: p.textSecondary,
+    height: 1.3,
+  );
+  static TextStyle captionEmph(AppPalette p) => TextStyle(
+    fontSize: 12,
+    fontWeight: FontWeight.w700,
+    color: p.textSecondary,
+    height: 1.3,
+  );
+  static TextStyle button(AppPalette p) => TextStyle(
+    fontSize: 17,
+    fontWeight: FontWeight.w600,
+    color: p.onPrimaryFill,
+    height: 1.2,
+  );
 }

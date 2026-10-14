@@ -1011,7 +1011,9 @@ class EmergencyTriageView extends StatelessWidget {
                           compact: true,
                           fg: open ? p.success : p.destructive,
                           bg: open
-                              ? const Color(0xFFDDF2E3)
+                              ? (p.isDark
+                                    ? p.success.withValues(alpha: 0.12)
+                                    : const Color(0xFFDDF2E3))
                               : p.destructive.withValues(alpha: 0.12),
                         ),
                       ],
