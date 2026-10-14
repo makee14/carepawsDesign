@@ -123,7 +123,7 @@ class ProfileScreen extends StatelessWidget {
                         title: 'My orders',
                         subtitle: store.orders.isEmpty
                             ? 'No orders yet'
-                            : '${store.orders.length} orders · ${peso(store.orders.fold(0.0, (a, o) => a + o.total))} lifetime',
+                            : '${store.orders.length} order${store.orders.length == 1 ? '' : 's'} · ${peso(store.orders.fold(0.0, (a, o) => a + o.total))} lifetime',
                         leadingPath: Ic.bag,
                         onTap: () =>
                             Navigator.of(context)
