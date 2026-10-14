@@ -22,7 +22,7 @@ class NotificationsScreen extends StatelessWidget {
       backgroundColor: p.background,
       navigationBar: DetailNavBar(
         title: 'Notifications',
-        showBack: false,
+        showBack: true,
         actions: [
           if (store.unreadNotifications > 0)
             CupertinoButton(

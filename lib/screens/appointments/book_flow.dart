@@ -217,11 +217,11 @@ class _BookFlowState extends State<BookFlow> {
                   _ => Ic.arrowRight,
                 },
                 busy: _confirming,
-                // Step 6 (index 5) is the confirmation: Done dismisses the
-                // flow. Previously there was no button and no back affordance
-                // here, trapping the user on the confirmation screen.
+                // Step 6 (index 5) is the confirmation: Done lands on the
+                // Appointments tab, the section the booking belongs to —
+                // not wherever the flow was opened from.
                 onPressed: _step == 5
-                    ? () => dismissSheet(context)
+                    ? () => doneToTab(context, 2)
                     : (_canContinue() ? _next : null),
               )),
           ],

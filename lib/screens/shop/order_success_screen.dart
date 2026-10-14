@@ -157,8 +157,7 @@ class OrderSuccessScreen extends StatelessWidget {
                   const SizedBox(height: 8),
                   SecondaryButton(
                     label: 'Done',
-                    onPressed: () =>
-                        Navigator.of(context).popUntil((r) => r.isFirst),
+                    onPressed: () => doneToTab(context, 3),
                   ),
                 ],
               ),

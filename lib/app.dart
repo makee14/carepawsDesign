@@ -702,6 +702,15 @@ void dismissSheet(BuildContext context) {
   }
 }
 
+/// Completes a flow: switches to the given tab, then pops to that tab's
+/// root. Done buttons use this (not bare dismiss) so the user lands in the
+/// section the flow belongs to — booking → Appointments, order → Shop —
+/// instead of wherever the flow happened to be opened from.
+void doneToTab(BuildContext context, int tab) {
+  AppScope.read(context).tab = tab;
+  Navigator.of(context).popUntil((r) => r.isFirst);
+}
+
 class _AppSheet extends StatelessWidget {
   const _AppSheet({required this.child, required this.scrollable});
 
