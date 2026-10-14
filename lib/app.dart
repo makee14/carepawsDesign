@@ -146,9 +146,9 @@ class _SplashScreenState extends State<SplashScreen>
               child: Column(
                 children: [
                   // Optical centering: the hero sits at the true screen
-                  // centre (8:5 split of the free space compensates the
+                  // centre (11:8 split of the free space compensates the
                   // bottom CTA block) instead of floating high.
-                  const Spacer(flex: 8),
+                  const Spacer(flex: 11),
                   // Staggered arrival: mark, wordmark, then tagline. Each piece
                   // waits on the one before it so the screen assembles instead
                   // of appearing all at once.
@@ -156,7 +156,7 @@ class _SplashScreenState extends State<SplashScreen>
                     children: [
                       FadeIn(
                         duration: Motion.slow,
-                        child: _LoopingLogo(loop: _loop, size: 132),
+                        child: _LoopingLogo(loop: _loop, size: 152),
                       ),
                       const SizedBox(height: T.s24),
                       FadeIn(
@@ -183,7 +183,7 @@ class _SplashScreenState extends State<SplashScreen>
                       ),
                     ],
                   ),
-                  const Spacer(flex: 5),
+                  const Spacer(flex: 8),
                   FadeIn(
                     index: 4,
                     child: SizedBox(
@@ -209,11 +209,11 @@ class _SplashScreenState extends State<SplashScreen>
   }
 }
 
-/// The CarePaws logo mark — the launcher icon artwork itself, rendered from
-/// the byte-identical SVG string as tool/icon/app_icon.svg (see
-/// [Ic.launcherArtwork]). The in-app logo and the app icon are one and the
-/// same mark by construction: gradient, squircle and artwork shared.
-/// Used on splash and auth only, per the one-mark rule.
+/// The CarePaws logo mark — the badge alone (dog + cat heads, heart in
+/// negative space), rendered from [Ic.badgeArtwork]. Per the one-mark rule
+/// the mark appears alone: no tile, no wordmark. It is the same badge as
+/// the launcher icon's, so in-app logo and app icon stay one mark.
+/// Used on splash and auth only.
 class LogoMark extends StatelessWidget {
   const LogoMark({super.key, this.size = 120});
   final double size;
@@ -225,7 +225,7 @@ class LogoMark extends StatelessWidget {
       label: 'CarePaws Veterinary Clinic logo',
       child: SizedBox.square(
         dimension: size,
-        child: Ic.launcherIcon(size: size),
+        child: Ic.badgeIcon(size: size),
       ),
     );
   }
