@@ -14,6 +14,21 @@ import 'package:petcare_artifact/services/ai_service.dart';
 /// The key is never stored in the repository — the only place it can appear is
 /// `lib/services/ai_service.dart` as a build-time constant.
 void main() {
+  // No network needed: with no key the service must be honestly unavailable.
+  group('Unavailable without a key', () {
+    test('bootstrap reports noKey and requests throw it', () async {
+      final ai = AiService();
+      addTearDown(ai.dispose);
+      await ai.bootstrap();
+      expect(ai.status, AiStatus.unavailable);
+      expect(ai.failure, AiFailure.noKey);
+      await expectLater(
+        ai.chat(petName: 'Biscuit', species: 'dog', question: 'hi'),
+        throwsA(isA<AiException>().having((e) => e.failure, 'failure', AiFailure.noKey)),
+      );
+    });
+  });
+
   final hasKey = geminiApiKey.isNotEmpty &&
       geminiApiKey != 'YOUR_GEMINI_API_KEY' &&
       geminiApiKey.length > 20;
@@ -27,7 +42,7 @@ void main() {
       final ai = AiService();
       await ai.bootstrap();
       expect(ai.status, AiStatus.live, reason: 'should reach live mode');
-      expect(ai.isDemo, isFalse);
+      expect(ai.isUnavailable, isFalse);
       expect(ai.modelId, isNotNull);
       expect(ai.modelId, isNotEmpty);
       // A full flash-family model is preferred over lite/preview/aliases.
@@ -116,29 +131,14 @@ void main() {
   });
 
   group('Fallback behaviour', () {
-    test('an unreachable API degrades to demo mode without throwing', () async {
-      final ai = AiService(timeout: const Duration(milliseconds: 300));
-      // Point the service at a dead host by overriding the key with garbage.
-      final broken = AiService();
-      // The real service still succeeds; assert the demo responder instead.
-      final demo = DemoAi.triage(
-        'Biscuit is struggling to breathe',
-        petName: 'Biscuit',
-        species: 'dog',
-        hasPhoto: false,
-      );
-      expect(demo.route, TriageRoute.emergency);
-      broken.dispose();
-      ai.dispose();
-    });
-
-    test('demo responder covers all four routes', () {
-      TriageResult run(String s) =>
-          DemoAi.triage(s, petName: 'Biscuit', species: 'dog', hasPhoto: false);
-      expect(run('he collapsed and cannot breathe').route, TriageRoute.emergency);
-      expect(run('he is vomiting').route, TriageRoute.book);
-      expect(run('how often should I brush him').route, TriageRoute.homeCare);
-      expect(run('something looks different').route, TriageRoute.chat);
+    test('an unreachable API surfaces unreachable instead of a canned answer', () async {
+      // A 1ms timeout guarantees the request cannot complete; the service
+      // must report unreachable, never guess.
+      final ai = AiService(timeout: const Duration(milliseconds: 1));
+      addTearDown(ai.dispose);
+      await ai.bootstrap();
+      expect(ai.status, AiStatus.unavailable);
+      expect(ai.failure, AiFailure.unreachable);
     });
   });
 }

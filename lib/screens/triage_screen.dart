@@ -2,9 +2,9 @@ import 'dart:typed_data';
 
 import 'package:flutter/cupertino.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../app.dart';
+import '../data/clinic.dart';
 import '../data/models.dart';
 import '../data/seed.dart';
 import '../design/icons.dart';
@@ -12,9 +12,12 @@ import '../design/theme.dart';
 import '../design/tokens.dart';
 import '../services/ai_service.dart';
 import '../state/app_store.dart';
+import '../widgets/ai_unavailable.dart';
 import '../widgets/common.dart';
+import 'add_pet_screen.dart';
 import 'appointments/book_flow.dart';
 import 'chat_thread_screen.dart';
+import 'profile/settings_screens.dart';
 
 enum TriageEntry { home, aiChat, booking }
 
@@ -34,7 +37,7 @@ class TriageScreen extends StatefulWidget {
 
   /// When provided (Book step 2), the result is returned instead of pushing a
   /// result screen, and "Skip triage" is offered.
-  final void Function(TriageResult result)? onComplete;
+  final void Function(TriageResult? result)? onComplete;
   final bool showSkip;
 
   @override
@@ -50,16 +53,22 @@ class _TriageScreenState extends State<TriageScreen> {
   String? _photoMime;
   bool _picking = false;
 
+  /// Set when a request fails after the input view was already shown — the
+  /// card replaces the form's top slot so the failure is never a dead end.
+  AiFailure? _aiFailure;
+
+  /// The pet this check is for. Set from [TriageScreen.preselectedPetId] when an
+  /// entry point already knows the pet; otherwise the AI identifies the pet
+  /// from the description at submit time (never a manual picker).
+  ///
+  /// True when the AI could not determine which pet the concern is about —
+  /// the result view then offers an honest disambiguation instead of guessing.
+  bool _ambiguousPet = false;
+
   @override
   void initState() {
     super.initState();
     _petId = widget.preselectedPetId;
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    _petId ??= AppScope.of(context).pets.firstOrNull?.id;
   }
 
   @override
@@ -88,8 +97,10 @@ class _TriageScreenState extends State<TriageScreen> {
       // No camera / gallery available (desktop, simulator without photos).
       // Never a dead end: the text-only path continues identically.
       if (!mounted) return;
-      await showCupertinoDialog<void>(
-        context: context,
+      await showPopup<void>(
+        context,
+        centered: true,
+        barrierDismissible: false,
         builder: (ctx) => CupertinoAlertDialog(
           title: const Text('Photos unavailable here'),
           content: const Padding(
@@ -115,22 +126,76 @@ class _TriageScreenState extends State<TriageScreen> {
 
   Future<void> _submit() async {
     final store = AppScope.read(context);
-    final pet = store.pet(_petId ?? '');
-    if (pet == null) return;
-    setState(() => _busy = true);
-    final result = await store.ai.triage(
-      petName: pet.name,
-      species: pet.breed,
-      text: _text.text.trim(),
-      photo: _photo,
-      photoMime: _photoMime,
-    );
+    setState(() {
+      _busy = true;
+      _aiFailure = null;
+      _ambiguousPet = false;
+    });
+    TriageResult result;
+    String? petId = _petId;
+    try {
+      if (petId != null) {
+        final pet = store.pet(petId);
+        if (pet == null) return;
+        result = await store.ai.triage(
+          petName: pet.name,
+          species: pet.breed,
+          text: _text.text.trim(),
+          photo: _photo,
+          photoMime: _photoMime,
+          ownerFirstName: store.ownerFirstName,
+        );
+      } else {
+        // No entry point knew the pet: the AI identifies it from the
+        // description (never a manual picker).
+        final detected = await store.ai.triageDetect(
+          pets: store.pets,
+          text: _text.text.trim(),
+          photo: _photo,
+          photoMime: _photoMime,
+          ownerFirstName: store.ownerFirstName,
+        );
+        result = detected.result;
+        petId = _matchPetId(store, detected.petName);
+        if (petId == null) {
+          // The AI honestly could not tell which pet this is about — show the
+          // result with a disambiguation step instead of guessing.
+          if (!mounted) return;
+          setState(() {
+            _busy = false;
+            _result = result;
+            _ambiguousPet = true;
+          });
+          return;
+        }
+      }
+    } on AiException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _busy = false;
+        _aiFailure = e.failure;
+      });
+      return;
+    }
     if (!mounted) return;
     setState(() {
       _busy = false;
       _result = result;
+      _petId = petId;
     });
     successHaptic();
+  }
+
+  /// Matches the model's pet name against the roster (case-insensitive).
+  /// Returns null when the model could not determine the pet or no roster pet
+  /// matches — the UI then asks honestly instead of guessing.
+  String? _matchPetId(AppStore store, String? petName) {
+    final name = petName?.trim();
+    if (name == null || name.isEmpty) return null;
+    return store.pets
+        .where((p) => p.name.toLowerCase() == name.toLowerCase())
+        .firstOrNull
+        ?.id;
   }
 
   @override
@@ -145,18 +210,13 @@ class _TriageScreenState extends State<TriageScreen> {
       navigationBar: DetailNavBar(
         title: 'AI Health Check',
         showBack: true,
-        actions: [
-          if (store.ai.isDemo)
-            const Padding(
-              padding: EdgeInsets.only(right: 6),
-              child: Center(child: DemoAiBadge(compact: true)),
-            ),
-        ],
       ),
       child: SafeArea(
         child: result == null
             ? _input(store, pet)
-            : _resultView(store, result, pet),
+            : _ambiguousPet
+                ? _disambiguate(store)
+                : _resultView(store, result, pet),
       ),
     );
   }
@@ -164,7 +224,39 @@ class _TriageScreenState extends State<TriageScreen> {
   // ------------------------------------------------------------ input view
   Widget _input(AppStore store, Pet? pet) {
     final p = context.p;
+    // No pets on file: the check needs a pet to be about. Never a dead end.
+    if (store.pets.isEmpty) {
+      return ListView(
+        padding: const EdgeInsets.fromLTRB(20, 20, 20, 40),
+        children: [
+          GlassCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Add your pet first', style: Type.title1(p)),
+                const SizedBox(height: 8),
+                Text(
+                  'The health check needs a pet to be about. Add one and come back — it takes a minute.',
+                  style: Type.body(p).copyWith(color: p.textSecondary),
+                ),
+                const SizedBox(height: 16),
+                PrimaryButton(
+                  label: 'Add a pet',
+                  onPressed: () => Navigator.of(context).push(
+                    appRoute(const AddPetScreen()),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      );
+    }
     final canSubmit = !_busy && (_text.text.trim().isNotEmpty || _photo != null);
+    // Bootstrap state (no key / unreachable / API error) and a request that
+    // just failed both land here — one card, never a dead end.
+    final failure =
+        _aiFailure ?? (store.ai.status == AiStatus.unavailable ? store.ai.failure ?? AiFailure.noKey : null);
     return ListView(
       padding: EdgeInsets.fromLTRB(
         20,
@@ -173,13 +265,20 @@ class _TriageScreenState extends State<TriageScreen> {
         120 + MediaQuery.paddingOf(context).bottom,
       ),
       children: [
-        if (store.ai.isDemo) ...[
-          const DemoAiBadge(),
-          const SizedBox(height: 10),
-          Text(
-            'Running the built-in responder. Add a GEMINI_API_KEY to run live model checks — '
-            'every route below behaves identically either way.',
-            style: Type.footnote(p),
+        if (failure != null) ...[
+          AiUnavailableCard(
+            failure: failure,
+            onOpenSettings: () => Navigator.of(context).push(
+              appRoute(const AiSettingsScreen()),
+            ),
+            onBook: widget.onComplete == null
+                ? () => Navigator.of(context).push(appRoute(const BookFlow()))
+                : null,
+            onCall: () => callPhoneNumber(
+              context,
+              number: Clinic.phone,
+              name: Clinic.name,
+            ),
           ),
           const SizedBox(height: T.s16),
         ],
@@ -188,22 +287,16 @@ class _TriageScreenState extends State<TriageScreen> {
           style: Type.body(p).copyWith(color: p.textSecondary),
         ),
         const SizedBox(height: T.s20),
-        Text('Which pet?', style: Type.headline(p)),
-        const SizedBox(height: 10),
-        SizedBox(
-          height: 140,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            itemCount: store.pets.length,
-            separatorBuilder: (_, _) => const SizedBox(width: 10),
-            itemBuilder: (context, i) => PetChip(
-              pet: store.pets[i],
-              selected: store.pets[i].id == _petId,
-              onTap: () => setState(() => _petId = store.pets[i].id),
-            ),
+        if (pet != null) ...[
+          _PetContextRow(pet: pet),
+          const SizedBox(height: T.s20),
+        ] else ...[
+          Text(
+            'The AI will identify which pet this is about from your description — no need to pick one.',
+            style: Type.footnote(p).copyWith(color: p.textSecondary),
           ),
-        ),
-        const SizedBox(height: T.s20),
+          const SizedBox(height: T.s20),
+        ],
         Text('Describe the concern', style: Type.headline(p)),
         const SizedBox(height: 4),
         Text(
@@ -267,7 +360,9 @@ class _TriageScreenState extends State<TriageScreen> {
           label: 'Run health check',
           icon: Ic.sparkle,
           busy: _busy,
-          onPressed: canSubmit ? _submit : null,
+          // Without a live model the request would only fail: the card above
+          // explains why and offers the alternatives instead.
+          onPressed: canSubmit && store.ai.isLive ? _submit : null,
         ),
         if (widget.showSkip) ...[
           const SizedBox(height: 10),
@@ -276,17 +371,14 @@ class _TriageScreenState extends State<TriageScreen> {
             onPressed: _busy
                 ? null
                 : () {
-                    final r = DemoAi.triage(
-                      '',
-                      petName: pet?.name ?? 'Your pet',
-                      species: pet?.breed ?? 'dog',
-                      hasPhoto: false,
-                    );
-                    if (widget.onComplete != null) {
-                      dismissSheet(context);
-                      widget.onComplete!(r);
+                    // Skipping returns no result — the booking flow treats an
+                    // absent triage as an explicit skip, not as a fake
+                    // outcome. onComplete pops the route exactly once.
+                    final complete = widget.onComplete;
+                    if (complete != null) {
+                      complete(null);
                     } else {
-                      setState(() => _result = r);
+                      Navigator.of(context).pop();
                     }
                   },
           ),
@@ -296,8 +388,53 @@ class _TriageScreenState extends State<TriageScreen> {
   }
 
   // ----------------------------------------------------------- result view
-  Widget _resultView(AppStore store, TriageResult result, Pet? pet) {
-    // Emergency outcome: the call CTA is rendered first, above the fold.
+  /// Shown when the AI could not determine which pet the concern is about.
+  /// An honest note plus pet rows that re-run the check for the chosen pet —
+  /// this only appears after the AI tried, never as the primary input.
+  Widget _disambiguate(AppStore store) {
+    final p = context.p;
+    return ListView(
+      padding: EdgeInsets.fromLTRB(
+        20,
+        20,
+        20,
+        120 + MediaQuery.paddingOf(context).bottom,
+      ),
+      children: [
+        GlassCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Which pet is this about?', style: Type.title1(p)),
+              const SizedBox(height: 8),
+              Text(
+                'I couldn\u2019t tell from your description, so I didn\u2019t guess. '
+                'Pick a pet and I\u2019ll run the check for them.',
+                style: Type.body(p).copyWith(color: p.textSecondary),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: T.s16),
+        for (final pet in store.pets) ...[
+          PressScale(
+            onTap: () {
+              setState(() {
+                _petId = pet.id;
+                _result = null;
+                _ambiguousPet = false;
+              });
+              _submit();
+            },
+            child: _PetContextRow(pet: pet),
+          ),
+          const SizedBox(height: 10),
+        ],
+      ],
+    );
+  }
+
+  Widget _resultView(AppStore store, TriageResult result, Pet? pet) {    // Emergency outcome: the call CTA is rendered first, above the fold.
     if (result.route == TriageRoute.emergency) {
       return EmergencyTriageView(result: result, pet: pet, entry: widget.entry);
     }
@@ -662,7 +799,7 @@ class ChatTriageView extends StatelessWidget {
                 _NoteBox(
                   text: store.staffOnline()
                       ? 'The clinic team is online now and usually replies within 10 minutes.'
-                      : store.offlineNote ?? 'The clinic team replies from 8:00 AM.',
+                      : store.offlineNote ?? 'The clinic team replies during clinic hours.',
                   icon: Ic.clock,
                 ),
                 const SizedBox(height: 12),
@@ -775,50 +912,6 @@ class EmergencyTriageView extends StatelessWidget {
 
   static bool isOpen() => clinicOpenAt(DateTime.now());
 
-  Future<void> _call(BuildContext context, String number, String name) async {
-    final uri = Uri(scheme: 'tel', path: number.replaceAll(' ', ''));
-    var ok = false;
-    try {
-      ok = await launchUrl(uri) ||
-          await launchUrl(uri, mode: LaunchMode.externalApplication);
-    } catch (_) {
-      ok = false;
-    }
-    if (!context.mounted) return;
-    // Desktop / simulators have no tel: handler — show the number instead of
-    // a dead end.
-    if (!ok) {
-      await showAppSheet(
-        context,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(name, style: Type.title2(context.p), textAlign: TextAlign.center),
-              const SizedBox(height: 10),
-              Text(
-                number,
-                style: Type.largeTitle(context.p).copyWith(color: context.p.accentText),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                'Dial this number from your phone. PetCare will reopen at 8:00 AM.',
-                style: Type.footnote(context.p),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: T.s20),
-              PrimaryButton(
-                label: 'Done',
-                onPressed: () => dismissSheet(context),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final store = AppScope.of(context);
@@ -912,7 +1005,7 @@ class EmergencyTriageView extends StatelessWidget {
                     PrimaryButton(
                       label: open ? 'Call the clinic now' : 'Call $name',
                       icon: Ic.phone,
-                      onPressed: () => _call(context, number, name),
+                      onPressed: () => callPhoneNumber(context, number: number, name: name),
                     ),
                   ],
                 ),
@@ -944,7 +1037,7 @@ class EmergencyTriageView extends StatelessWidget {
             label: open ? 'Call the clinic now' : 'Call $name',
             icon: Ic.phone,
             destructive: true,
-            onPressed: () => _call(context, number, name),
+            onPressed: () => callPhoneNumber(context, number: number, name: name),
           )),
       ],
     );
@@ -1011,6 +1104,61 @@ class _NoteBox extends StatelessWidget {
           const SizedBox(width: 9),
           Expanded(child: Text(text, style: Type.footnote(p))),
         ],
+      ),
+    );
+  }
+}
+
+/// Non-interactive context line shown when the entry point already knows the
+/// pet — the AI never asks the user to pick one.
+class _PetContextRow extends StatelessWidget {
+  const _PetContextRow({required this.pet});
+
+  final Pet pet;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.p;
+    return Semantics(
+      label: 'Health check for ${pet.name}',
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: p.surface,
+          borderRadius: BorderRadius.circular(T.rCard),
+          border: Border.all(color: p.divider),
+        ),
+        child: Row(
+          children: [
+            PetArt(
+              seed: pet.id.hashCode.abs() % 4,
+              species: pet.species,
+              radius: 12,
+              iconSize: 34,
+              label: '${pet.name} portrait',
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Checking ${pet.name}',
+                    style: Type.headline(p),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  Text(
+                    pet.breed,
+                    style: Type.footnote(p).copyWith(color: p.textSecondary),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

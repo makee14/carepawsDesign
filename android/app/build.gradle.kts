@@ -29,11 +29,33 @@ android {
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        // Release signing is driven entirely by environment variables so no
+        // secrets ever live in the repo. Set CAREPAWS_KEYSTORE to the absolute
+        // path of the release keystore plus CAREPAWS_KEY_ALIAS,
+        // CAREPAWS_STORE_PASSWORD and CAREPAWS_KEY_PASSWORD before building.
+        create("release") {
+            val ks = System.getenv("CAREPAWS_KEYSTORE")
+            if (!ks.isNullOrBlank()) {
+                storeFile = file(ks)
+                storePassword = System.getenv("CAREPAWS_STORE_PASSWORD")
+                keyAlias = System.getenv("CAREPAWS_KEY_ALIAS")
+                keyPassword = System.getenv("CAREPAWS_KEY_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            // Sign with the release keystore when its env vars are present;
+            // otherwise fall back to the debug key so `flutter build apk`
+            // still runs without secrets (CI builds --debug).
+            val ks = System.getenv("CAREPAWS_KEYSTORE")
+            signingConfig = if (!ks.isNullOrBlank()) {
+                signingConfigs.getByName("release")
+            } else {
+                signingConfigs.getByName("debug")
+            }
         }
     }
 }

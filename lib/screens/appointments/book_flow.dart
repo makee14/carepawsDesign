@@ -2,15 +2,19 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 
 import '../../app.dart';
+import '../../data/clinic.dart';
 import '../../data/models.dart';
 import '../../data/seed.dart';
 import '../../design/icons.dart';
 import '../../design/theme.dart';
 import '../../design/tokens.dart';
+import '../../services/ai_service.dart';
 import '../../state/app_store.dart';
+import '../../widgets/ai_unavailable.dart';
 import '../../widgets/common.dart';
 import '../../widgets/time_of_day.dart';
 import '../triage_screen.dart';
+import '../profile/settings_screens.dart';
 
 /// Six-step booking flow:
 /// 1 Pet → 2 AI Triage → 3 Service → 4 Date & time → 5 Review → 6 Confirm.
@@ -190,7 +194,9 @@ class _BookFlowState extends State<BookFlow> {
         child: Column(
           children: [
             if (_step < 5) _ProgressBar(step: _step, total: steps),
-            Expanded(child: _body(store)),
+            // Keyed per step: otherwise the step ListViews share one
+            // ScrollableState and a new step would open scrolled down.
+            Expanded(child: KeyedSubtree(key: ValueKey(_step), child: _body(store))),
             if (_step < 5)
               StickyCta(
                 extra: (_step > 0)
@@ -320,7 +326,6 @@ class _BookFlowState extends State<BookFlow> {
                     Ic.svg(Ic.sparkle, color: p.accent, size: 22),
                     const SizedBox(width: 10),
                     Expanded(child: Text('Run a health check', style: Type.headline(p))),
-                    if (store.ai.isDemo) const DemoAiBadge(compact: true),
                   ],
                 ),
                 const SizedBox(height: 8),
@@ -329,6 +334,20 @@ class _BookFlowState extends State<BookFlow> {
                   'into booking, chat or home care — and flags anything urgent.',
                   style: Type.body(p).copyWith(color: p.textSecondary),
                 ),
+                if (store.ai.status == AiStatus.unavailable) ...[
+                  const SizedBox(height: T.s16),
+                  AiUnavailableCard(
+                    failure: store.ai.failure ?? AiFailure.noKey,
+                    onOpenSettings: () => Navigator.of(context).push(
+                      appRoute(const AiSettingsScreen()),
+                    ),
+                    onCall: () => callPhoneNumber(
+                      context,
+                      number: Clinic.phone,
+                      name: Clinic.name,
+                    ),
+                  ),
+                ],
                 const SizedBox(height: T.s16),
                 PrimaryButton(
                   label: 'Start health check',

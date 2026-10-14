@@ -99,7 +99,8 @@ class AppointmentDetailScreen extends StatelessWidget {
                                 const SizedBox(height: 6),
                                 Text(
                                   mediumDate(a.start),
-                                  style: Type.body(p).copyWith(color: p.textSecondary),
+                                  style: Type.body(p)
+                                      .copyWith(color: p.textSecondary),
                                 ),
                                 const SizedBox(height: 10),
                                 Wrap(
@@ -133,7 +134,11 @@ class AppointmentDetailScreen extends StatelessWidget {
                   SoftCard(
                     child: Row(
                       children: [
-                        StaffAvatar(initials: staff.initials, size: 48, role: staff.role),
+                        StaffAvatar(
+                          initials: staff.initials,
+                          size: 48,
+                          role: staff.role,
+                        ),
                         const SizedBox(width: 12),
                         Expanded(
                           child: Column(
@@ -158,21 +163,33 @@ class AppointmentDetailScreen extends StatelessWidget {
                   Text('Visit details', style: Type.headline(p)),
                   const SizedBox(height: 10),
                   SoftCard(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 6,
+                    ),
                     child: Column(
                       children: [
-                        AmountRow(label: 'Date', value: shortDate(a.start), bold: true),
-                        AmountRow(label: 'Time', value: clockLabel(a.start), bold: true),
                         AmountRow(
-                          label: 'Ends',
-                          value: clockLabel(a.end),
+                          label: 'Date',
+                          value: shortDate(a.start),
+                          bold: true,
                         ),
-                        AmountRow(label: 'Total', value: peso(a.price), bold: true),
+                        AmountRow(
+                          label: 'Time',
+                          value: clockLabel(a.start),
+                          bold: true,
+                        ),
+                        AmountRow(label: 'Ends', value: clockLabel(a.end)),
+                        AmountRow(
+                          label: 'Total',
+                          value: peso(a.price),
+                          bold: true,
+                        ),
                         if (a.sickPet)
                           const Padding(
                             padding: EdgeInsets.only(top: 8, bottom: 4),
                             child: _InfoRow(
-                              icon: Ic.stethoscope2,
+                              icon: Ic.stethoscope,
                               text: 'Sick-visit request — confirmed by the vet assistant',
                             ),
                           ),
@@ -184,11 +201,17 @@ class AppointmentDetailScreen extends StatelessWidget {
                     Text('Grooming intake', style: Type.headline(p)),
                     const SizedBox(height: 10),
                     SoftCard(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 6,
+                      ),
                       child: Column(
                         children: [
                           AmountRow(label: 'Size', value: a.grooming!.size),
-                          AmountRow(label: 'Coat condition', value: a.grooming!.coat),
+                          AmountRow(
+                            label: 'Coat condition',
+                            value: a.grooming!.coat,
+                          ),
                           if (a.grooming!.notes.isNotEmpty)
                             AmountRow(label: 'Notes', value: a.grooming!.notes),
                         ],
@@ -207,7 +230,10 @@ class AppointmentDetailScreen extends StatelessWidget {
                             children: [
                               Ic.svg(Ic.sparkle, color: p.accent, size: 18),
                               const SizedBox(width: 8),
-                              Text('Guidance, not a diagnosis', style: Type.footnoteEmph(p)),
+                              Text(
+                                'Guidance, not a diagnosis',
+                                style: Type.footnoteEmph(p),
+                              ),
                             ],
                           ),
                           const SizedBox(height: 8),
@@ -225,9 +251,14 @@ class AppointmentDetailScreen extends StatelessWidget {
                       children: [
                         Row(
                           children: [
-                            Ic.svg(Ic.location2, color: p.accent, size: 20),
+                            Ic.svg(Ic.pin, color: p.accent, size: 20),
                             const SizedBox(width: 9),
-                            Expanded(child: Text(Seed.clinicName, style: Type.headline(p))),
+                            Expanded(
+                              child: Text(
+                                Seed.clinicName,
+                                style: Type.headline(p),
+                              ),
+                            ),
                           ],
                         ),
                         const SizedBox(height: 8),
@@ -258,7 +289,9 @@ class AppointmentDetailScreen extends StatelessWidget {
                         label: 'Reschedule',
                         icon: Ic.calendar,
                         onPressed: () => Navigator.of(context).pushReplacement(
-                          appRoute(BookFlow(initialPetId: a.petId, rebookFrom: a)),
+                          appRoute(
+                            BookFlow(initialPetId: a.petId, rebookFrom: a),
+                          ),
                         ),
                       ),
                     ),
@@ -328,7 +361,7 @@ Future<void> showBookingSuccessSheet(
   await showAppSheet(
     context,
     child: Padding(
-      padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
       child: StatefulBuilder(
         builder: (ctx, setSheet) => Column(
           mainAxisSize: MainAxisSize.min,
@@ -342,7 +375,9 @@ Future<void> showBookingSuccessSheet(
               ),
               child: Center(
                 child: Ic.svg(
-                  appointment.status == ApptStatus.requestPending ? Ic.clock : Ic.checkCircle,
+                  appointment.status == ApptStatus.requestPending
+                      ? Ic.clock
+                      : Ic.checkCircle,
                   color: appointment.status == ApptStatus.requestPending
                       ? context.p.warning
                       : context.p.success,
@@ -362,7 +397,8 @@ Future<void> showBookingSuccessSheet(
             const SizedBox(height: 8),
             Text(
               '$petName · ${mediumDate(appointment.start)}\n${store.staffOf(appointment.staffId).name}',
-              style: Type.body(context.p).copyWith(color: context.p.textSecondary),
+              style: Type.body(context.p)
+                  .copyWith(color: context.p.textSecondary),
               textAlign: TextAlign.center,
             ),
             if (appointment.status == ApptStatus.requestPending) ...[
@@ -384,10 +420,7 @@ Future<void> showBookingSuccessSheet(
               },
             ),
             const SizedBox(height: 10),
-            SecondaryButton(
-              label: 'Done',
-              onPressed: () => dismissSheet(ctx),
-            ),
+            SecondaryButton(label: 'Done', onPressed: () => dismissSheet(ctx)),
           ],
         ),
       ),

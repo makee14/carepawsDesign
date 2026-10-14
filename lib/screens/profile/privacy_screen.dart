@@ -101,8 +101,10 @@ class PrivacyScreen extends StatelessWidget {
   Future<void> _deleteAccount(BuildContext context) async {
     final store = AppScope.read(context);
     // iOS system-style alert; Delete in systemRed, Cancel is the default.
-    final ok = await showCupertinoDialog<bool>(
-      context: context,
+    final ok = await showPopup<bool>(
+      context,
+      centered: true,
+      barrierDismissible: false,
       builder: (ctx) => CupertinoAlertDialog(
         title: const Text('Delete account?'),
         content: const Padding(
@@ -136,7 +138,7 @@ class PrivacyScreen extends StatelessWidget {
       context,
       scrollable: false,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -233,7 +235,7 @@ class ExportScreen extends StatelessWidget {
                     context,
                     scrollable: false,
                     child: Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
+                      padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [

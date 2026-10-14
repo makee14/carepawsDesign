@@ -39,10 +39,12 @@ class _SearchScreenState extends State<SearchScreen> {
     bool hit(String s) => q.isEmpty || s.toLowerCase().contains(q);
 
     final pets = store.pets.where((x) => hit(x.name) || hit(x.breed)).toList();
-    final services = store.servicesForSearch.where((s) => hit(s.name) || hit(s.blurb)).toList();
-    final products = store.products.where(
-      (x) => hit(x.name) || hit(x.tagline) || hit(x.description),
-    ).toList();
+    final services = store.servicesForSearch
+        .where((s) => hit(s.name) || hit(s.blurb))
+        .toList();
+    final products = store.products
+        .where((x) => hit(x.name) || hit(x.tagline) || hit(x.description))
+        .toList();
 
     final total = pets.length + services.length + products.length;
 
@@ -59,7 +61,10 @@ class _SearchScreenState extends State<SearchScreen> {
             padding: EdgeInsets.zero,
             minimumSize: const Size(48, 44),
             onPressed: () => dismissSheet(context),
-            child: Text('Cancel', style: Type.body(p).copyWith(color: p.accentText)),
+            child: Text(
+              'Cancel',
+              style: Type.body(p).copyWith(color: p.accentText),
+            ),
           ),
         ),
         middle: CupertinoSearchTextField(
@@ -80,7 +85,8 @@ class _SearchScreenState extends State<SearchScreen> {
             ? EmptyState(
                 icon: Ic.search,
                 title: 'No results',
-                body: 'Nothing matches “$_query”. Try a shorter word, or browse the shop catalog.',
+                body:
+                    'Nothing matches “$_query”. Try a shorter word, or browse the shop catalog.',
                 actionLabel: 'Browse products',
                 onAction: () {
                   dismissSheet(context);
@@ -105,14 +111,21 @@ class _SearchScreenState extends State<SearchScreen> {
                       child: Column(
                         children: [
                           for (var i = 0; i < pets.length; i++) ...[
-                            if (i > 0) Divider(height: 1, color: p.divider, indent: 58),
+                            if (i > 0)
+                              Divider(height: 1, color: p.divider, indent: 58),
                             RowTile(
                               title: pets[i].name,
-                              subtitle: '${pets[i].breed} · ${pets[i].ageLabel}',
-                              leadingPath: pets[i].species == Species.dog ? Ic.dog : Ic.cat,
-                              onTap: () => Navigator.of(context).pushReplacement(
-                                appRoute(PetProfileScreen(petId: pets[i].id)),
-                              ),
+                              subtitle:
+                                  '${pets[i].breed} · ${pets[i].ageLabel}',
+                              leadingPath: pets[i].species == Species.dog
+                                  ? Ic.dog
+                                  : Ic.cat,
+                              onTap: () => Navigator.of(context)
+                                  .pushReplacement(
+                                    appRoute(
+                                      PetProfileScreen(petId: pets[i].id),
+                                    ),
+                                  ),
                             ),
                           ],
                         ],
@@ -130,19 +143,22 @@ class _SearchScreenState extends State<SearchScreen> {
                       child: Column(
                         children: [
                           for (var i = 0; i < services.length; i++) ...[
-                            if (i > 0) Divider(height: 1, color: p.divider, indent: 58),
+                            if (i > 0)
+                              Divider(height: 1, color: p.divider, indent: 58),
                             RowTile(
                               title: services[i].name,
                               subtitle:
                                   '${services[i].durationLabel} · ${peso(services[i].price)}',
-                              leadingPath: services[i].icon,
-                              onTap: () => Navigator.of(context).pushReplacement(
-                                appRoute(
-                                  BookFlow(
-                                    initialPetId: store.pets.firstOrNull?.id,
+                              leadingPath: Ic.byName(services[i].icon),
+                              onTap: () => Navigator.of(context)
+                                  .pushReplacement(
+                                    appRoute(
+                                      BookFlow(
+                                        initialPetId:
+                                            store.pets.firstOrNull?.id,
+                                      ),
+                                    ),
                                   ),
-                                ),
-                              ),
                             ),
                           ],
                         ],
@@ -160,18 +176,22 @@ class _SearchScreenState extends State<SearchScreen> {
                       child: Column(
                         children: [
                           for (var i = 0; i < products.length; i++) ...[
-                            if (i > 0) Divider(height: 1, color: p.divider, indent: 58),
+                            if (i > 0)
+                              Divider(height: 1, color: p.divider, indent: 58),
                             RowTile(
                               title: products[i].name,
                               subtitle:
                                   '${peso(products[i].price)} · '
                                   '${products[i].inStock ? '${products[i].stock} in stock' : 'Out of stock'}',
                               leadingPath: Ic.bag,
-                              onTap: () => Navigator.of(context).pushReplacement(
-                                appRoute(
-                                  ProductDetailScreen(productId: products[i].id),
-                                ),
-                              ),
+                              onTap: () => Navigator.of(context)
+                                  .pushReplacement(
+                                    appRoute(
+                                      ProductDetailScreen(
+                                        productId: products[i].id,
+                                      ),
+                                    ),
+                                  ),
                             ),
                           ],
                         ],
@@ -184,9 +204,8 @@ class _SearchScreenState extends State<SearchScreen> {
                       child: SecondaryButton(
                         label: 'Run an AI health check',
                         icon: Ic.sparkle,
-                        onPressed: () => Navigator.of(context).pushReplacement(
-                          appRoute(const TriageScreen()),
-                        ),
+                        onPressed: () => Navigator.of(context)
+                            .pushReplacement(appRoute(const TriageScreen())),
                       ),
                     ),
                 ],

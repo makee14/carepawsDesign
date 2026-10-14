@@ -1,4 +1,5 @@
 import 'package:flutter/cupertino.dart';
+
 import 'dart:math' as math;
 
 import '../../app.dart';
@@ -23,7 +24,10 @@ class CheckoutScreen extends StatefulWidget {
 class _CheckoutScreenState extends State<CheckoutScreen> {
   PayMethod _method = PayMethod.gcash;
   bool _paying = false;
-  bool _failedOnce = false;
+
+  /// Set only when a payment attempt genuinely fails. The cart stays intact
+  /// and the inline error offers a retry — no canned failure for demo.
+  bool _paymentFailed = false;
 
   @override
   Widget build(BuildContext context) {
@@ -32,9 +36,6 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     final lines = store.cart;
     final blocked = store.blockedRestricted;
     final total = store.cartTotal;
-    // Deterministic "first attempt fails" lets the retry path be demonstrated
-    // and tested without faking a random outage.
-    final willFail = _failedOnce ? false : true;
 
     if (lines.isEmpty) {
       return CupertinoPageScaffold(
@@ -63,7 +64,10 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                   Text('Order summary', style: Type.title2(p)),
                   const SizedBox(height: 10),
                   SoftCard(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 6,
+                    ),
                     child: Column(
                       children: [
                         for (final l in lines)
@@ -79,7 +83,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                                 const SizedBox(width: 10),
                                 Expanded(
                                   child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
                                       Text(
@@ -88,12 +93,17 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                                         maxLines: 2,
                                         overflow: TextOverflow.ellipsis,
                                       ),
-                                      Text('Qty ${l.qty}', style: Type.caption(p)),
+                                      Text(
+                                        'Qty ${l.qty}',
+                                        style: Type.caption(p),
+                                      ),
                                     ],
                                   ),
                                 ),
                                 Text(
-                                  peso(store.productOf(l.productId).price * l.qty),
+                                  peso(
+                                    store.productOf(l.productId).price * l.qty,
+                                  ),
                                   style: Type.footnoteEmph(p),
                                 ),
                               ],
@@ -101,12 +111,18 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                           ),
                         Divider(height: 1, color: p.divider),
                         const SizedBox(height: 4),
+                        AmountRow(label: 'Subtotal', value: peso(total)),
                         AmountRow(
-                          label: 'Subtotal',
-                          value: peso(total),
+                          label: 'Pickup',
+                          value: 'Free',
+                          note: 'Collect at the clinic counter',
                         ),
-                        AmountRow(label: 'Pickup', value: 'Free', note: 'Collect at the clinic counter'),
-                        AmountRow(label: 'Total', value: peso(total), bold: true, emphasis: true),
+                        AmountRow(
+                          label: 'Total',
+                          value: peso(total),
+                          bold: true,
+                          emphasis: true,
+                        ),
                       ],
                     ),
                   ),
@@ -123,10 +139,11 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                       children: [
                         _MethodRow(
                           label: 'GCash',
-                          sub: 'Marcos@gcash · •••• 4412',
+                          sub: 'GCash · •••• 4412',
                           icon: Ic.wallet,
                           selected: _method == PayMethod.gcash,
-                          onTap: () => setState(() => _method = PayMethod.gcash),
+                          onTap: () =>
+                              setState(() => _method = PayMethod.gcash),
                         ),
                         Divider(height: 1, color: p.divider, indent: 56),
                         _MethodRow(
@@ -148,9 +165,14 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                       children: [
                         Row(
                           children: [
-                            Ic.svg(Ic.location2, color: p.accent, size: 20),
+                            Ic.svg(Ic.pin, color: p.accent, size: 20),
                             const SizedBox(width: 9),
-                            Expanded(child: Text(Seed.clinicName, style: Type.headline(p))),
+                            Expanded(
+                              child: Text(
+                                Seed.clinicName,
+                                style: Type.headline(p),
+                              ),
+                            ),
                           ],
                         ),
                         const SizedBox(height: 8),
@@ -160,7 +182,12 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                           children: [
                             Ic.svg(Ic.clock, color: p.textSecondary, size: 14),
                             const SizedBox(width: 7),
-                            Expanded(child: Text(Seed.clinicHours, style: Type.caption(p))),
+                            Expanded(
+                              child: Text(
+                                Seed.clinicHours,
+                                style: Type.caption(p),
+                              ),
+                            ),
                           ],
                         ),
                         const SizedBox(height: 12),
@@ -178,7 +205,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                               Expanded(
                                 child: Text(
                                   'No delivery — pickup at the clinic. We hold orders for 7 days.',
-                                  style: Type.footnote(p).copyWith(color: p.warning),
+                                  style: Type.footnote(p)
+                                      .copyWith(color: p.warning),
                                 ),
                               ),
                             ],
@@ -187,9 +215,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                       ],
                     ),
                   ),
-                  if (_failedOnce) ...[
+                  if (_paymentFailed) ...[
                     const SizedBox(height: T.s16),
-                    _PaymentError(onRetry: () => setState(() => _failedOnce = false)),
+                    _PaymentError(onRetry: _pay),
                   ],
                 ],
               ),
@@ -202,7 +230,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                     label: 'Pay ${peso(total)}',
                     icon: _method == PayMethod.gcash ? Ic.wallet : Ic.card2,
                     busy: _paying,
-                    onPressed: blocked.isNotEmpty ? null : () => _pay(willFail),
+                    onPressed: blocked.isNotEmpty ? null : _pay,
                   ),
                   const SizedBox(height: 8),
                   SecondaryButton(
@@ -223,41 +251,46 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     );
   }
 
-  Future<void> _pay(bool willFail) async {
+  Future<void> _pay() async {
+    if (_paying) return;
     final store = AppScope.read(context);
-    setState(() => _paying = true);
-    await Future<void>.delayed(const Duration(milliseconds: 900));
-    if (!mounted) return;
+    setState(() {
+      _paying = true;
+      _paymentFailed = false;
+    });
+    Order? order;
+    try {
+      await Future<void>.delayed(const Duration(milliseconds: 900));
 
-    if (willFail) {
-      // Failure keeps the cart fully intact and offers an inline retry.
+      final lines = [
+        for (final c in store.cart)
+          OrderLine(c.productId, c.qty, store.productOf(c.productId).price),
+      ];
+      order = Order(
+        id: 'o${store.now.microsecondsSinceEpoch}',
+        placedAt: store.now,
+        lines: lines,
+        status: OrderStatus.paid,
+        pickupCode: _code(store.now.microsecondsSinceEpoch),
+        method: _method == PayMethod.gcash ? 'GCash' : 'Card',
+      );
+      store.addOrder(order);
+      store.clearCart();
+      successHaptic();
+    } catch (_) {
+      // A real payment failure lands here: the cart stays fully intact and
+      // the inline error offers a retry.
+      if (!mounted) return;
       setState(() {
         _paying = false;
-        _failedOnce = true;
+        _paymentFailed = true;
       });
       return;
     }
-
-    final lines = [
-      for (final c in store.cart)
-        OrderLine(c.productId, c.qty, store.productOf(c.productId).price),
-    ];
-    final order = Order(
-      id: 'o${store.now.microsecondsSinceEpoch}',
-      placedAt: store.now,
-      lines: lines,
-      status: OrderStatus.paid,
-      pickupCode: _code(store.now.microsecondsSinceEpoch),
-      method: _method == PayMethod.gcash ? 'GCash' : 'Card',
-    );
-    store.addOrder(order);
-    store.clearCart();
-    successHaptic();
     if (!mounted) return;
     setState(() => _paying = false);
-    Navigator.of(context).pushReplacement(
-      appRoute(OrderSuccessScreen(orderId: order.id)),
-    );
+    Navigator.of(context)
+        .pushReplacement(appRoute(OrderSuccessScreen(orderId: order.id)));
   }
 
   static String _code(int seed) {
@@ -303,7 +336,14 @@ class _MethodRow extends StatelessWidget {
                     color: p.accent.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(9),
                   ),
-                  child: Center(child: Ic.svg(icon, color: p.primaryFill, size: 18, stroke: 2)),
+                  child: Center(
+                    child: Ic.svg(
+                      icon,
+                      color: p.primaryFill,
+                      size: 18,
+                      stroke: 2,
+                    ),
+                  ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -424,7 +464,11 @@ class _PaymentError extends StatelessWidget {
             style: Type.body(p),
           ),
           const SizedBox(height: 14),
-          PrimaryButton(label: 'Retry payment', icon: Ic.refresh, onPressed: onRetry),
+          PrimaryButton(
+            label: 'Retry payment',
+            icon: Ic.refresh,
+            onPressed: onRetry,
+          ),
         ],
       ),
     );

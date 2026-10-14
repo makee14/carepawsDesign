@@ -6,6 +6,7 @@ import '../design/theme.dart';
 import '../design/tokens.dart';
 import '../state/app_store.dart';
 import '../widgets/common.dart';
+import 'onboarding_illustrations.dart';
 
 /// Apple-style onboarding: full-screen cards you swipe through.
 /// 5 pages: Welcome, Pets, AI Health Check, Booking, Shop + chat.
@@ -35,7 +36,13 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     'PetCare AI answers instantly, day or night. The clinic team replies during hours, usually within 10 minutes.',
     'Order from the clinic shop and collect at the counter with a pickup code. Prescription items unlock once the vet signs.',
   ];
-  static const _icons = [Ic.paw, Ic.sparkle, Ic.calendar, Ic.chat, Ic.bag];
+  static const _illustrations = [
+    PawIntro(),
+    AiOrbIntro(),
+    BookIntro(),
+    ChatIntro(),
+    ShopIntro(),
+  ];
 
   @override
   void dispose() {
@@ -73,23 +80,31 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     padding: EdgeInsets.zero,
                     minimumSize: const Size(64, 44),
                     onPressed: _finish,
-                    child: Text('Skip',
-                        style: Type.body(p).copyWith(color: p.accentText)),
+                    child: Text(
+                      'Skip',
+                      style: Type.body(p).copyWith(color: p.accentText),
+                    ),
                   ),
                   const Spacer(),
-                  Row(children: [
-                    for (var i = 0; i < _titles.length; i++)
-                      AnimatedContainer(
-                        duration: Motion.fast,
-                        margin: EdgeInsets.only(left: i == 0 ? 0 : 6),
-                        width: i == _page ? 22 : 7,
-                        height: 7,
-                        decoration: BoxDecoration(
-                          color: i == _page ? p.accent : p.divider,
-                          borderRadius: BorderRadius.circular(99),
+                  Row(
+                    children: [
+                      for (var i = 0; i < _titles.length; i++)
+                        AnimatedContainer(
+                          // Expanding pill for the active dot; static under
+                          // reduced motion.
+                          duration: reduceMotionOf(context)
+                              ? Duration.zero
+                              : Motion.fast,
+                          margin: EdgeInsets.only(left: i == 0 ? 0 : 6),
+                          width: i == _page ? 22 : 7,
+                          height: 7,
+                          decoration: BoxDecoration(
+                            color: i == _page ? p.accent : p.divider,
+                            borderRadius: BorderRadius.circular(99),
+                          ),
                         ),
-                      ),
-                  ]),
+                    ],
+                  ),
                 ],
               ),
             ),
@@ -99,26 +114,34 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 onPageChanged: (i) => setState(() => _page = i),
                 itemCount: _titles.length,
                 itemBuilder: (context, i) => _Page(
-                  icon: _icons[i],
+                  active: i == _page,
+                  illustration: _illustrations[i],
                   title: _titles[i],
                   body: _bodies[i],
                 ),
               ),
             ),
             Padding(
-              padding: EdgeInsets.fromLTRB(20, 8, 20,
-                  20 + MediaQuery.paddingOf(context).bottom * 0.3),
-              child: Column(mainAxisSize: MainAxisSize.min, children: [
-                PrimaryButton(
-                  label: last ? 'Get started' : 'Continue',
-                  icon: last ? Ic.check : Ic.arrowRight,
-                  onPressed: _next,
-                ),
-                if (!last) ...[
-                  const SizedBox(height: 8),
-                  SecondaryButton(label: 'Skip tour', onPressed: _finish),
+              padding: EdgeInsets.fromLTRB(
+                20,
+                8,
+                20,
+                20 + MediaQuery.paddingOf(context).bottom * 0.3,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  PrimaryButton(
+                    label: last ? 'Get started' : 'Continue',
+                    icon: last ? Ic.check : Ic.arrowRight,
+                    onPressed: _next,
+                  ),
+                  if (!last) ...[
+                    const SizedBox(height: 8),
+                    SecondaryButton(label: 'Skip tour', onPressed: _finish),
+                  ],
                 ],
-              ]),
+              ),
             ),
           ],
         ),
@@ -127,45 +150,103 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   }
 }
 
-class _Page extends StatelessWidget {
-  const _Page({required this.icon, required this.title, required this.body});
-  final String icon;
+/// One onboarding page: fixed-size animated illustration slot, then the
+/// staggered title/body entrance.
+///
+/// The illustration slot never changes size with text scale — the drawing is
+/// authored on a fixed canvas and fitted into the slot, so AX5 text can't push
+/// it into an overflow. The page itself scrolls when the copy outgrows the
+/// viewport (AX5, landscape).
+///
+/// When the page becomes the current one ([active] flips false→true) the
+/// entrance replays: the illustration subtree is re-keyed so its one-shot
+/// timeline restarts, and the title/body [FadeIn]s are re-keyed too.
+class _Page extends StatefulWidget {
+  const _Page({
+    required this.active,
+    required this.illustration,
+    required this.title,
+    required this.body,
+  });
+
+  final bool active;
+  final Widget illustration;
   final String title;
   final String body;
+
+  @override
+  State<_Page> createState() => _PageState();
+}
+
+class _PageState extends State<_Page> {
+  int _run = 0;
+
+  @override
+  void didUpdateWidget(covariant _Page oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.active && !oldWidget.active) {
+      setState(() => _run++);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final p = context.p;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(28, 24, 28, 8),
-      child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-        FadeIn(
-          child: Container(
-            width: 112,
-            height: 112,
-            decoration: BoxDecoration(
-              color: T.amber.withValues(alpha: p.isDark ? 0.18 : 0.24),
-              shape: BoxShape.circle,
+    // Compressed slot in landscape so the copy and CTA stay on screen.
+    final wide =
+        MediaQuery.sizeOf(context).width > MediaQuery.sizeOf(context).height;
+    final slotH = wide ? 148.0 : 208.0;
+    return LayoutBuilder(
+      builder: (context, constraints) => SingleChildScrollView(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(minHeight: constraints.maxHeight),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(28, 16, 28, 8),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                SizedBox(
+                  height: slotH,
+                  width: double.infinity,
+                  child: FittedBox(
+                    fit: BoxFit.contain,
+                    child: SizedBox(
+                      width: introCanvas.width,
+                      height: introCanvas.height,
+                      child: IgnorePointer(
+                        // Decorative: the title/body carry the meaning.
+                        child: KeyedSubtree(
+                          key: ValueKey('illustration$_run'),
+                          child: widget.illustration,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: T.s24),
+                FadeIn(
+                  key: ValueKey('title$_run'),
+                  child: Text(
+                    widget.title,
+                    style: Type.title1(p).copyWith(fontSize: 30, height: 1.15),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                FadeIn(
+                  key: ValueKey('body$_run'),
+                  index: 1,
+                  child: Text(
+                    widget.body,
+                    style: Type.body(p).copyWith(color: p.textSecondary),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              ],
             ),
-            child: Center(
-                child: Ic.svg(icon, color: p.accent, size: 52, stroke: 1.6)),
           ),
         ),
-        const SizedBox(height: T.s32),
-        FadeIn(
-          index: 1,
-          child: Text(title,
-              style: Type.title1(p).copyWith(fontSize: 30, height: 1.15),
-              textAlign: TextAlign.center),
-        ),
-        const SizedBox(height: 12),
-        FadeIn(
-          index: 2,
-          child: Text(body,
-              style: Type.body(p).copyWith(color: p.textSecondary),
-              textAlign: TextAlign.center),
-        ),
-      ]),
+      ),
     );
   }
 }
-

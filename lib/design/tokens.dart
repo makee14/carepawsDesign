@@ -37,9 +37,17 @@ class T {
   static const double s32 = 32;
 
   static const double rCard = 20;
-  static const double rGlass = 18;
   static const double rControl = 14;
   static const double rPill = 999;
+
+  // ---- elevation: one language for every card --------------------------------
+  // Every card floats at exactly this height; only the shadow colour adapts
+  // to the theme (6% espresso on light; the palette's glass shadow on dark,
+  // where SoftCard stays flat). GlassCard and SoftCard share these values so
+  // two cards side by side never read as different elevations.
+  static const double shadowBlur = 18;
+  static const double shadowDy = 6;
+  static const Color shadowLight = Color(0x0F2A1A0E);
 
   /// HIG minimum comfortable touch target.
   static const double tap = 48;

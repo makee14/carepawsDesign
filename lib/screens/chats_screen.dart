@@ -26,15 +26,14 @@ class ChatsScreen extends StatelessWidget {
         slivers: [
           const LargeTitleBar(title: 'Chats'),
           SliverPadding(
-            padding: EdgeInsets.fromLTRB(20, 12, 20, 40 + TabBarClearance.of(context)),
+            padding: EdgeInsets.fromLTRB(
+              20,
+              12,
+              20,
+              40 + TabBarClearance.of(context),
+            ),
             sliver: SliverList.list(
               children: [
-                if (store.ai.isDemo) ...[
-                  const Row(
-                    children: [DemoAiBadge(), Spacer()],
-                  ),
-                  const SizedBox(height: 12),
-                ],
                 SoftCard(
                   padding: EdgeInsets.zero,
                   child: Column(
@@ -57,10 +56,8 @@ class ChatsScreen extends StatelessWidget {
                   title: 'Clinic team',
                   icon: Ic.person,
                   actionLabel: 'All staff',
-                  onAction: () => showAppSheet(
-                    context,
-                    child: const StaffDirectorySheet(),
-                  ),
+                  onAction: () =>
+                      showAppSheet(context, child: const StaffDirectorySheet()),
                 ),
                 const StaffDirectory(compact: true),
                 const SizedBox(height: T.s20),
@@ -72,15 +69,20 @@ class ChatsScreen extends StatelessWidget {
                         children: [
                           Ic.svg(Ic.info, color: p.textSecondary, size: 18),
                           const SizedBox(width: 9),
-                          Expanded(child: Text('How this works', style: Type.headline(p))),
+                          Expanded(
+                            child: Text(
+                              'How this works',
+                              style: Type.headline(p),
+                            ),
+                          ),
                         ],
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        'PetCare AI answers as the vet on duty — feeding, health, vaccines, '
-                        'grooming and health checks. Anything outside veterinary care it will '
-                        'turn back to your pet. Anything clinical goes to Miguel the vet '
-                        'assistant, who loops in Dr. Alvarez or Ana when needed. '
+                        'PetCare AI is the clinic\'s in-app assistant — feeding, health, vaccines, '
+                        'grooming and health checks. It gives guidance, never a diagnosis. Anything '
+                        'outside veterinary care it will turn back to your pet. Anything clinical goes '
+                        'to Miguel the vet assistant, who loops in Dr. Alvarez or Ana when needed. '
                         'A health check carries your pet and the summary automatically — no retyping.',
                         style: Type.body(p).copyWith(color: p.textSecondary),
                       ),
@@ -97,7 +99,11 @@ class ChatsScreen extends StatelessWidget {
 }
 
 class _ThreadRow extends StatelessWidget {
-  const _ThreadRow({required this.thread, required this.store, this.highlighted = false});
+  const _ThreadRow({
+    required this.thread,
+    required this.store,
+    this.highlighted = false,
+  });
 
   final Thread thread;
   final AppStore store;
@@ -110,17 +116,19 @@ class _ThreadRow extends StatelessWidget {
     final last = msgs.isEmpty ? null : msgs.last;
     final preview = thread.isAi
         ? 'Answers feeding, grooming, vaccines and general care.'
-        : (store.offlineNote ?? 'Replies in about 10 minutes during clinic hours.');
+        : (store.offlineNote ??
+              'Replies in about 10 minutes during clinic hours.');
 
     return Semantics(
       button: true,
-      label: '${thread.title}. ${thread.subtitle}. ${last == null ? 'No messages yet' : 'Last message: ${last.text}'}',
+      label:
+          '${thread.title}. ${thread.subtitle}. ${last == null ? 'No messages yet' : 'Last message: ${last.text}'}',
       child: ExcludeSemantics(
         child: PressScale(
           scale: 0.985,
-          onTap: () => Navigator.of(context).push(
-            appRoute(ChatThreadScreen(threadId: thread.id)),
-          ),
+          onTap: () =>
+              Navigator.of(context)
+                  .push(appRoute(ChatThreadScreen(threadId: thread.id))),
           child: Container(
             constraints: const BoxConstraints(minHeight: 76),
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -137,7 +145,7 @@ class _ThreadRow extends StatelessWidget {
                   ),
                   child: Center(
                     child: Ic.svg(
-                      thread.icon,
+                      Ic.byName(thread.icon),
                       color: thread.isAi ? p.primaryFill : p.accent,
                       size: 22,
                       stroke: 2,
@@ -162,7 +170,12 @@ class _ThreadRow extends StatelessWidget {
                           ),
                           if (thread.pinned) ...[
                             const SizedBox(width: 6),
-                            Ic.svg(Ic.bookmark, color: p.accent, size: 14, stroke: 2.2),
+                            Ic.svg(
+                              Ic.bookmark,
+                              color: p.accent,
+                              size: 14,
+                              stroke: 2.2,
+                            ),
                           ],
                         ],
                       ),
@@ -183,7 +196,11 @@ class _ThreadRow extends StatelessWidget {
                               )
                             : Row(
                                 children: [
-                                  Ic.svg(Ic.clock, color: p.textSecondary, size: 13),
+                                  Ic.svg(
+                                    Ic.clock,
+                                    color: p.textSecondary,
+                                    size: 13,
+                                  ),
                                   const SizedBox(width: 4),
                                   Flexible(
                                     child: Text(
@@ -199,7 +216,12 @@ class _ThreadRow extends StatelessWidget {
                     ],
                   ),
                 ),
-                Ic.svg(Ic.chevronRight, color: p.textSecondary, size: 16, stroke: 2.2),
+                Ic.svg(
+                  Ic.chevronRight,
+                  color: p.textSecondary,
+                  size: 16,
+                  stroke: 2.2,
+                ),
               ],
             ),
           ),
@@ -293,7 +315,7 @@ class StaffDirectorySheet extends StatelessWidget {
   Widget build(BuildContext context) {
     final p = context.p;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,

@@ -33,6 +33,9 @@ Future<void> main() async {
   // palette at someone whose saved choice is dark. SettingsStore swallows plugin
   // failures, so this cannot hold up the launch.
   await store.loadSettings();
+  // Drives the live countdowns on Home (and the open/closed + upcoming/past
+  // partitions) — the store clock otherwise only moves when tests drive it.
+  store.startClock();
   runApp(PetCareApp(store: store));
 }
 

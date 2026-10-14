@@ -68,7 +68,7 @@ class AboutScreen extends StatelessWidget {
                     label: 'PetCare AI',
                     value: store.ai.isLive
                         ? 'Live · ${store.ai.modelLabel ?? 'auto-selected model'}'
-                        : 'Demo mode · built-in responder',
+                        : 'Unavailable · no API key',
                   ),
                   _BuildRow(icon: Ic.checkCircle, label: 'Clinic hours', value: clinicStatusLine(store.now)),
                   _BuildRow(icon: Ic.paw, label: 'Pets on file', value: '${store.petCount}'),

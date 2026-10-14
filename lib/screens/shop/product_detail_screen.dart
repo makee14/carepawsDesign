@@ -28,6 +28,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     final p = context.p;
     final product = store.productOf(widget.productId);
     final hasRx = store.hasPrescription(product.id);
+    final heroH = Layout.heroHeight(context, 220);
 
     return CupertinoPageScaffold(
       backgroundColor: p.background,
@@ -39,78 +40,96 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
               child: ListView(
                 padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
                 children: [
-                  // Hero art with a floating glass metadata card.
-                  SizedBox(
-                    height: Layout.heroHeight(context, 220),
-                    child: Stack(
-                      clipBehavior: Clip.none,
-                      children: [
-                        Positioned.fill(
-                          child: ProductArt(
-                            art: product.art,
-                            radius: T.rCard,
-                            size: 320,
-                          ),
-                        ),
-                        if (product.restricted)
-                          Positioned(
-                            left: 12,
-                            top: 12,
-                            child: StatusChip(
-                              label: hasRx ? 'Prescription on file' : 'Prescription required',
-                              icon: Ic.shield,
-                              fg: p.onPrimaryFill,
-                              bg: hasRx ? p.success : p.primaryFill,
+                  // Hero art with a floating glass metadata card — structural
+                  // overlap: the Column (spacer + card) sizes the hero in
+                  // normal flow; the art is a fixed-size slot painted behind.
+                  // Nothing overflows, so no ancestor can clip the card.
+                  Stack(
+                    children: [
+                      Positioned(
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        height: heroH,
+                        child: Stack(
+                          children: [
+                            Positioned.fill(
+                              child: ProductArt(
+                                art: product.art,
+                                radius: T.rCard,
+                                size: 320,
+                              ),
                             ),
-                          ),
-                        Positioned(
-                          left: 12,
-                          right: 12,
-                          bottom: -30,
-                          child: GlassCard(
-                            padding: const EdgeInsets.all(T.s16),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text(product.name, style: Type.title2(p)),
-                                const SizedBox(height: 4),
-                                Text(product.tagline, style: Type.footnote(p)),
-                                const SizedBox(height: 10),
-                                Wrap(
-                                  spacing: 8,
-                                  runSpacing: 8,
-                                  children: [
-                                    StatusChip(
-                                      label: peso(product.price),
-                                      icon: Ic.wallet,
-                                      compact: true,
-                                      fg: p.accentText,
-                                      bg: p.accent.withValues(alpha: 0.12),
-                                    ),
-                                    StatusChip(
-                                      label: product.inStock
-                                          ? '${product.stock} in stock'
-                                          : 'Out of stock',
-                                      icon: product.inStock ? Ic.checkCircle : Ic.alert,
-                                      compact: true,
-                                      fg: product.inStock
-                                          ? p.success
-                                          : p.destructive,
-                                      bg: product.inStock
-                                          ? const Color(0xFFDDF2E3)
-                                          : const Color(0x1FDC2626),
-                                    ),
-                                  ],
+                            if (product.restricted)
+                              Positioned(
+                                left: 12,
+                                top: 12,
+                                child: StatusChip(
+                                  label: hasRx ? 'Prescription on file' : 'Prescription required',
+                                  icon: Ic.shield,
+                                  fg: p.onPrimaryFill,
+                                  bg: hasRx ? p.success : p.primaryFill,
                                 ),
-                              ],
+                              ),
+                          ],
+                        ),
+                      ),
+                      Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          SizedBox(height: heroH - 30),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                            child: GlassCard(
+                              padding: const EdgeInsets.all(T.s16),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(product.name, style: Type.title2(p)),
+                                  const SizedBox(height: 4),
+                                  Text(product.tagline, style: Type.footnote(p)),
+                                  const SizedBox(height: 10),
+                                  // One horizontal row, never a Wrap: the chip
+                                  // set is fixed, so a scroll row keeps the
+                                  // card height stable on narrow screens.
+                                  SingleChildScrollView(
+                                    scrollDirection: Axis.horizontal,
+                                    child: Row(
+                                      children: [
+                                        StatusChip(
+                                          label: peso(product.price),
+                                          icon: Ic.wallet,
+                                          compact: true,
+                                          fg: p.accentText,
+                                          bg: p.accent.withValues(alpha: 0.12),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        StatusChip(
+                                          label: product.inStock
+                                              ? '${product.stock} in stock'
+                                              : 'Out of stock',
+                                          icon: product.inStock ? Ic.checkCircle : Ic.alert,
+                                          compact: true,
+                                          fg: product.inStock
+                                              ? p.success
+                                              : p.destructive,
+                                          bg: product.inStock
+                                              ? const Color(0xFFDDF2E3)
+                                              : const Color(0x1FDC2626),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
-                        ),
-                      ],
-                    ),
+                        ],
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 44),
+                  const SizedBox(height: T.s16),
                   Text('About this product', style: Type.headline(p)),
                   const SizedBox(height: 8),
                   Text(product.description, style: Type.body(p)),

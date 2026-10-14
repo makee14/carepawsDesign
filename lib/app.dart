@@ -5,6 +5,7 @@ import 'package:flutter/cupertino.dart';
 
 import 'data/models.dart';
 import 'data/seed.dart';
+import 'data/clinic.dart';
 import 'design/icons.dart';
 import 'design/motion.dart';
 import 'design/theme.dart';
@@ -176,14 +177,16 @@ class _SplashScreenState extends State<SplashScreen> {
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 Text(
-                                  store.ai.isLive ? 'PetCare AI ready' : 'PetCare AI · Demo mode',
+                                  store.ai.isLive
+                                      ? 'PetCare AI ready'
+                                      : 'PetCare AI · Unavailable',
                                   style: Type.headline(p),
                                 ),
                                 const SizedBox(height: 2),
                                 Text(
                                   store.ai.isLive
                                       ? 'Model ${store.ai.modelLabel ?? 'auto'} selected automatically.'
-                                      : 'Everything works without a key. Add one any time in Settings.',
+                                      : 'Needs an API key. Add one any time in Settings → PetCare AI.',
                                   style: Type.footnote(p),
                                 ),
                               ],
@@ -207,10 +210,7 @@ class _SplashScreenState extends State<SplashScreen> {
                     ),
                   ),
                   const SizedBox(height: T.s12),
-                  Text(
-                    Seed.appVersion,
-                    style: Type.caption(p),
-                  ),
+                  Text(Seed.appVersion, style: Type.caption(p)),
                   const SizedBox(height: T.s12),
                 ],
               ),
@@ -240,7 +240,10 @@ class LogoMark extends StatelessWidget {
           decoration: BoxDecoration(
             color: p.surface,
             shape: BoxShape.circle,
-            border: Border.all(color: T.taupe.withValues(alpha: 0.45), width: size * 0.035),
+            border: Border.all(
+              color: T.taupe.withValues(alpha: 0.45),
+              width: size * 0.035,
+            ),
             boxShadow: [
               BoxShadow(
                 color: T.taupe.withValues(alpha: 0.18),
@@ -260,7 +263,12 @@ class LogoMark extends StatelessWidget {
                     top: size * 0.16,
                     child: Transform.rotate(
                       angle: -0.16,
-                      child: Ic.svg(Ic.dog, color: T.orange, size: size * 0.44, stroke: 1.9),
+                      child: Ic.svg(
+                        Ic.dog,
+                        color: T.orange,
+                        size: size * 0.44,
+                        stroke: 1.9,
+                      ),
                     ),
                   ),
                   Positioned(
@@ -268,7 +276,12 @@ class LogoMark extends StatelessWidget {
                     bottom: size * 0.13,
                     child: Transform.rotate(
                       angle: 0.1,
-                      child: Ic.svg(Ic.cat, color: p.primaryFill, size: size * 0.36, stroke: 1.9),
+                      child: Ic.svg(
+                        Ic.cat,
+                        color: p.primaryFill,
+                        size: size * 0.36,
+                        stroke: 1.9,
+                      ),
                     ),
                   ),
                 ],
@@ -557,12 +570,14 @@ class _LargeTitleDelegate extends SliverPersistentHeaderDelegate {
 
   @override
   double get maxExtent =>
-      topPadding +
-      LargeTitleBar.collapsedHeight +
-      LargeTitleBar.expandedExtra;
+      topPadding + LargeTitleBar.collapsedHeight + LargeTitleBar.expandedExtra;
 
   @override
-  Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
+  Widget build(
+    BuildContext context,
+    double shrinkOffset,
+    bool overlapsContent,
+  ) {
     final top = topPadding;
     final delta = LargeTitleBar.expandedExtra;
     final t = delta <= 0 ? 1.0 : (shrinkOffset / delta).clamp(0.0, 1.0);
@@ -666,7 +681,10 @@ class _FadeScaleRoute<R> extends PageRoute<R>
     }
     final fade = animation.drive(CurveTween(curve: Curves.easeOutCubic));
     final scale = animation.drive(
-      Tween(begin: 0.98, end: 1.0).chain(CurveTween(curve: Curves.easeOutCubic)),
+      Tween(
+        begin: 0.98,
+        end: 1.0,
+      ).chain(CurveTween(curve: Curves.easeOutCubic)),
     );
     final outFade = ReverseAnimation(secondaryAnimation)
         .drive(CurveTween(curve: Curves.easeOutCubic));
@@ -688,9 +706,8 @@ Future<void> showAppSheet(
   required Widget child,
   bool scrollable = true,
 }) {
-  return showCupertinoModalPopup<void>(
-    context: context,
-    barrierColor: const Color(0x66000000),
+  return showPopup<void>(
+    context,
     builder: (_) => _AppSheet(scrollable: scrollable, child: child),
   );
 }
@@ -727,24 +744,39 @@ class _AppSheet extends StatelessWidget {
         color: p.background,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
       ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 40,
-            height: 5,
-            margin: const EdgeInsets.symmetric(vertical: 10),
-            decoration: BoxDecoration(
-              color: p.textSecondary.withValues(alpha: 0.35),
-              borderRadius: BorderRadius.circular(3),
+      // The background runs edge to edge; the content clears the home
+      // indicator. Children bring their own top/side padding and a zero
+      // bottom — this is the one place bottom safe-area is handled, so every
+      // sheet clears the indicator identically.
+      child: SafeArea(
+        top: false,
+        minimum: const EdgeInsets.only(bottom: 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 40,
+              height: 5,
+              margin: const EdgeInsets.symmetric(vertical: 10),
+              decoration: BoxDecoration(
+                color: p.textSecondary.withValues(alpha: 0.35),
+                borderRadius: BorderRadius.circular(3),
+              ),
             ),
-          ),
-          Flexible(
-            child: scrollable
-                ? SingleChildScrollView(child: child)
-                : Padding(padding: const EdgeInsets.fromLTRB(20, 4, 20, 24), child: child),
-          ),
-        ],
+            // Always scrollable: at AX5 text sizes even a "fixed" sheet can
+            // outgrow 86% of the screen — scrolling beats a render overflow.
+            // The non-scrollable variant only differs in padding because its
+            // children already lay out their own insets.
+            Flexible(
+              child: scrollable
+                  ? SingleChildScrollView(child: child)
+                  : SingleChildScrollView(
+                      padding: const EdgeInsets.fromLTRB(20, 4, 20, 0),
+                      child: child,
+                    ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -758,8 +790,8 @@ Future<bool> confirmDestructive(
   required String confirmLabel,
   String cancelLabel = 'Cancel',
 }) async {
-  final result = await showCupertinoModalPopup<bool>(
-    context: context,
+  final result = await showPopup<bool>(
+    context,
     builder: (ctx) => CupertinoActionSheet(
       title: Text(title),
       message: Text(message),
@@ -779,40 +811,72 @@ Future<bool> confirmDestructive(
   return result ?? false;
 }
 
-Future<bool> confirm(
+/// Shared date-picker sheet: the same 22pt rounded-top chrome as every other
+/// sheet, Cancel/Done toolbar, safe-area aware. Returns the picked date, or
+/// null on cancel / barrier tap.
+Future<DateTime?> showDatePickerSheet(
   BuildContext context, {
-  required String title,
-  required String message,
-  required String confirmLabel,
-  String cancelLabel = 'Cancel',
+  required DateTime initial,
+  required DateTime minimum,
+  required DateTime maximum,
 }) async {
-  final result = await showCupertinoDialog<bool>(
-    context: context,
-    builder: (ctx) => CupertinoAlertDialog(
-      title: Text(title),
-      content: Padding(
-        padding: const EdgeInsets.only(top: 6),
-        child: Text(message),
+  var temp = initial;
+  var confirmed = false;
+  await showPopup<void>(
+    context,
+    builder: (ctx) => Container(
+      decoration: BoxDecoration(
+        color: ctx.p.surface,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
       ),
-      actions: [
-        CupertinoDialogAction(
-          onPressed: () => Navigator.of(ctx).pop(false),
-          child: Text(cancelLabel),
+      child: SafeArea(
+        top: false,
+        minimum: const EdgeInsets.only(bottom: 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                CupertinoButton(
+                  onPressed: () => Navigator.of(ctx).pop(),
+                  child: const Text('Cancel'),
+                ),
+                CupertinoButton(
+                  onPressed: () {
+                    confirmed = true;
+                    Navigator.of(ctx).pop();
+                  },
+                  child: const Text('Done'),
+                ),
+              ],
+            ),
+            SizedBox(
+              height: 216,
+              child: CupertinoDatePicker(
+                mode: CupertinoDatePickerMode.date,
+                initialDateTime: temp,
+                minimumDate: minimum,
+                maximumDate: maximum,
+                onDateTimeChanged: (d) => temp = d,
+              ),
+            ),
+          ],
         ),
-        CupertinoDialogAction(
-          isDefaultAction: true,
-          onPressed: () => Navigator.of(ctx).pop(true),
-          child: Text(confirmLabel),
-        ),
-      ],
+      ),
     ),
   );
-  return result ?? false;
+  return confirmed ? temp : null;
 }
 
 /// Large-title navigation bar with an optional trailing action row.
 class NavBar extends StatelessWidget {
-  const NavBar({super.key, required this.title, this.actions = const [], this.subtitle});
+  const NavBar({
+    super.key,
+    required this.title,
+    this.actions = const [],
+    this.subtitle,
+  });
 
   final String title;
   final String? subtitle;
@@ -838,7 +902,8 @@ class NavBar extends StatelessWidget {
 }
 
 /// Common back-navigation bar for pushed screens.
-class DetailNavBar extends StatelessWidget implements ObstructingPreferredSizeWidget {
+class DetailNavBar extends StatelessWidget
+    implements ObstructingPreferredSizeWidget {
   const DetailNavBar({
     super.key,
     required this.title,
@@ -877,7 +942,12 @@ class DetailNavBar extends StatelessWidget implements ObstructingPreferredSizeWi
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Ic.svg(Ic.chevronLeft, color: p.accentText, size: 20, stroke: 2.4),
+                    Ic.svg(
+                      Ic.chevronLeft,
+                      color: p.accentText,
+                      size: 20,
+                      stroke: 2.4,
+                    ),
                     if (MediaQuery.sizeOf(context).width > 400) ...[
                       const SizedBox(width: 2),
                       Text(
@@ -930,12 +1000,23 @@ String clockLabel(DateTime t) {
 }
 
 const monthNames = [
-  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
 ];
 const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
-String shortDate(DateTime d) => '${dayNames[d.weekday - 1]}, ${d.day} ${monthNames[d.month - 1]}';
+String shortDate(DateTime d) =>
+    '${dayNames[d.weekday - 1]}, ${d.day} ${monthNames[d.month - 1]}';
 String mediumDate(DateTime d) =>
     '${dayNames[d.weekday - 1]}, ${d.day} ${monthNames[d.month - 1]} · ${clockLabel(d)}';
 String dayMonth(DateTime d) => '${d.day} ${monthNames[d.month - 1]}';
@@ -945,45 +1026,30 @@ String isoDay(DateTime d) =>
 bool isToday(DateTime a, DateTime b) =>
     a.year == b.year && a.month == b.month && a.day == b.day;
 
-/// The "Demo AI" badge shown on AI surfaces when running the built-in responder.
-class DemoAiBadge extends StatelessWidget {
-  const DemoAiBadge({super.key, this.compact = false});
-  final bool compact;
-
-  @override
-  Widget build(BuildContext context) {
-    final p = context.p;
-    return StatusChip(
-      label: 'Demo AI',
-      icon: Ic.sparkle,
-      compact: compact,
-      fg: p.isDark ? T.amber : p.warning,
-      bg: p.isDark ? T.amber.withValues(alpha: 0.16) : T.amber.withValues(alpha: 0.26),
-    );
-  }
-}
-
 /// Clinic open/closed state, shared by Home and the emergency triage screen.
-bool clinicOpenAt(DateTime t) =>
-    t.weekday == DateTime.sunday
-    ? t.hour >= 9 && t.hour < 16
-    : t.hour >= 8 && t.hour < 19;
+/// Hours come from [Clinic]: Mon–Sat 9:00 AM – 6:00 PM, closed Sundays.
+bool clinicOpenAt(DateTime t) => Clinic.isOpenNow(t);
 
-String clinicStatusLine(DateTime t) =>
-    clinicOpenAt(t) ? 'Open now · ${_closeText(t)}' : 'Closed now · Opens ${_openText(t)}';
-
-String _closeText(DateTime t) =>
-    t.weekday == DateTime.sunday ? 'until 4:00 PM today' : 'until 7:00 PM today';
-
-String _openText(DateTime t) {
-  if (t.hour < 8) return 'at 8:00 AM';
-  if (t.weekday == DateTime.sunday) return 'at 9:00 AM Sunday';
-  return 'at 8:00 AM tomorrow';
+String clinicStatusLine(DateTime t) {
+  if (Clinic.isOpenNow(t)) return 'Open now · until 6:00 PM today';
+  final o = Clinic.nextOpening(t);
+  final today = DateTime(t.year, t.month, t.day);
+  final sameDay =
+      o.year == today.year && o.month == today.month && o.day == today.day;
+  final label = sameDay
+      ? 'at 9:00 AM today'
+      : 'at 9:00 AM ${Clinic.weekdayName(o.weekday)}';
+  return 'Closed now · opens $label';
 }
 
 /// Shared pet picker row.
 class PetChip extends StatelessWidget {
-  const PetChip({super.key, required this.pet, required this.selected, required this.onTap});
+  const PetChip({
+    super.key,
+    required this.pet,
+    required this.selected,
+    required this.onTap,
+  });
 
   final Pet pet;
   final bool selected;
@@ -1027,11 +1093,21 @@ class PetChip extends StatelessWidget {
                     ),
                     const Spacer(),
                     if (selected)
-                      Ic.svg(Ic.checkCircle, color: p.accent, size: 20, stroke: 2.1),
+                      Ic.svg(
+                        Ic.checkCircle,
+                        color: p.accent,
+                        size: 20,
+                        stroke: 2.1,
+                      ),
                   ],
                 ),
                 const SizedBox(height: 8),
-                Text(pet.name, style: Type.headline(p), maxLines: 1, overflow: TextOverflow.ellipsis),
+                Text(
+                  pet.name,
+                  style: Type.headline(p),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
                 const SizedBox(height: 2),
                 Text(
                   pet.breed,

@@ -1,7 +1,10 @@
+import 'dart:convert';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:petcare_artifact/app.dart';
 import 'package:petcare_artifact/design/tokens.dart';
 import 'package:petcare_artifact/data/models.dart';
@@ -10,7 +13,9 @@ import 'package:petcare_artifact/design/theme.dart';
 import 'package:petcare_artifact/screens/appointments/book_flow.dart';
 import 'package:petcare_artifact/screens/pets/pet_profile_screen.dart';
 import 'package:petcare_artifact/screens/triage_screen.dart';
+import 'package:petcare_artifact/services/ai_service.dart';
 import 'package:petcare_artifact/state/app_store.dart';
+import 'package:petcare_artifact/widgets/common.dart';
 
 DateTime fixedNow() => DateTime(2026, 10, 13, 9, 40);
 
@@ -77,7 +82,9 @@ Finder horizontalScrollable(WidgetTester tester) {
   double bestArea = -1;
   for (var i = 0; i < tester.widgetList(all).length; i++) {
     final el = all.at(i);
-    if (tester.widget<Scrollable>(el).axisDirection != AxisDirection.right) continue;
+    if (tester.widget<Scrollable>(el).axisDirection != AxisDirection.right) {
+      continue;
+    }
     final sz = tester.getSize(el);
     if (sz.width * sz.height > bestArea) {
       bestArea = sz.width * sz.height;
@@ -88,7 +95,11 @@ Finder horizontalScrollable(WidgetTester tester) {
 }
 
 /// Scrolls a horizontal carousel until [finder] is built.
-Future<void> revealHorizontal(WidgetTester tester, Finder finder, {int max = 20}) async {
+Future<void> revealHorizontal(
+  WidgetTester tester,
+  Finder finder, {
+  int max = 20,
+}) async {
   for (var i = 0; i < max && countOf(finder) == 0; i++) {
     await tester.drag(
       horizontalScrollable(tester),
@@ -108,27 +119,112 @@ int countOf(Finder f) {
   }
 }
 
+/// Stands in for the Gemini API: model discovery returns one flash model and
+/// content generation returns the canned triage JSON under test. The app's
+/// real request building, parsing and routing all run unchanged.
+class _FakeGemini extends http.BaseClient {
+  _FakeGemini(this.triageJson);
+  final Map<String, dynamic> triageJson;
+
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) async {
+    final Object body = request.url.path.endsWith('/models')
+        ? {
+            'models': [
+              {
+                'name': 'models/gemini-flash-test',
+                'displayName': 'Flash (test)',
+                'supportedGenerationMethods': ['generateContent'],
+              },
+            ],
+          }
+        : {
+            'candidates': [
+              {
+                'content': {
+                  'parts': [
+                    {'text': jsonEncode(triageJson)},
+                  ],
+                },
+              },
+            ],
+          };
+    final bytes = utf8.encode(jsonEncode(body));
+    return http.StreamedResponse(
+      Stream.value(bytes),
+      200,
+      request: request,
+      headers: {'content-type': 'application/json'},
+    );
+  }
+}
+
+Map<String, dynamic> _triageJson({
+  required String route,
+  required int urgency,
+  required String title,
+  List<String> redFlags = const [],
+  List<String> homeCare = const [],
+  String? petName = 'Biscuit',
+}) => {
+  'petName': petName,
+  'route': route,
+  'urgency': urgency,
+  'title': title,
+  'summary': 'A canned test summary for "$title".',
+  'bullets': ['Canned test bullet'],
+  'redFlags': redFlags,
+  'homeCare': homeCare,
+  'nextStep': 'Canned next step.',
+};
+
+/// A service in live mode backed by the fake, reached through the real
+/// key-storage path — no test-only seams in the service itself.
+Future<AiService> _liveAi(Map<String, dynamic> triageJson) async {
+  // Without mock values, SharedPreferences.getInstance() never resolves
+  // inside testWidgets (the fake async clock stalls its internal wait).
+  SharedPreferences.setMockInitialValues({});
+  final ai = AiService(client: _FakeGemini(triageJson));
+  addTearDown(ai.dispose);
+  final ok = await ai.useKey('test-key-that-is-long-enough-for-checks');
+  assert(ok && ai.isLive, 'fake service should reach live mode');
+  return ai;
+}
+
 /// Scrolls the main list until [finder] exists on screen.
 Future<bool> reveal(WidgetTester tester, Finder finder, {int max = 40}) async {
   if (countOf(finder) > 0) return true;
   for (var i = 0; i < max; i++) {
-    await tester.drag(mainScrollable(tester), const Offset(0, -180), warnIfMissed: false);
+    await tester.drag(
+      mainScrollable(tester),
+      const Offset(0, -180),
+      warnIfMissed: false,
+    );
     await tester.pumpAndSettle();
     if (countOf(finder) > 0) return true;
   }
   return false;
 }
 
-Future<void> scrollToText(WidgetTester tester, String text, {int max = 40}) async {
+Future<void> scrollToText(
+  WidgetTester tester,
+  String text, {
+  int max = 40,
+}) async {
   await reveal(tester, find.text(text), max: max);
 }
 
-Future<void> scrollToLabel(WidgetTester tester, Pattern label, {int max = 40}) async {
+Future<void> scrollToLabel(
+  WidgetTester tester,
+  Pattern label, {
+  int max = 40,
+}) async {
   await reveal(tester, find.bySemanticsLabel(label), max: max);
 }
 
 /// Chrome that overlays the scrolling content and would swallow a tap.
 const double _chromeTop = 104;
+
 /// The floating tab bar: FloatingTabBar.lift (10) + FloatingTabBar.height (64),
 /// plus a little slack. A tap inside this band lands on the bar, not the list.
 const double _chromeBottom = 78;
@@ -151,11 +247,19 @@ bool _inViewport(WidgetTester tester, Finder finder, Size size) {
 }
 
 /// Scrolls both axes until [finder] is fully inside the viewport, then taps it.
-Future<void> tapInView(WidgetTester tester, Finder finder, {int max = 60}) async {
+Future<void> tapInView(
+  WidgetTester tester,
+  Finder finder, {
+  int max = 60,
+}) async {
   final size = viewSize;
   for (var i = 0; i < max; i++) {
     if (countOf(finder) == 0) {
-      await tester.drag(mainScrollable(tester), const Offset(0, -160), warnIfMissed: false);
+      await tester.drag(
+        mainScrollable(tester),
+        const Offset(0, -160),
+        warnIfMissed: false,
+      );
     } else if (!_inViewport(tester, finder, size)) {
       final c = tester.getCenter(finder.first);
       if (c.dx > size.width || c.dx < 0) {
@@ -166,9 +270,17 @@ Future<void> tapInView(WidgetTester tester, Finder finder, {int max = 60}) async
         );
       } else if (c.dy < 0) {
         // Target scrolled above the viewport — scroll back up.
-        await tester.drag(mainScrollable(tester), const Offset(0, 200), warnIfMissed: false);
+        await tester.drag(
+          mainScrollable(tester),
+          const Offset(0, 200),
+          warnIfMissed: false,
+        );
       } else {
-        await tester.drag(mainScrollable(tester), const Offset(0, -160), warnIfMissed: false);
+        await tester.drag(
+          mainScrollable(tester),
+          const Offset(0, -160),
+          warnIfMissed: false,
+        );
       }
     } else {
       await tester.tap(finder.first);
@@ -181,7 +293,11 @@ Future<void> tapInView(WidgetTester tester, Finder finder, {int max = 60}) async
   await tester.pumpAndSettle();
 }
 
-Future<void> scrollAndTap(WidgetTester tester, Finder finder, {int max = 40}) async {
+Future<void> scrollAndTap(
+  WidgetTester tester,
+  Finder finder, {
+  int max = 40,
+}) async {
   await tapInView(tester, finder);
 }
 
@@ -200,6 +316,10 @@ void main() {
       await pumpShell(tester);
       expect(find.text('Good morning'), findsOneWidget);
       expect(find.text('My Pets'), findsOneWidget);
+      // The structural hero now sizes itself in flow (taller than the old
+      // overflow-based one), so the reminders section starts just below the
+      // initial build window — reveal it like a user would.
+      await scrollTo(tester, 'Care reminders');
       expect(find.text('Care reminders'), findsOneWidget);
       await scrollTo(tester, 'Clinic info');
       expect(find.text('Clinic info'), findsOneWidget);
@@ -222,9 +342,12 @@ void main() {
   });
 
   group('Home', () {
-    testWidgets('shows the next appointment hero with a live countdown',
-        (tester) async {
+    testWidgets('shows the next appointment hero with a live countdown', (
+      tester,
+    ) async {
       await pumpShell(tester);
+      // The carousel builds pages lazily: only the visible page is in the
+      // tree, so its "Next appointment" chip appears once.
       expect(find.text('Next appointment'), findsOneWidget);
       expect(find.text('in 3d'), findsWidgets);
       expect(find.textContaining('Biscuit'), findsWidgets);
@@ -246,15 +369,18 @@ void main() {
       expect(find.text('Add pet').evaluate().isNotEmpty, isTrue);
     });
 
-    testWidgets('first reminder toggle shows the in-context permission sheet',
-        (tester) async {
+    testWidgets('first reminder toggle shows the in-context permission sheet', (
+      tester,
+    ) async {
       final store = AppStore(now: fixedNow())
         ..reminders = Seed.reminders.map((r) => r.copyWith(on: false)).toList();
       await pumpShell(tester, store: store);
 
       // Find the medications switch and turn it on.
       await scrollToText(tester, 'Care reminders');
-      final sw = find.byType(CupertinoSwitch).first;
+      // The taller carousel hero can leave the switches just below the fold;
+      // find them offstage and let ensureVisible do the scrolling.
+      final sw = find.byType(CupertinoSwitch, skipOffstage: false).first;
       await tester.ensureVisible(sw);
       await tester.pumpAndSettle();
       await tester.tap(sw);
@@ -268,14 +394,18 @@ void main() {
       expect(store.reminderOn(ReminderKind.medication), isTrue);
     });
 
-    testWidgets('declining permission reverts the switch and explains why',
-        (tester) async {
+    testWidgets('declining permission reverts the switch and explains why', (
+      tester,
+    ) async {
       final store = AppStore(now: fixedNow())
         ..reminders = Seed.reminders.map((r) => r.copyWith(on: false)).toList();
       await pumpShell(tester, store: store);
 
       await scrollToText(tester, 'Care reminders');
-      await tester.ensureVisible(find.byType(CupertinoSwitch).first);
+      // The taller carousel hero can leave the switches just below the fold;
+      // find them offstage and let ensureVisible do the scrolling.
+      final noff = find.byType(CupertinoSwitch, skipOffstage: false);
+      await tester.ensureVisible(noff.first);
       await tester.pumpAndSettle();
       await tester.tap(find.byType(CupertinoSwitch).first);
       await tester.pumpAndSettle();
@@ -288,12 +418,151 @@ void main() {
       expect(store.reminderOn(ReminderKind.medication), isFalse);
     });
 
-    testWidgets('clinic card names the after-hours emergency hospital',
-        (tester) async {
+    testWidgets('clinic card names the after-hours emergency hospital', (
+      tester,
+    ) async {
       await pumpShell(tester);
       await scrollToText(tester, 'Animal Emergency Center');
       expect(find.textContaining('Open now'), findsWidgets);
       expect(find.textContaining('Animal Emergency Center'), findsWidgets);
+    });
+  });
+
+  group('Home appointment carousel', () {
+    /// Current carousel page, read off the PageView the hero owns.
+    int carouselPage(WidgetTester tester) =>
+        (tester.widget<PageView>(find.byType(PageView)).controller?.page ?? 0)
+            .round();
+
+    testWidgets('auto-advances every 5 seconds and wraps around', (
+      tester,
+    ) async {
+      await pumpShell(tester);
+      expect(find.byType(PageView), findsOneWidget);
+      expect(carouselPage(tester), 0);
+
+      await tester.pump(const Duration(seconds: 5));
+      await tester.pumpAndSettle();
+      expect(carouselPage(tester), 1);
+
+      await tester.pump(const Duration(seconds: 5));
+      await tester.pumpAndSettle();
+      expect(carouselPage(tester), 0);
+    });
+
+    testWidgets('pauses while touched and resumes after idle', (
+      tester,
+    ) async {
+      await pumpShell(tester);
+      final gesture = await tester.startGesture(
+        tester.getCenter(find.byType(PageView)),
+      );
+      // A small drag breaks the tap (no accidental push) without paging.
+      await gesture.moveBy(const Offset(0, 30));
+      await tester.pump(const Duration(seconds: 6));
+      await tester.pumpAndSettle();
+      // The 5s auto-advance was suppressed for the whole hold.
+      expect(carouselPage(tester), 0);
+
+      await gesture.up();
+      // Resume is idle-gated: 2.5s of quiet, then the 5s cadence restarts.
+      await tester.pump(const Duration(milliseconds: 2500));
+      await tester.pump(const Duration(seconds: 5));
+      await tester.pumpAndSettle();
+      expect(carouselPage(tester), 1);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('reduced motion disables auto-advance but keeps paging', (
+      tester,
+    ) async {
+      await pumpShell(tester, reduceMotion: true);
+      expect(find.byType(PageView), findsOneWidget);
+
+      await tester.pump(const Duration(seconds: 11));
+      await tester.pumpAndSettle();
+      // No auto-advance timer at all under Reduce Motion.
+      expect(carouselPage(tester), 0);
+
+      // A manual swipe still pages — instantly, with no animation.
+      await tester.drag(find.byType(PageView), const Offset(-400, 0));
+      await tester.pumpAndSettle();
+      expect(carouselPage(tester), 1);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('a single appointment shows no paging chrome and no timer', (
+      tester,
+    ) async {
+      final s = AppStore(now: fixedNow())..cancelAppointment('a2');
+      await pumpShell(tester, store: s);
+      expect(find.byType(PageView), findsNothing);
+      expect(find.text('Next appointment'), findsOneWidget);
+
+      await tester.pump(const Duration(seconds: 11));
+      await tester.pumpAndSettle();
+      expect(find.byType(PageView), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('zero appointments keeps the empty state', (tester) async {
+      final s = AppStore(now: fixedNow())
+        ..cancelAppointment('a1')
+        ..cancelAppointment('a2');
+      await pumpShell(tester, store: s);
+      expect(find.text('Nothing booked yet'), findsOneWidget);
+      expect(find.byType(PageView), findsNothing);
+
+      await tester.tap(find.text('Book').first);
+      await tester.pumpAndSettle();
+      expect(find.text('Choose a service to get started'), findsOneWidget);
+    });
+
+    testWidgets('countdown updates as the store clock advances', (
+      tester,
+    ) async {
+      // a1 is Oct 16 10:00; now sits 59 minutes before it.
+      final s = AppStore(now: DateTime(2026, 10, 16, 9, 1));
+      await pumpShell(tester, store: s);
+      expect(find.text('in 59m'), findsWidgets);
+
+      s.advanceClock(const Duration(minutes: 2));
+      await tester.pump();
+      expect(find.text('in 57m'), findsWidgets);
+      expect(find.text('in 59m'), findsNothing);
+    });
+
+    testWidgets('both pages share one fixed card height at AX5', (
+      tester,
+    ) async {
+      await pumpShell(tester, textScale: 1.6);
+      // Pages build lazily, so measure each card while its page is current.
+      Finder cardFinder() => find.descendant(
+        of: find.byType(PageView),
+        matching: find.byType(GlassCard),
+      );
+      expect(cardFinder(), findsOneWidget);
+      final h0 = tester.getSize(cardFinder()).height;
+
+      await tester.drag(find.byType(PageView), const Offset(-400, 0));
+      await tester.pumpAndSettle();
+      expect(cardFinder(), findsOneWidget);
+      final h1 = tester.getSize(cardFinder()).height;
+
+      // Identical heights: paging never moves the content below the carousel.
+      expect(h1, h0);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('tapping a page opens that appointment', (tester) async {
+      await pumpShell(tester);
+      await tester.drag(find.byType(PageView), const Offset(-400, 0));
+      await tester.pumpAndSettle();
+      expect(carouselPage(tester), 1);
+      await tester.tap(find.text('Mochi · Full Grooming'));
+      await tester.pumpAndSettle();
+      // Appointment detail for a2 (Mochi's grooming) is on top.
+      expect(find.text('Full Grooming'), findsWidgets);
     });
   });
 
@@ -347,10 +616,18 @@ void main() {
   });
 
   group('Triage — all four routes', () {
-    Future<void> submitTriage(WidgetTester tester, String description) async {
+    // Drives the real triage engine through a canned Gemini API: model
+    // discovery returns one flash model and content generation returns the
+    // canned triage JSON under test. No canned app-side answers involved.
+    Future<void> submitTriage(
+      WidgetTester tester,
+      Map<String, dynamic> triageJson, {
+      DateTime? now,
+    }) async {
+      final ai = await _liveAi(triageJson);
       await tester.pumpWidget(
         AppScope(
-          store: AppStore(now: fixedNow()),
+          store: AppStore(now: now ?? fixedNow(), ai: ai),
           child: CupertinoApp(
             theme: themeFor(AppPalette.light),
             home: TriageScreen(entry: TriageEntry.home),
@@ -360,17 +637,24 @@ void main() {
       await tester.pumpAndSettle();
       await tester.enterText(
         find.byType(CupertinoTextField).first,
-        description,
+        'test description',
       );
       await tester.pump();
       await scrollAndTap(tester, find.text('Run health check'));
-      await tester.pump(const Duration(milliseconds: 900));
       await tester.pumpAndSettle();
     }
 
     testWidgets('serious signs route to the emergency screen', (tester) async {
-      await submitTriage(tester, 'Biscuit is having trouble breathing and collapsed');
-      expect(find.text('Possible emergency'), findsOneWidget);
+      await submitTriage(
+        tester,
+        _triageJson(
+          route: 'emergency',
+          urgency: 2,
+          title: 'Possible emergency — canned',
+          redFlags: ['Laboured breathing or blue/pale gums'],
+        ),
+      );
+      expect(find.text('Possible emergency — canned'), findsOneWidget);
       // Primary call CTA is present and above the fold.
       expect(find.text('Call the clinic now'), findsWidgets);
       expect(find.text(Seed.clinicPhone), findsWidgets);
@@ -381,82 +665,254 @@ void main() {
     });
 
     testWidgets('moderate symptoms route to booking', (tester) async {
-      await submitTriage(tester, 'Biscuit has been vomiting and is limping');
+      await submitTriage(
+        tester,
+        _triageJson(
+          route: 'book',
+          urgency: 1,
+          title: 'Needs a visit — canned',
+          redFlags: ['Blood in vomit, stool or urine'],
+        ),
+      );
       expect(find.text('Book appointment'), findsWidgets);
       expect(find.text('Chat clinic team about this'), findsWidgets);
       expect(find.textContaining('not a diagnosis'), findsOneWidget);
     });
 
     testWidgets('mild concerns route to home care', (tester) async {
-      await submitTriage(tester, 'Mochi is shedding a lot, any tips on brushing?');
-      expect(find.text('Care instructions for the next 48 hours'), findsOneWidget);
+      await submitTriage(
+        tester,
+        _triageJson(
+          route: 'homeCare',
+          urgency: 0,
+          title: 'Manageable at home — canned',
+          homeCare: ['Keep fresh water available at all times'],
+        ),
+      );
+      expect(
+        find.text('Care instructions for the next 48 hours'),
+        findsOneWidget,
+      );
       expect(find.text('Book anyway'), findsOneWidget);
       expect(find.text('Chat clinic team about this'), findsWidgets);
     });
 
     testWidgets('vague input routes to the clinic chat', (tester) async {
-      await submitTriage(tester, 'Something seems different today');
+      await submitTriage(
+        tester,
+        _triageJson(
+          route: 'chat',
+          urgency: 1,
+          title: 'Let the clinic team take a look — canned',
+        ),
+      );
       expect(find.text('Chat clinic team about this'), findsWidgets);
       expect(find.text('Book instead'), findsOneWidget);
     });
 
-    testWidgets('text-only path works with no photo (no dead end)',
-        (tester) async {
-      await submitTriage(tester, 'Biscuit is scratching a lot this week');
+    testWidgets('text-only path works with no photo (no dead end)', (
+      tester,
+    ) async {
+      await submitTriage(
+        tester,
+        _triageJson(route: 'book', urgency: 1, title: 'Needs a visit — canned'),
+      );
       expect(find.text('Run health check'), findsNothing);
       expect(find.textContaining('not a diagnosis'), findsOneWidget);
     });
 
-    testWidgets('after hours swaps in the nearest emergency hospital',
-        (tester) async {
-      await tester.pumpWidget(
-        AppScope(
-          store: AppStore(now: DateTime(2026, 10, 13, 22)),
-          child: CupertinoApp(
-            theme: themeFor(AppPalette.light),
-            home: TriageScreen(entry: TriageEntry.home),
-          ),
+    testWidgets('after hours swaps in the nearest emergency hospital', (
+      tester,
+    ) async {
+      await submitTriage(
+        tester,
+        _triageJson(
+          route: 'emergency',
+          urgency: 2,
+          title: 'Possible emergency — canned',
+          redFlags: ['Laboured breathing or blue/pale gums'],
         ),
+        now: DateTime(2026, 10, 13, 22),
       );
-      await tester.pumpAndSettle();
-      await tester.enterText(
-        find.byType(CupertinoTextField).first,
-        'she is struggling to breathe',
-      );
-      await tester.pump();
-      await scrollAndTap(tester, find.text('Run health check'));
-      await tester.pump(const Duration(milliseconds: 900));
-      await tester.pumpAndSettle();
 
       expect(find.text(Seed.afterHoursPhone), findsWidgets);
       expect(find.textContaining(Seed.afterHoursName), findsWidgets);
     });
 
     testWidgets('home-care outcome can still book', (tester) async {
-      await submitTriage(tester, 'How often should I brush Mochi?');
+      await submitTriage(
+        tester,
+        _triageJson(
+          route: 'homeCare',
+          urgency: 0,
+          title: 'Manageable at home — canned',
+          homeCare: ['Keep fresh water available at all times'],
+        ),
+      );
       await scrollAndTap(tester, find.text('Book anyway'));
       await tester.pumpAndSettle();
       expect(find.byType(BookFlow), findsOneWidget);
     });
-  });
 
-  group('Demo-AI mode', () {
-    testWidgets('shows the Demo AI badge on AI surfaces', (tester) async {
-      await pumpShell(tester);
-      await openTab(tester, 'Chats');
-      await scrollToText(tester, 'PetCare AI');
-      expect(find.text('Demo AI'), findsWidgets);
+    testWidgets('no manual pet picker — AI identifies the pet', (tester) async {
+      final ai = await _liveAi(
+        _triageJson(
+          route: 'book',
+          urgency: 1,
+          title: 'Needs a visit — canned',
+          petName: 'Mochi',
+        ),
+      );
+      await tester.pumpWidget(
+        AppScope(
+          store: AppStore(now: fixedNow(), ai: ai),
+          child: CupertinoApp(
+            theme: themeFor(AppPalette.light),
+            home: const TriageScreen(entry: TriageEntry.home),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      // The manual picker is gone; the AI context line is shown instead.
+      expect(find.text('Which pet?'), findsNothing);
+      expect(
+        find.textContaining('The AI will identify which pet'),
+        findsOneWidget,
+      );
+      await tester.enterText(
+        find.byType(CupertinoTextField).first,
+        'Mochi is limping',
+      );
+      await tester.pump();
+      await scrollAndTap(tester, find.text('Run health check'));
+      await tester.pumpAndSettle();
+      expect(find.text('Needs a visit — canned'), findsWidgets);
     });
 
-    testWidgets('home quick action opens triage with the badge', (tester) async {
+    testWidgets('ambiguous pet shows honest disambiguation', (tester) async {
+      await submitTriage(
+        tester,
+        _triageJson(
+          route: 'book',
+          urgency: 1,
+          title: 'Needs a visit — canned',
+          petName: null,
+        ),
+      );
+      // No guessing: an honest prompt to pick the pet, then a re-run.
+      expect(find.text('Which pet is this about?'), findsOneWidget);
+      expect(find.textContaining('didn\u2019t guess'), findsOneWidget);
+      expect(find.text('Checking Biscuit'), findsOneWidget);
+      expect(find.text('Checking Mochi'), findsOneWidget);
+      await scrollAndTap(tester, find.text('Checking Mochi'));
+      await tester.pumpAndSettle();
+      // Re-ran with the chosen pet through the known-pet path.
+      expect(find.text('Needs a visit — canned'), findsWidgets);
+      expect(find.text('Which pet is this about?'), findsNothing);
+    });
+
+    testWidgets('preselected pet skips detection', (tester) async {
+      final ai = await _liveAi(
+        _triageJson(route: 'book', urgency: 1, title: 'Needs a visit — canned'),
+      );
+      await tester.pumpWidget(
+        AppScope(
+          store: AppStore(now: fixedNow(), ai: ai),
+          child: CupertinoApp(
+            theme: themeFor(AppPalette.light),
+            home: const TriageScreen(
+              entry: TriageEntry.home,
+              preselectedPetId: 'p1',
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.textContaining('Checking Biscuit'), findsOneWidget);
+    });
+  });
+
+  group('AI unavailable', () {
+    testWidgets(
+      'the AI thread pins the unavailable card when no key is configured',
+      (tester) async {
+        await pumpShell(tester);
+        await openTab(tester, 'Chats');
+        await tester.tap(find.text('PetCare AI').first);
+        await tester.pumpAndSettle();
+        expect(find.text('PetCare AI is unavailable'), findsOneWidget);
+        expect(find.textContaining('No API key is configured'), findsOneWidget);
+        expect(find.text('Add an API key'), findsOneWidget);
+        // Never a dead end: working alternatives are right there.
+        expect(find.text('Book a visit'), findsOneWidget);
+        expect(find.text('Call the clinic'), findsOneWidget);
+      },
+    );
+
+    testWidgets('sending in the AI thread explains what went wrong', (
+      tester,
+    ) async {
+      await pumpShell(tester);
+      await openTab(tester, 'Chats');
+      await tester.tap(find.text('PetCare AI').first);
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byType(CupertinoTextField).first,
+        'what should Biscuit eat',
+      );
+      await tester.pump();
+      await tester.tap(find.bySemanticsLabel('Send message'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('no API key is configured'), findsWidgets);
+      expect(find.textContaining('Settings → PetCare AI'), findsWidgets);
+    });
+
+    testWidgets(
+      'triage shows the unavailable card and disables Run without a key',
+      (tester) async {
+        await tester.pumpWidget(
+          AppScope(
+            store: AppStore(now: fixedNow()),
+            child: CupertinoApp(
+              theme: themeFor(AppPalette.light),
+              home: TriageScreen(entry: TriageEntry.home),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(find.text('PetCare AI is unavailable'), findsOneWidget);
+        // The card pushes the form down — scroll until the field is built.
+        await scrollToText(tester, 'Describe the concern');
+        await tester.enterText(
+          find.byType(CupertinoTextField).first,
+          'Biscuit is limping',
+        );
+        await tester.pump();
+        // Run is disabled without a live model: no request can fire.
+        await scrollToText(tester, 'Run health check');
+        final runButton = find.ancestor(
+          of: find.text('Run health check'),
+          matching: find.byType(PrimaryButton),
+        );
+        expect(runButton, findsOneWidget);
+        expect(tester.widget<PrimaryButton>(runButton).onPressed, isNull);
+      },
+    );
+
+    testWidgets('home quick action opens triage without any demo badge', (
+      tester,
+    ) async {
       await pumpShell(tester);
       await scrollAndTap(tester, find.text('AI Triage'));
       await tester.pumpAndSettle();
       expect(find.byType(TriageScreen), findsOneWidget);
-      expect(find.text('Demo AI'), findsWidgets);
+      expect(find.text('PetCare AI is unavailable'), findsOneWidget);
+      expect(find.text('Demo AI'), findsNothing);
     });
 
-    testWidgets('the AI thread offers Start health check', (tester) async {
+    testWidgets('the AI thread still offers Start health check', (
+      tester,
+    ) async {
       await pumpShell(tester);
       await openTab(tester, 'Chats');
       await tester.tap(find.text('PetCare AI').first);
@@ -467,8 +923,9 @@ void main() {
   });
 
   group('Chats', () {
-    testWidgets('inbox lists the pinned AI thread and the clinic thread',
-        (tester) async {
+    testWidgets('inbox lists the pinned AI thread and the clinic thread', (
+      tester,
+    ) async {
       await pumpShell(tester);
       await openTab(tester, 'Chats');
       expect(find.text('PetCare AI'), findsWidgets);
@@ -476,17 +933,19 @@ void main() {
       expect(find.textContaining('Always available'), findsWidgets);
     });
 
-    testWidgets('staff directory lists name + role with no availability badges',
-        (tester) async {
-      await pumpShell(tester);
-      await openTab(tester, 'Chats');
-      expect(find.text('Dr. Rafael Alvarez'), findsWidgets);
-      expect(find.text('Veterinarian'), findsWidgets);
-      expect(find.text('Miguel Cruz'), findsWidgets);
-      expect(find.text('Vet Assistant'), findsWidgets);
-      expect(find.text('Ana Reyes'), findsWidgets);
-      expect(find.textContaining('Online'), findsNothing);
-    });
+    testWidgets(
+      'staff directory lists name + role with no availability badges',
+      (tester) async {
+        await pumpShell(tester);
+        await openTab(tester, 'Chats');
+        expect(find.text('Dr. Rafael Alvarez'), findsWidgets);
+        expect(find.text('Veterinarian'), findsWidgets);
+        expect(find.text('Miguel Cruz'), findsWidgets);
+        expect(find.text('Vet Assistant'), findsWidgets);
+        expect(find.text('Ana Reyes'), findsWidgets);
+        expect(find.textContaining('Online'), findsNothing);
+      },
+    );
 
     testWidgets('sending a message gets a reply', (tester) async {
       await pumpShell(tester);
@@ -508,8 +967,9 @@ void main() {
   });
 
   group('Appointments', () {
-    testWidgets('upcoming list shows pet, service, staff and status',
-        (tester) async {
+    testWidgets('upcoming list shows pet, service, staff and status', (
+      tester,
+    ) async {
       await pumpShell(tester);
       await openTab(tester, 'Appointments');
       expect(find.text('Upcoming'), findsOneWidget);
@@ -524,8 +984,9 @@ void main() {
       expect(find.text('Full Grooming'), findsWidgets);
     });
 
-    testWidgets('segmented control switches to Past and offers Rebook',
-        (tester) async {
+    testWidgets('segmented control switches to Past and offers Rebook', (
+      tester,
+    ) async {
       await pumpShell(tester);
       await openTab(tester, 'Appointments');
       await scrollAndTap(tester, find.text('Past').first);
@@ -547,8 +1008,9 @@ void main() {
       expect(find.text('Book appointment'), findsOneWidget);
     });
 
-    testWidgets('cancel asks for confirmation, then moves the visit to Past',
-        (tester) async {
+    testWidgets('cancel asks for confirmation, then moves the visit to Past', (
+      tester,
+    ) async {
       final store = AppStore(now: fixedNow());
       await pumpShell(tester, store: store);
       await openTab(tester, 'Appointments');
@@ -565,11 +1027,15 @@ void main() {
       expect(store.past.any((a) => a.status == ApptStatus.cancelled), isTrue);
       await scrollToText(tester, 'Cancelled');
       expect(find.text('Cancelled'), findsWidgets);
-      expect(store.upcoming.any((a) => a.status == ApptStatus.cancelled), isFalse);
+      expect(
+        store.upcoming.any((a) => a.status == ApptStatus.cancelled),
+        isFalse,
+      );
     });
 
-    testWidgets('rebook opens the flow already past the triage step',
-        (tester) async {
+    testWidgets('rebook opens the flow already past the triage step', (
+      tester,
+    ) async {
       await pumpShell(tester);
       await openTab(tester, 'Appointments');
       await tester.tap(find.text('Past').first);
@@ -582,7 +1048,10 @@ void main() {
   });
 
   group('Book flow — 6 steps end to end', () {
-    Future<AppStore> startBooking(WidgetTester tester, {String? triageNote}) async {
+    Future<AppStore> startBooking(
+      WidgetTester tester, {
+      String? triageNote,
+    }) async {
       final store = AppStore(now: fixedNow());
       await pumpShell(tester, store: store);
       await openTab(tester, 'Appointments');
@@ -592,54 +1061,67 @@ void main() {
       return store;
     }
 
-    testWidgets('runs pet -> triage -> service -> date -> review -> confirmed',
-        (tester) async {
-      final store = await startBooking(tester);
+    testWidgets(
+      'runs pet -> triage -> service -> date -> review -> confirmed',
+      (tester) async {
+        final store = await startBooking(tester);
 
-      // Step 1 — pet pre-selected, Continue enabled.
-      expect(find.textContaining('Step 1 of 6'), findsOneWidget);
-      expect(find.text('Who is this visit for?'), findsOneWidget);
-      await scrollAndTap(tester, find.text('Continue').first);
+        // Step 1 — pet pre-selected, Continue enabled.
+        expect(find.textContaining('Step 1 of 6'), findsOneWidget);
+        expect(find.text('Who is this visit for?'), findsOneWidget);
+        await scrollAndTap(tester, find.text('Continue').first);
 
-      // Step 2 — triage is skippable.
-      expect(find.text('AI health check'), findsOneWidget);
-      await scrollAndTap(tester, find.text('Skip triage'));
-      await scrollAndTap(tester, find.text('Continue').first);
+        // Step 2 — triage is skippable.
+        expect(find.text('AI health check'), findsOneWidget);
+        await scrollAndTap(tester, find.text('Skip triage'));
+        await scrollAndTap(tester, find.text('Continue').first);
 
-      // Step 3 — service.
-      expect(find.textContaining('Step 3 of 6'), findsOneWidget);
-      expect(find.text('What does Biscuit need?'), findsOneWidget);
-      await scrollAndTap(tester, find.text('Vet Consultation'));
-      expect(find.textContaining('₱850'), findsWidgets);
-      await scrollAndTap(tester, find.text('Continue').first);
+        // Step 3 — service.
+        expect(find.textContaining('Step 3 of 6'), findsOneWidget);
+        expect(find.text('What does Biscuit need?'), findsOneWidget);
+        await scrollAndTap(tester, find.text('Vet Consultation'));
+        expect(find.textContaining('₱850'), findsWidgets);
+        await scrollAndTap(tester, find.text('Continue').first);
 
-      // Step 4 — date & time, duration-aware slots.
-      expect(find.textContaining('Step 4 of 6'), findsOneWidget);
-      expect(find.textContaining('30 min'), findsWidgets);
-      await scrollAndTap(tester, find.text('14').first);
-      await scrollAndTap(tester, find.text('10:00 AM').first);
-      await scrollAndTap(tester, find.text('Continue').first);
+        // Step 4 — date & time, duration-aware slots.
+        expect(find.textContaining('Step 4 of 6'), findsOneWidget);
+        expect(find.textContaining('30 min'), findsWidgets);
+        await scrollAndTap(tester, find.text('14').first);
+        await scrollAndTap(tester, find.text('10:00 AM').first);
+        await scrollAndTap(tester, find.text('Continue').first);
 
-      // Step 5 — review shows staff + total before confirming.
-      expect(find.textContaining('Step 5 of 6'), findsOneWidget);
-      await scrollToText(tester, 'Dr. Rafael Alvarez');
-      expect(find.text('Assigned staff'), findsOneWidget);
-      expect(find.text('Dr. Rafael Alvarez'), findsWidgets);
-      await scrollToText(tester, '₱850');
-      expect(find.text('Total'), findsWidgets);
-      expect(find.text('₱850'), findsWidgets);
-      await scrollAndTap(tester, find.text('Confirm booking'));
-      await tester.pumpAndSettle();
-      await tester.pump(const Duration(milliseconds: 400));
+        // Step 5 — review shows staff + total before confirming.
+        expect(find.textContaining('Step 5 of 6'), findsOneWidget);
+        await scrollToText(tester, 'Dr. Rafael Alvarez');
+        expect(find.text('Assigned staff'), findsOneWidget);
+        expect(find.text('Dr. Rafael Alvarez'), findsWidgets);
+        await scrollToText(tester, '₱850');
+        expect(find.text('Total'), findsWidgets);
+        expect(find.text('₱850'), findsWidgets);
+        await scrollAndTap(tester, find.text('Confirm booking'));
+        await tester.pumpAndSettle();
+        await tester.pump(const Duration(milliseconds: 400));
 
-      // Step 6 — confirmed.
-      expect(find.text('You are booked'), findsOneWidget);
-      expect(store.upcoming.any((a) => a.serviceId == 'sv1'), isTrue);
-    });
+        // Step 6 — confirmed.
+        expect(find.text('You are booked'), findsOneWidget);
+        expect(store.upcoming.any((a) => a.serviceId == 'sv1'), isTrue);
+      },
+    );
 
-    testWidgets('sick-visit triage turns the booking into a request',
-        (tester) async {
-      final store = AppStore(now: fixedNow());
+    testWidgets('sick-visit triage turns the booking into a request', (
+      tester,
+    ) async {
+      final store = AppStore(
+        now: fixedNow(),
+        ai: await _liveAi(
+          _triageJson(
+            route: 'book',
+            urgency: 1,
+            title: 'Needs a visit — canned',
+            redFlags: ['Blood in vomit, stool or urine'],
+          ),
+        ),
+      );
       await pumpShell(tester, store: store);
       await openTab(tester, 'Appointments');
       await tester.tap(find.bySemanticsLabel('Book a new appointment'));
@@ -648,13 +1130,13 @@ void main() {
 
       await scrollAndTap(tester, find.text('Continue').first);
       await scrollAndTap(tester, find.text('Start health check'));
+      await scrollToText(tester, 'Describe the concern');
       await tester.enterText(
         find.byType(CupertinoTextField).first,
         'Biscuit has been vomiting and is not eating',
       );
       await tester.pump();
       await scrollAndTap(tester, find.text('Run health check'));
-      await tester.pump(const Duration(milliseconds: 900));
       await tester.pumpAndSettle();
 
       // Routed to the book outcome.
@@ -682,8 +1164,9 @@ void main() {
       );
     });
 
-    testWidgets('grooming shows intake fields and estimated pricing',
-        (tester) async {
+    testWidgets('grooming shows intake fields and estimated pricing', (
+      tester,
+    ) async {
       await startBooking(tester);
       await scrollAndTap(tester, find.text('Continue').first);
       await scrollAndTap(tester, find.text('Skip triage'));
@@ -733,8 +1216,9 @@ void main() {
       expect(find.textContaining('No delivery'), findsOneWidget);
     });
 
-    testWidgets('search with no results offers Browse all products',
-        (tester) async {
+    testWidgets('search with no results offers Browse all products', (
+      tester,
+    ) async {
       await pumpShell(tester);
       await openTab(tester, 'Shop');
       await tester.enterText(find.byType(CupertinoSearchTextField), 'zzzz');
@@ -755,22 +1239,26 @@ void main() {
       expect(find.text('Claw & Whisker Grooming Clippers'), findsWidgets);
     });
 
-    testWidgets('out-of-stock product shows a Notify me action',
-        (tester) async {
+    testWidgets('out-of-stock product shows a Notify me action', (
+      tester,
+    ) async {
       await pumpShell(tester);
       await openTab(tester, 'Shop');
       expect(find.text('Out of stock'), findsWidgets);
     });
 
-    testWidgets('add to cart then cart shows quantity and total',
-        (tester) async {
+    testWidgets('add to cart then cart shows quantity and total', (
+      tester,
+    ) async {
       final store = AppStore(now: fixedNow());
       await pumpShell(tester, store: store);
       await openTab(tester, 'Shop');
 
       await tapInView(
         tester,
-        find.bySemanticsLabel('Add Grass-fed Lamb & Oat Adult Dog Food to cart'),
+        find.bySemanticsLabel(
+          'Add Grass-fed Lamb & Oat Adult Dog Food to cart',
+        ),
       );
       expect(find.text('Added to cart'), findsOneWidget);
       await tester.tap(find.text('View cart'));
@@ -821,29 +1309,33 @@ void main() {
       expect(find.bySemanticsLabel(RegExp(r'^Language\.')), findsOneWidget);
     });
 
-    testWidgets('delete account shows the iOS-style alert with the exact copy',
-        (tester) async {
-      final store = AppStore(now: fixedNow());
-      await pumpShell(tester, store: store);
-      await openTab(tester, 'Profile');
-      await scrollAndTap(tester, find.text('Privacy').first);
-      await tester.pumpAndSettle();
+    testWidgets(
+      'delete account shows the iOS-style alert with the exact copy',
+      (tester) async {
+        final store = AppStore(now: fixedNow());
+        await pumpShell(tester, store: store);
+        await openTab(tester, 'Profile');
+        await scrollAndTap(tester, find.text('Privacy').first);
+        await tester.pumpAndSettle();
 
-      await scrollAndTap(tester, find.text('Delete account'));
-      await tester.pumpAndSettle();
-      expect(find.text('Delete account?'), findsOneWidget);
-      expect(
-        find.text('This permanently removes your pets, appointments, and orders.'),
-        findsOneWidget,
-      );
-      expect(find.text('Cancel'), findsWidgets);
-      expect(find.text('Delete'), findsOneWidget);
+        await scrollAndTap(tester, find.text('Delete account'));
+        await tester.pumpAndSettle();
+        expect(find.text('Delete account?'), findsOneWidget);
+        expect(
+          find.text(
+            'This permanently removes your pets, appointments, and orders.',
+          ),
+          findsOneWidget,
+        );
+        expect(find.text('Cancel'), findsWidgets);
+        expect(find.text('Delete'), findsOneWidget);
 
-      await tester.tap(find.text('Delete'));
-      await tester.pumpAndSettle();
-      expect(find.text('Account deleted'), findsOneWidget);
-      expect(store.petCount, 0);
-    });
+        await tester.tap(find.text('Delete'));
+        await tester.pumpAndSettle();
+        expect(find.text('Account deleted'), findsOneWidget);
+        expect(store.petCount, 0);
+      },
+    );
 
     testWidgets('appearance can switch to the dark token set', (tester) async {
       final store = AppStore(now: fixedNow());
@@ -878,8 +1370,9 @@ void main() {
       );
     });
 
-    testWidgets('statuses are labelled with text, not colour alone',
-        (tester) async {
+    testWidgets('statuses are labelled with text, not colour alone', (
+      tester,
+    ) async {
       await pumpShell(tester);
       await scrollToText(tester, 'Open now');
       expect(find.text('Open now'), findsWidgets);
@@ -897,14 +1390,16 @@ void main() {
       expect(size.height, greaterThanOrEqualTo(48));
     });
 
-    testWidgets('every tab renders at Dynamic Type AX5 (135%+) without overflow',
-        (tester) async {
-      await pumpShell(tester, textScale: 1.35);
-      for (final t in ['Chats', 'Appointments', 'Shop', 'Profile', 'Home']) {
-        await openTab(tester, t);
-        expect(tester.takeException(), isNull, reason: 'overflow on $t');
-      }
-    });
+    testWidgets(
+      'every tab renders at Dynamic Type AX5 (135%+) without overflow',
+      (tester) async {
+        await pumpShell(tester, textScale: 1.35);
+        for (final t in ['Chats', 'Appointments', 'Shop', 'Profile', 'Home']) {
+          await openTab(tester, t);
+          expect(tester.takeException(), isNull, reason: 'overflow on $t');
+        }
+      },
+    );
 
     testWidgets('home scrolls (does not clip) at AX5', (tester) async {
       await pumpShell(tester, textScale: 1.35);
@@ -914,8 +1409,9 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('portrait and landscape both render without overflow',
-        (tester) async {
+    testWidgets('portrait and landscape both render without overflow', (
+      tester,
+    ) async {
       await pumpShell(tester, size: const Size(390, 844));
       for (final t in ['Home', 'Appointments', 'Shop']) {
         await openTab(tester, t);
@@ -929,8 +1425,9 @@ void main() {
       }
     });
 
-    testWidgets('keyboard focus shows a Terracotta ring and Enter activates',
-        (tester) async {
+    testWidgets('keyboard focus shows a Terracotta ring and Enter activates', (
+      tester,
+    ) async {
       await pumpShell(tester);
 
       // Tab moves focus through the controls in reading order.
@@ -948,21 +1445,23 @@ void main() {
               w.decoration is BoxDecoration &&
               ((w.decoration as BoxDecoration).border?.top.width ?? 0) == 2 &&
               ((w.decoration as BoxDecoration).border?.top.color ==
-                      T.terracottaDeep),
+                  T.terracottaDeep),
         ),
         findsWidgets,
         reason: 'expected a 2pt terracotta focus ring',
       );
     });
 
-    testWidgets('focus order is the visual reading order and has no traps',
-        (tester) async {
+    testWidgets('focus order is the visual reading order and has no traps', (
+      tester,
+    ) async {
       await pumpShell(tester);
       final seen = <int>[];
       for (var i = 0; i < 8; i++) {
         await tester.sendKeyEvent(LogicalKeyboardKey.tab);
         await tester.pumpAndSettle();
-        final r = FocusManager.instance.primaryFocus?.context?.findRenderObject();
+        final r = FocusManager.instance.primaryFocus?.context
+            ?.findRenderObject();
         if (r is RenderBox) {
           final p = r.localToGlobal(Offset.zero);
           seen.add((p.dy * 10).round() + (p.dx / 10).round());
@@ -972,7 +1471,9 @@ void main() {
       expect(seen.toSet().length, greaterThan(3));
     });
 
-    testWidgets('Enter on a focused control performs its action', (tester) async {
+    testWidgets('Enter on a focused control performs its action', (
+      tester,
+    ) async {
       await pumpShell(tester);
       // Focus the "Book" quick action and activate it with the keyboard.
       final book = find.text('Book');

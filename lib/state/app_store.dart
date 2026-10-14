@@ -6,6 +6,7 @@ import 'package:flutter/cupertino.dart';
 
 import '../data/models.dart';
 import '../data/seed.dart';
+import '../data/clinic.dart';
 import '../design/theme.dart' show ThemeMode;
 import '../services/ai_service.dart';
 import '../services/photo_store.dart';
@@ -28,6 +29,32 @@ class AppStore extends ChangeNotifier {
 
   /// Test/demo hook for deterministic screenshots.
   void advanceClock(Duration d) => now = _now.add(d);
+
+  Timer? _clock;
+
+  /// Starts the wall clock: `now` re-reads the device time every 30s so live
+  /// countdowns, open/closed state and the upcoming/past partition stay
+  /// current without user interaction. Called once from `main()`; tests drive
+  /// time with [advanceClock] instead, so the timer never leaks into the test
+  /// harness (a pending periodic timer fails `testWidgets` teardown).
+  void startClock() {
+    _clock ??= Timer.periodic(const Duration(seconds: 30), (_) {
+      _now = DateTime.now();
+      notifyListeners();
+    });
+  }
+
+  /// Test seam / shutdown hook.
+  void stopClock() {
+    _clock?.cancel();
+    _clock = null;
+  }
+
+  @override
+  void dispose() {
+    stopClock();
+    super.dispose();
+  }
 
   // ------------------------------------------------------------- app state
   bool get notificationsAsked => _notificationsAsked;
@@ -74,15 +101,23 @@ class AppStore extends ChangeNotifier {
   // ------------------------------------------------------------- accessors
   String get ownerName => Seed.ownerName;
 
+  /// First name for conversational copy. Empty when the profile has no name —
+  /// callers use a plain greeting instead of a hardcoded name.
+  String get ownerFirstName {
+    final n = ownerName.trim();
+    return n.isEmpty ? '' : n.split(RegExp(r'\s+')).first;
+  }
+
   Appointment? get nextAppointment {
-    final up = upcoming;
+    final up = upcomingAppointments;
     return up.isEmpty ? null : up.first;
   }
 
-  /// Soonest first — the Appointments list and the Home hero both rely on this.
-  /// Visits whose pet is no longer on the account are skipped, so removing a pet
-  /// (or the whole account) can never leave a dangling reference on screen.
-  List<Appointment> get upcoming => (appointments
+  /// Soonest first — the home carousel pages through these, and the
+  /// Appointments list and reminders rely on the same ordering. Visits whose
+  /// pet is no longer on the account are skipped, so removing a pet (or the
+  /// whole account) can never leave a dangling reference on screen.
+  List<Appointment> get upcomingAppointments => (appointments
         .where(
           (a) =>
               a.status.isActive &&
@@ -91,6 +126,9 @@ class AppStore extends ChangeNotifier {
         )
         .toList())
       ..sort((a, b) => a.start.compareTo(b.start));
+
+  /// Alias kept for existing callers.
+  List<Appointment> get upcoming => upcomingAppointments;
 
   List<Appointment> get past => appointments
       .where((a) => !a.status.isActive || a.end.isBefore(now))
@@ -116,25 +154,18 @@ class AppStore extends ChangeNotifier {
 
   int get unreadNotifications => notifications.where((n) => !n.read).length;
 
-  bool staffOnline() {
-    final h = now.hour + (now.minute > 0 ? 0.08 : 0);
-    return h >= 8 && h < 19;
-  }
+  /// The human team keeps the same hours as the front desk.
+  bool staffOnline() => Clinic.isOpenNow(now);
 
   /// Response-time note shown when the human team is offline.
   String? get offlineNote {
     if (staffOnline()) return null;
-    final open = _nextOpen(now);
-    return 'The clinic team is offline until 8:00 AM. $open';
-  }
-
-  static String _nextOpen(DateTime n) {
-    if (n.hour >= 8) return 'Replies today from 8:00 AM.';
-    final tomorrow = n.add(const Duration(days: 1));
-    final dd = DateTime(tomorrow.year, tomorrow.month, tomorrow.day, 8);
-    final days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-    if (n.day == tomorrow.day) return 'Replies tomorrow from 8:00 AM.';
-    return 'Replies on ${days[dd.weekday % 7]} from 8:00 AM.';
+    final o = Clinic.nextOpening(now);
+    final today = DateTime(now.year, now.month, now.day);
+    final sameDay =
+        o.year == today.year && o.month == today.month && o.day == today.day;
+    final when = sameDay ? 'today' : Clinic.weekdayName(o.weekday);
+    return 'The clinic team is offline until 9:00 AM $when.';
   }
 
   // ----------------------------------------------------------------- pets
@@ -503,13 +534,15 @@ class AppStore extends ChangeNotifier {
         triageSummary: result.summary,
       ),
     );
+    final first = ownerFirstName;
+    final thanks = first.isEmpty ? 'Thanks' : 'Thanks, $first';
     final reply = ChatMessage(
       id: 'r${now.microsecondsSinceEpoch}',
       threadId: 'th_clinic',
       author: ChatAuthor.vetAssistant,
       text: staffOnline()
-          ? 'Thanks Marco — I have this. I will review ${pet.name}\'s chart and reply with a recommendation within clinic hours.'
-          : 'Thanks Marco — this came through while we were closed. I will pick it up from 8:00 AM and reply with a recommendation.',
+          ? '$thanks — I have this. I will review ${pet.name}\'s chart and reply with a recommendation within clinic hours.'
+          : '$thanks — this came through while we were closed. I will pick it up from 9:00 AM and reply with a recommendation.',
       at: now.add(const Duration(minutes: 1)),
       petId: pet.id,
     );

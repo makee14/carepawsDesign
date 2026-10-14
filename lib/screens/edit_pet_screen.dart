@@ -84,7 +84,9 @@ class _EditPetScreenState extends State<EditPetScreen> {
   }
 
   String? get _weightError {
-    if (_weight.text.trim().isEmpty) return 'Enter a weight so the clinic can dose correctly.';
+    if (_weight.text.trim().isEmpty) {
+      return 'Enter a weight so the clinic can dose correctly.';
+    }
     if (_parsedWeight == null) {
       return 'Use a number like 4.6 — between 0.2 and 120 kg.';
     }
@@ -93,46 +95,13 @@ class _EditPetScreenState extends State<EditPetScreen> {
 
   Future<void> _pickBirthDate(DateTime current) async {
     final now = DateTime.now();
-    var temp = _birthDate ?? current;
-    await showCupertinoModalPopup<void>(
-      context: context,
-      builder: (ctx) => Container(
-        height: 300,
-        color: context.p.surface,
-        child: SafeArea(
-          top: false,
-          child: Column(
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  CupertinoButton(
-                    onPressed: () => dismissSheet(ctx),
-                    child: const Text('Cancel'),
-                  ),
-                  CupertinoButton(
-                    onPressed: () {
-                      setState(() => _birthDate = temp);
-                      dismissSheet(ctx);
-                    },
-                    child: const Text('Done'),
-                  ),
-                ],
-              ),
-              Expanded(
-                child: CupertinoDatePicker(
-                  mode: CupertinoDatePickerMode.date,
-                  initialDateTime: temp,
-                  minimumDate: DateTime(now.year - 30),
-                  maximumDate: now,
-                  onDateTimeChanged: (d) => temp = d,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
+    final picked = await showDatePickerSheet(
+      context,
+      initial: _birthDate ?? current,
+      minimum: DateTime(now.year - 30),
+      maximum: now,
     );
+    if (picked != null) setState(() => _birthDate = picked);
   }
 
   void _save(Pet pet) {
@@ -150,7 +119,12 @@ class _EditPetScreenState extends State<EditPetScreen> {
     final vitals = pet.vitals
         .map(
           (v) => v.label == 'Weight'
-              ? Vital(label: v.label, value: w.toStringAsFixed(1), unit: v.unit, icon: v.icon)
+              ? Vital(
+                  label: v.label,
+                  value: w.toStringAsFixed(1),
+                  unit: v.unit,
+                  icon: v.icon,
+                )
               : v,
         )
         .toList();
@@ -223,7 +197,11 @@ class _EditPetScreenState extends State<EditPetScreen> {
                           child: ClipRRect(
                             borderRadius: BorderRadius.circular(T.rCard),
                             child: preview != null && preview.isNotEmpty
-                                ? Image.memory(preview, fit: BoxFit.cover, gaplessPlayback: true)
+                                ? Image.memory(
+                                    preview,
+                                    fit: BoxFit.cover,
+                                    gaplessPlayback: true,
+                                  )
                                 : PetArt(
                                     seed: pet.id.hashCode.abs() % 4,
                                     species: pet.species,
@@ -238,13 +216,17 @@ class _EditPetScreenState extends State<EditPetScreen> {
                             _PhotoAction(
                               icon: Ic.camera,
                               label: 'Take photo',
-                              onTap: _picking ? null : () => _pick(ImageSource.camera),
+                              onTap: _picking
+                                  ? null
+                                  : () => _pick(ImageSource.camera),
                             ),
                             const SizedBox(width: 10),
                             _PhotoAction(
                               icon: Ic.image,
                               label: 'Choose photo',
-                              onTap: _picking ? null : () => _pick(ImageSource.gallery),
+                              onTap: _picking
+                                  ? null
+                                  : () => _pick(ImageSource.gallery),
                             ),
                             if (preview != null && preview.isNotEmpty) ...[
                               const SizedBox(width: 10),
@@ -253,7 +235,8 @@ class _EditPetScreenState extends State<EditPetScreen> {
                                 label: 'Remove photo',
                                 onTap: _picking
                                     ? null
-                                    : () => setState(() => _photo = Uint8List(0)),
+                                    : () =>
+                                          setState(() => _photo = Uint8List(0)),
                               ),
                             ],
                           ],
@@ -306,7 +289,11 @@ class _EditPetScreenState extends State<EditPetScreen> {
                                 style: Type.body(p),
                               ),
                             ),
-                            Ic.svg(Ic.calendar, color: p.textSecondary, size: 18),
+                            Ic.svg(
+                              Ic.calendar,
+                              color: p.textSecondary,
+                              size: 18,
+                            ),
                           ],
                         ),
                       ),
@@ -328,13 +315,17 @@ class _EditPetScreenState extends State<EditPetScreen> {
                     child: CupertinoTextField(
                       controller: _weight,
                       onChanged: (_) => setState(() {}),
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
                       placeholder: pet.weightKg.toStringAsFixed(1),
                       padding: const EdgeInsets.all(14),
                       cursorColor: p.primaryFill,
                       decoration: _dec(p).copyWith(
                         border: Border.all(
-                          color: _weightError == null ? p.divider : p.destructive,
+                          color: _weightError == null
+                              ? p.divider
+                              : p.destructive,
                         ),
                       ),
                     ),
@@ -392,7 +383,10 @@ String _ageLabel(DateTime birth) {
   int y = now.year - birth.year;
   int m = now.month - birth.month;
   if (now.day < birth.day) m--;
-  if (m < 0) { y--; m += 12; }
+  if (m < 0) {
+    y--;
+    m += 12;
+  }
   if (y <= 0) return '$m mo old';
   return '$y yr old';
 }
@@ -414,7 +408,10 @@ class _Labeled extends StatelessWidget {
           children: [
             Expanded(child: Text(label, style: Type.footnoteEmph(p))),
             if (hint != null)
-              Text(hint!, style: Type.caption(p).copyWith(color: p.textSecondary)),
+              Text(
+                hint!,
+                style: Type.caption(p).copyWith(color: p.textSecondary),
+              ),
           ],
         ),
         const SizedBox(height: 6),
@@ -425,7 +422,11 @@ class _Labeled extends StatelessWidget {
 }
 
 class _PhotoAction extends StatelessWidget {
-  const _PhotoAction({required this.icon, required this.label, required this.onTap});
+  const _PhotoAction({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
 
   final String icon;
   final String label;
@@ -467,7 +468,11 @@ class _PhotoAction extends StatelessWidget {
 }
 
 class _Segmented extends StatelessWidget {
-  const _Segmented({required this.value, required this.options, required this.onChanged});
+  const _Segmented({
+    required this.value,
+    required this.options,
+    required this.onChanged,
+  });
 
   final String value;
   final List<String> options;
@@ -488,13 +493,15 @@ class _Segmented extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: o == value ? p.accent : p.surface,
                   borderRadius: BorderRadius.circular(T.rControl),
-                  border: Border.all(color: o == value ? p.accent : p.divider, width: 1.4),
+                  border: Border.all(
+                    color: o == value ? p.accent : p.divider,
+                    width: 1.4,
+                  ),
                 ),
                 child: Text(
                   o,
-                  style: Type.footnoteEmph(
-                    p,
-                  ).copyWith(color: o == value ? p.onPrimaryFill : p.text),
+                  style: Type.footnoteEmph(p)
+                      .copyWith(color: o == value ? p.onPrimaryFill : p.text),
                 ),
               ),
             ),

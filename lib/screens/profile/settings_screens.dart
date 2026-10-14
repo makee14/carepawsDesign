@@ -12,7 +12,7 @@ import '../../state/app_store.dart';
 import '../../widgets/common.dart';
 import '../onboarding_screen.dart';
 import 'privacy_screen.dart';
-import '../../services/ai_service.dart' show AiStatus;
+import '../../services/ai_service.dart' show AiFailure, AiStatus;
 
 /// Consolidated settings surface reachable from the Profile nav bar.
 class SettingsScreen extends StatelessWidget {
@@ -140,8 +140,8 @@ class AiSettingsScreen extends StatelessWidget {
             const AiSettingsCard(),
             const SizedBox(height: T.s20),
             Text(
-              'The key decides whether health checks and chat run on a real model '
-              'or on the built-in responder. Nothing else about the app changes.',
+              'The key decides whether health checks and chat can run on a real model. '
+              'Without one, PetCare AI stays unavailable — everything else about the app works the same.',
               style: Type.footnote(p).copyWith(color: p.textSecondary),
             ),
           ],
@@ -196,7 +196,7 @@ class _AiSettingsCardState extends State<AiSettingsCard> {
     await showAppSheet(
       context,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -211,8 +211,8 @@ class _AiSettingsCardState extends State<AiSettingsCard> {
             Text(
               ok
                   ? 'Health checks and chat now run on ${store.ai.modelLabel}.'
-                  : 'The key looked empty or incomplete, so PetCare AI stayed in demo mode. '
-                        'Paste the whole key from Google AI Studio and try again.',
+                  : '${(store.ai.failure ?? AiFailure.noKey).label}, so PetCare AI stayed unavailable. '
+                        '${(store.ai.failure ?? AiFailure.noKey).hint}',
               style: Type.footnote(context.p),
               textAlign: TextAlign.center,
             ),
@@ -240,7 +240,7 @@ class _AiSettingsCardState extends State<AiSettingsCard> {
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
-                  ai.isLive ? 'Live model connected' : 'Demo AI mode',
+                  ai.isLive ? 'Live model connected' : 'AI unavailable',
                   style: Type.headline(p),
                 ),
               ),
@@ -249,7 +249,7 @@ class _AiSettingsCardState extends State<AiSettingsCard> {
                     ? 'Checking'
                     : ai.isLive
                     ? 'Live'
-                    : 'Demo',
+                    : 'Unavailable',
                 compact: true,
                 fg: ai.isLive ? p.success : p.warning,
                 bg: ai.isLive ? const Color(0xFFDDF2E3) : T.amber.withValues(alpha: 0.28),
@@ -260,8 +260,7 @@ class _AiSettingsCardState extends State<AiSettingsCard> {
           Text(
             ai.isLive
                 ? 'Model ${ai.modelLabel} was selected automatically from the available free-tier models that accept text and images.'
-                : 'No API key is configured, so PetCare AI runs on the built-in responder. Every triage route still works. '
-                      'Paste a key below to go live on this device.',
+                : '${(ai.failure ?? AiFailure.noKey).label}. ${(ai.failure ?? AiFailure.noKey).hint}',
             style: Type.body(p).copyWith(color: p.textSecondary),
           ),
           const SizedBox(height: T.s16),
@@ -339,8 +338,10 @@ class _AiSettingsCardState extends State<AiSettingsCard> {
 /// Clears the session and returns to the splash, so the sign-in flow can be
 /// demonstrated again without relaunching the app.
 Future<void> _confirmSignOut(BuildContext context, AppStore store) async {
-  final ok = await showCupertinoDialog<bool>(
-    context: context,
+  final ok = await showPopup<bool>(
+    context,
+    centered: true,
+    barrierDismissible: false,
     builder: (ctx) => CupertinoAlertDialog(
       title: const Text('Sign out?'),
       content: const Padding(
@@ -586,7 +587,7 @@ class ScaffoldlessNotice {
       context,
       scrollable: false,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -928,7 +929,7 @@ class HelpScreen extends StatelessWidget {
       context,
       scrollable: false,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -974,7 +975,7 @@ class FaqScreen extends StatelessWidget {
       ),
       (
         'Is the clinic open on Sundays?',
-        'Yes, 9:00 AM to 4:00 PM. Mon–Sat is 8:00 AM to 7:00 PM. After hours, the nearest 24-hour animal '
+        'No — the clinic is closed on Sundays. Hours are Mon–Sat 9:00 AM to 6:00 PM. After hours, the nearest 24-hour animal '
             'hospital is listed on the Home screen.',
       ),
       (
@@ -982,9 +983,7 @@ class FaqScreen extends StatelessWidget {
         'Yes, from the appointment card or the detail screen. You can also rebook in the same number of taps, '
             'and past visits have a one-tap Rebook that skips triage.',
       ),
-      ('What time is it right now?', clinicOpenAt(store.now)
-          ? 'The clinic is open now, until 7:00 PM today.'
-          : 'The clinic is closed. It reopens at 8:00 AM.'),
+      ('What time is it right now?', clinicStatusLine(store.now)),
     ];
 
     return CupertinoPageScaffold(

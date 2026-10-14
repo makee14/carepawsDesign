@@ -2,6 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../app.dart';
+import '../data/clinic.dart';
 import '../data/seed.dart';
 import '../design/icons.dart';
 import '../design/theme.dart';
@@ -61,7 +62,7 @@ class RemindersScreen extends StatelessWidget {
                           ReminderTile(
                             title: store.reminders[i].title,
                             subtitle: store.reminders[i].subtitle,
-                            iconPath: store.reminders[i].icon,
+                            iconPath: Ic.byName(store.reminders[i].icon),
                             value: store.reminders[i].on,
                             onChanged: (v) => toggleReminderWithSheet(
                               context,
@@ -97,14 +98,22 @@ class _UpcomingList extends StatelessWidget {
     final p = context.p;
     final meds = [
       for (final pet in store.pets)
-        (pet: pet, when: '8:00 AM every day', what: 'Joint supplement, 1 tablet'),
+        (
+          pet: pet,
+          when: '8:00 AM every day',
+          what: 'Joint supplement, 1 tablet',
+        ),
     ];
     final vaccines = [
       (pet: store.pets.last, when: '9 Jul 2027', what: 'Triose booster'),
     ];
     final appts = [
       for (final a in store.upcoming)
-        (pet: store.pet(a.petId)!, when: mediumDate(a.start), what: store.serviceOf(a.serviceId).name),
+        (
+          pet: store.pet(a.petId)!,
+          when: mediumDate(a.start),
+          what: store.serviceOf(a.serviceId).name,
+        ),
     ];
 
     return SoftCard(
@@ -116,7 +125,8 @@ class _UpcomingList extends StatelessWidget {
               icon: Ic.pill,
               title: m.what,
               subtitle: '${m.pet.name} · ${m.when}',
-              onTap: () => _detail(context, m.what, '${m.pet.name} · ${m.when}'),
+              onTap: () =>
+                  _detail(context, m.what, '${m.pet.name} · ${m.when}'),
             ),
           Divider(height: 1, color: p.divider, indent: 54),
           for (final v in vaccines)
@@ -124,7 +134,8 @@ class _UpcomingList extends StatelessWidget {
               icon: Ic.syringe,
               title: v.what,
               subtitle: '${v.pet.name} · ${v.when}',
-              onTap: () => _detail(context, v.what, '${v.pet.name} · ${v.when}'),
+              onTap: () =>
+                  _detail(context, v.what, '${v.pet.name} · ${v.when}'),
             ),
           if (appts.isNotEmpty) ...[
             Divider(height: 1, color: p.divider, indent: 54),
@@ -133,7 +144,8 @@ class _UpcomingList extends StatelessWidget {
                 icon: Ic.calendar,
                 title: a.what,
                 subtitle: '${a.pet.name} · ${a.when}',
-                onTap: () => _detail(context, a.what, '${a.pet.name} · ${a.when}'),
+                onTap: () =>
+                    _detail(context, a.what, '${a.pet.name} · ${a.when}'),
               ),
           ],
         ],
@@ -146,15 +158,27 @@ class _UpcomingList extends StatelessWidget {
       context,
       scrollable: false,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(title, style: Type.title2(context.p), textAlign: TextAlign.center),
+            Text(
+              title,
+              style: Type.title2(context.p),
+              textAlign: TextAlign.center,
+            ),
             const SizedBox(height: 8),
-            Text(when, style: Type.body(context.p).copyWith(color: context.p.textSecondary), textAlign: TextAlign.center),
+            Text(
+              when,
+              style: Type.body(context.p)
+                  .copyWith(color: context.p.textSecondary),
+              textAlign: TextAlign.center,
+            ),
             const SizedBox(height: T.s20),
-            PrimaryButton(label: 'Done', onPressed: () => dismissSheet(context)),
+            PrimaryButton(
+              label: 'Done',
+              onPressed: () => dismissSheet(context),
+            ),
           ],
         ),
       ),
@@ -163,7 +187,12 @@ class _UpcomingList extends StatelessWidget {
 }
 
 class _ReminderRow extends StatelessWidget {
-  const _ReminderRow({required this.icon, required this.title, required this.subtitle, required this.onTap});
+  const _ReminderRow({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
   final String icon;
   final String title;
   final String subtitle;
@@ -206,18 +235,28 @@ class ClinicInfoScreen extends StatelessWidget {
                       children: [
                         Row(
                           children: [
-                            Expanded(child: Text(Seed.clinicName, style: Type.title2(p))),
+                            Expanded(
+                              child: Text(
+                                Seed.clinicName,
+                                style: Type.title2(p),
+                              ),
+                            ),
                             StatusChip(
                               label: open ? 'Open now' : 'Closed now',
                               icon: open ? Ic.checkCircle : Ic.clock,
                               compact: true,
                               fg: open ? p.success : p.warning,
-                              bg: open ? const Color(0xFFDDF2E3) : T.amber.withValues(alpha: 0.28),
+                              bg: open
+                                  ? const Color(0xFFDDF2E3)
+                                  : T.amber.withValues(alpha: 0.28),
                             ),
                           ],
                         ),
                         const SizedBox(height: 8),
-                        Text(clinicStatusLine(store.now), style: Type.footnote(p)),
+                        Text(
+                          clinicStatusLine(store.now),
+                          style: Type.footnote(p),
+                        ),
                       ],
                     ),
                   ),
@@ -225,12 +264,21 @@ class ClinicInfoScreen extends StatelessWidget {
                   Text('Hours', style: Type.headline(p)),
                   const SizedBox(height: 10),
                   SoftCard(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 6,
+                    ),
                     child: Column(
                       children: const [
-                        AmountRow(label: 'Monday – Saturday', value: '8:00 AM – 7:00 PM'),
+                        AmountRow(
+                          label: 'Monday – Saturday',
+                          value: '8:00 AM – 7:00 PM',
+                        ),
                         AmountRow(label: 'Sunday', value: '9:00 AM – 4:00 PM'),
-                        AmountRow(label: 'Public holidays', value: '9:00 AM – 1:00 PM'),
+                        AmountRow(
+                          label: 'Public holidays',
+                          value: '9:00 AM – 1:00 PM',
+                        ),
                       ],
                     ),
                   ),
@@ -245,16 +293,23 @@ class ClinicInfoScreen extends StatelessWidget {
                           children: [
                             Ic.svg(Ic.pin, color: p.accent, size: 20),
                             const SizedBox(width: 10),
-                            Expanded(child: Text(Seed.clinicAddress, style: Type.body(p))),
+                            Expanded(
+                              child: Text(
+                                Seed.clinicAddress,
+                                style: Type.body(p),
+                              ),
+                            ),
                           ],
                         ),
                         const SizedBox(height: 14),
                         PrimaryButton(
                           label: 'Open in Maps',
-                          icon: Ic.location2,
+                          icon: Ic.pin,
                           onPressed: () => _openLink(
                             context,
-                            Uri.parse('https://maps.google.com/?q=${Uri.encodeComponent(Seed.clinicAddress)}'),
+                            Uri.parse(
+                              'https://maps.google.com/?q=${Uri.encodeComponent(Clinic.address)}',
+                            ),
                             'Open PetCare in Maps',
                           ),
                         ),
@@ -272,14 +327,19 @@ class ClinicInfoScreen extends StatelessWidget {
                           title: Seed.clinicPhone,
                           subtitle: 'Reception',
                           leadingPath: Ic.phone,
-                          onTap: () => _call(context, Seed.clinicPhone, Seed.clinicName),
+                          onTap: () =>
+                              _call(context, Seed.clinicPhone, Seed.clinicName),
                         ),
                         Divider(height: 1, color: p.divider, indent: 58),
                         RowTile(
                           title: Seed.afterHoursPhone,
                           subtitle: '24-hour animal hospital',
                           leadingPath: Ic.phone,
-                          onTap: () => _call(context, Seed.afterHoursPhone, Seed.afterHoursName),
+                          onTap: () => _call(
+                            context,
+                            Seed.afterHoursPhone,
+                            Seed.afterHoursName,
+                          ),
                         ),
                       ],
                     ),
@@ -295,7 +355,12 @@ class ClinicInfoScreen extends StatelessWidget {
                           children: [
                             Ic.svg(Ic.alert, color: p.accentText, size: 20),
                             const SizedBox(width: 10),
-                            Expanded(child: Text('After hours', style: Type.headline(p))),
+                            Expanded(
+                              child: Text(
+                                'After hours',
+                                style: Type.headline(p),
+                              ),
+                            ),
                           ],
                         ),
                         const SizedBox(height: 8),
@@ -307,13 +372,21 @@ class ClinicInfoScreen extends StatelessWidget {
                         const SizedBox(height: 10),
                         Text(Seed.afterHoursName, style: Type.headline(p)),
                         const SizedBox(height: 4),
-                        Text(Seed.afterHoursPhone, style: Type.body(p).copyWith(color: p.accentText)),
+                        Text(
+                          Seed.afterHoursPhone,
+                          style: Type.body(p).copyWith(color: p.accentText),
+                        ),
                         const SizedBox(height: 14),
                         PrimaryButton(
-                          label: 'Call ${Seed.afterHoursName.split(' — ').first}',
+                          label:
+                              'Call ${Seed.afterHoursName.split(' — ').first}',
                           icon: Ic.phone,
                           destructive: true,
-                          onPressed: () => _call(context, Seed.afterHoursPhone, Seed.afterHoursName),
+                          onPressed: () => _call(
+                            context,
+                            Seed.afterHoursPhone,
+                            Seed.afterHoursName,
+                          ),
                         ),
                       ],
                     ),
@@ -327,36 +400,8 @@ class ClinicInfoScreen extends StatelessWidget {
     );
   }
 
-  Future<void> _call(BuildContext context, String number, String name) async {
-    final uri = Uri(scheme: 'tel', path: number.replaceAll(' ', ''));
-    var ok = false;
-    try {
-      ok = await launchUrl(uri) ||
-          await launchUrl(uri, mode: LaunchMode.externalApplication);
-    } catch (_) {
-      ok = false;
-    }
-    if (!context.mounted) return;
-    if (!ok) {
-      await showAppSheet(
-        context,
-        scrollable: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(name, style: Type.title2(context.p), textAlign: TextAlign.center),
-              const SizedBox(height: 10),
-              Text(number, style: Type.largeTitle(context.p).copyWith(color: context.p.accentText)),
-              const SizedBox(height: T.s20),
-              PrimaryButton(label: 'Done', onPressed: () => dismissSheet(context)),
-            ],
-          ),
-        ),
-      );
-    }
-  }
+  Future<void> _call(BuildContext context, String number, String name) =>
+      callPhoneNumber(context, number: number, name: name);
 
   Future<void> _openLink(BuildContext context, Uri uri, String title) async {
     var ok = false;
@@ -371,17 +416,28 @@ class ClinicInfoScreen extends StatelessWidget {
         context,
         scrollable: false,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
+          padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Ic.svg(Ic.location2, color: context.p.accent, size: 36),
+              Ic.svg(Ic.pin, color: context.p.accent, size: 36),
               const SizedBox(height: 12),
-              Text(title, style: Type.title2(context.p), textAlign: TextAlign.center),
+              Text(
+                title,
+                style: Type.title2(context.p),
+                textAlign: TextAlign.center,
+              ),
               const SizedBox(height: 8),
-              Text(Seed.clinicAddress, style: Type.footnote(context.p), textAlign: TextAlign.center),
+              Text(
+                Seed.clinicAddress,
+                style: Type.footnote(context.p),
+                textAlign: TextAlign.center,
+              ),
               const SizedBox(height: T.s20),
-              PrimaryButton(label: 'Done', onPressed: () => dismissSheet(context)),
+              PrimaryButton(
+                label: 'Done',
+                onPressed: () => dismissSheet(context),
+              ),
             ],
           ),
         ),

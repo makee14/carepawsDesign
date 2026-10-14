@@ -1,14 +1,19 @@
 import 'package:flutter/cupertino.dart';
 
 import '../app.dart';
+import '../data/clinic.dart';
 import '../data/models.dart';
 import '../data/seed.dart';
 import '../design/icons.dart';
 import '../design/theme.dart';
 import '../design/tokens.dart';
+import '../services/ai_service.dart';
 import '../state/app_store.dart';
+import '../widgets/ai_unavailable.dart';
 import '../widgets/common.dart';
+import 'appointments/book_flow.dart';
 import 'chats_screen.dart';
+import 'profile/settings_screens.dart';
 import 'triage_screen.dart';
 
 /// A conversation thread. The PetCare AI thread also carries the
@@ -77,6 +82,26 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
     _scrollToEnd();
   }
 
+  /// Asks the real model. Any failure (no key, network, API error) comes
+  /// back as an explicit "AI unavailable" bubble — never a canned answer.
+  Future<String> _askAi(AppStore store, Pet? pet, String text) async {
+    try {
+      return await store.ai.chat(
+        petName: pet?.name ?? 'your pet',
+        species: pet?.breed ?? 'dog',
+        question: text,
+        ownerFirstName: store.ownerFirstName,
+      );
+    } on AiException catch (e) {
+      return aiUnavailableText(e.failure);
+    }
+  }
+
+  static String _thanks(AppStore store) {
+    final first = store.ownerFirstName;
+    return first.isEmpty ? 'Thanks' : 'Thanks, $first';
+  }
+
   Future<void> _send() async {
     final text = _input.text.trim();
     if (text.isEmpty) return;
@@ -99,15 +124,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
     _scrollToEnd();
 
     final reply = _isAi
-        ? await store.ai.chat(
-            petName: pet?.name ?? 'your pet',
-            species: pet?.breed ?? 'dog',
-            question: text,
-          )
+        ? await _askAi(store, pet, text)
         : (store.staffOnline()
-              ? 'Thanks Marco — noted on ${pet?.name ?? 'that'}. I will check the chart and come back '
+              ? '${_thanks(store)} — noted on ${pet?.name ?? 'that'}. I will check the chart and come back '
                     'to you with a recommendation. If anything changes in the meantime, call the clinic.'
-              : 'Got your message. The clinic team is offline until 8:00 AM, so reply may take a few '
+              : 'Got your message. The clinic team is offline until 9:00 AM, so reply may take a few '
                     'hours. For anything urgent, call ${Seed.clinicPhone}.');
 
     if (!mounted) return;
@@ -137,12 +158,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
       navigationBar: DetailNavBar(
         title: thread.title,
         actions: [
-          if (_isAi && store.ai.isDemo)
-            const Padding(
-              padding: EdgeInsets.only(right: 8),
-              child: Center(child: DemoAiBadge(compact: true)),
-            )
-          else if (!_isAi)
+          if (!_isAi)
             IconTap(
               path: Ic.person,
               label: 'Clinic team',
@@ -154,9 +170,24 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
       child: SafeArea(
         child: Column(
           children: [
-            if (_isAi)
-              _AiHeader(store: store)
-            else if (store.offlineNote != null)
+            if (_isAi) _AiHeader(store: store),
+            if (_isAi && store.ai.status == AiStatus.unavailable)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                child: AiUnavailableCard(
+                  failure: store.ai.failure ?? AiFailure.noKey,
+                  onOpenSettings: () => Navigator.of(context).push(
+                    appRoute(const AiSettingsScreen()),
+                  ),
+                  onBook: () => Navigator.of(context).push(appRoute(const BookFlow())),
+                  onCall: () => callPhoneNumber(
+                    context,
+                    number: Clinic.phone,
+                    name: Clinic.name,
+                  ),
+                ),
+              ),
+            if (!_isAi && store.offlineNote != null)
               _OfflineBanner(text: store.offlineNote!),
             if (_showStaff && !_isAi) const StaffDirectory(),
             if (_isAi)
@@ -343,7 +374,7 @@ class _EmptyThread extends StatelessWidget {
                 context,
                 scrollable: false,
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
+                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [

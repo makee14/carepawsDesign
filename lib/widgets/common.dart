@@ -2,11 +2,96 @@ import 'dart:ui';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../data/models.dart';
 import '../design/icons.dart';
+import '../design/motion.dart';
 import '../design/theme.dart';
 import '../design/tokens.dart';
+
+/// Shows a popup — a bottom sheet or a centered alert — that honors reduced
+/// motion.
+///
+/// The Cupertino popup/dialog routes always animate; when the user asked for
+/// stillness ([reduceMotionOf]) the popup appears instantly instead, via a
+/// zero-duration [showGeneralDialog]. Everything else — barrier behaviour,
+/// placement, dismissal — matches the animated path, so this is a drop-in
+/// replacement for [showCupertinoModalPopup] (bottom sheets) and
+/// [showCupertinoDialog] (centered alerts, pass `centered: true` and
+/// `barrierDismissible: false`).
+Future<R?> showPopup<R>(
+  BuildContext context, {
+  required WidgetBuilder builder,
+  bool centered = false,
+  bool barrierDismissible = true,
+}) {
+  if (reduceMotionOf(context)) {
+    return showGeneralDialog<R>(
+      context: context,
+      barrierColor: const Color(0x66000000),
+      barrierDismissible: barrierDismissible,
+      barrierLabel: 'Dismiss',
+      transitionDuration: Duration.zero,
+      pageBuilder: (ctx, _, _) => Align(
+        alignment: centered ? Alignment.center : Alignment.bottomCenter,
+        child: builder(ctx),
+      ),
+    );
+  }
+  if (centered) {
+    return showCupertinoDialog<R>(
+      context: context,
+      barrierDismissible: barrierDismissible,
+      builder: builder,
+    );
+  }
+  return showCupertinoModalPopup<R>(
+    context: context,
+    barrierColor: const Color(0x66000000),
+    barrierDismissible: barrierDismissible,
+    builder: builder,
+  );
+}
+
+/// Dials [number] via tel:. On devices with no dialer (desktop, simulators),
+/// shows the number in a sheet instead of a dead end.
+Future<void> callPhoneNumber(
+  BuildContext context, {
+  required String number,
+  required String name,
+}) async {
+  final uri = Uri(scheme: 'tel', path: number.replaceAll(' ', ''));
+  var ok = false;
+  try {
+    ok = await launchUrl(uri) ||
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+  } catch (_) {
+    ok = false;
+  }
+  if (!context.mounted) return;
+  if (!ok) {
+    await showPopup<void>(
+      context,
+      centered: true,
+      barrierDismissible: false,
+      builder: (ctx) => CupertinoAlertDialog(
+        title: Text(name),
+        content: Padding(
+          padding: const EdgeInsets.only(top: 8),
+          child: Text('$number\n\nDial this number from your phone.'),
+        ),
+        actions: [
+          CupertinoDialogAction(
+            isDefaultAction: true,
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Done'),
+          ),
+        ],
+      ),
+    );
+  }
+}
 
 /// Frosted-glass surface: backdrop blur, 1px translucent border, layered depth.
 class GlassCard extends StatelessWidget {
@@ -14,7 +99,7 @@ class GlassCard extends StatelessWidget {
     super.key,
     required this.child,
     this.padding = const EdgeInsets.all(T.s16),
-    this.radius = T.rGlass,
+    this.radius = T.rCard,
     this.tint,
     this.border,
     this.blur = T.glassBlur,
@@ -49,9 +134,9 @@ class GlassCard extends StatelessWidget {
         border: Border.all(color: border ?? p.glassBorder, width: 1),
         boxShadow: [
           BoxShadow(
-            color: p.glassShadow,
-            blurRadius: 24,
-            offset: const Offset(0, 8),
+            color: p.isDark ? p.glassShadow : T.shadowLight,
+            blurRadius: T.shadowBlur,
+            offset: const Offset(0, T.shadowDy),
           ),
         ],
       ),
@@ -309,9 +394,9 @@ class SoftCard extends StatelessWidget {
             ? null
             : const [
                 BoxShadow(
-                  color: Color(0x0F2A1A0E),
-                  blurRadius: 18,
-                  offset: Offset(0, 6),
+                  color: T.shadowLight,
+                  blurRadius: T.shadowBlur,
+                  offset: Offset(0, T.shadowDy),
                 ),
               ],
       ),
@@ -698,14 +783,14 @@ class StatStrip extends StatelessWidget {
     );
     if (glass) {
       return ClipRRect(
-        borderRadius: BorderRadius.circular(T.rGlass),
+        borderRadius: BorderRadius.circular(T.rCard),
         child: BackdropFilter(
           filter: ImageFilter.blur(sigmaX: T.glassBlur, sigmaY: T.glassBlur),
           child: Container(
             padding: padding,
             decoration: BoxDecoration(
               color: p.glassTint,
-              borderRadius: BorderRadius.circular(T.rGlass),
+              borderRadius: BorderRadius.circular(T.rCard),
               border: Border.all(color: p.glassBorder),
             ),
             child: inner,

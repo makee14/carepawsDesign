@@ -130,7 +130,7 @@ class ProfileScreen extends StatelessWidget {
                             ? 'Live · ${store.ai.modelLabel}'
                             : store.ai.status == AiStatus.checking
                             ? 'Checking for a key…'
-                            : 'Demo mode · tap to add a key',
+                            : 'Unavailable · tap to add a key',
                         leadingPath: Ic.sparkle,
                         onTap: () => Navigator.of(context).push(
                           appRoute(const AiSettingsScreen()),
@@ -268,7 +268,7 @@ class ProfileScreen extends StatelessWidget {
     showAppSheet(
       context,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -331,7 +331,7 @@ class ProfileScreen extends StatelessWidget {
       context,
       scrollable: false,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -378,7 +378,7 @@ class ProfileScreen extends StatelessWidget {
       context,
       scrollable: false,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [

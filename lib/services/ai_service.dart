@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../data/clinic.dart';
 import '../data/models.dart';
 
 /// ---------------------------------------------------------------------------
@@ -23,32 +24,76 @@ const String geminiApiKey = String.fromEnvironment(
   defaultValue: 'YOUR_GEMINI_API_KEY',
 );
 
-enum AiStatus { checking, live, demo }
+enum AiStatus { checking, live, unavailable }
+
+/// Why the assistant cannot answer right now. Surfaced verbatim in the
+/// "AI unavailable" UI, so each case names exactly what went wrong.
+enum AiFailure {
+  noKey('No API key is configured', 'Paste a key in Settings → PetCare AI to turn it on.'),
+  unreachable("Couldn't reach the AI service", 'Check the connection and try again, or paste a fresh key in Settings → PetCare AI.'),
+  serviceError('The AI service returned an error', 'The key may be invalid — paste a fresh one in Settings → PetCare AI and try again.');
+
+  const AiFailure(this.label, this.hint);
+  final String label;
+  final String hint;
+}
+
+/// Thrown by [AiService.triage] and [AiService.chat] instead of falling back
+/// to canned answers. There is never a silent demo mode: the UI catches this
+/// and says exactly what went wrong and what to do.
+class AiException implements Exception {
+  const AiException(this.failure, [this.detail]);
+  final AiFailure failure;
+  final String? detail;
+
+  @override
+  String toString() =>
+      'AiException(${failure.name}${detail == null ? '' : ': $detail'})';
+}
 
 /// The clinic's voice. One place, shared by the chat and triage paths, so the
-/// assistant behaves like the same vet everywhere in the app.
+/// assistant behaves like the same assistant everywhere in the app.
 ///
-/// Two jobs: give it a veterinary role to answer from, and close the door on
-/// everything else. The scope rules are reinforced in code — see
-/// [AiService.chat], which asks the model to flag out-of-scope questions and
-/// answers those with a fixed redirect instead of its own words.
+/// The system instruction is built fresh for every request: local time, clinic
+/// hours and the open/closed state are injected, so the model never guesses
+/// when the clinic is open and never pretends to be a vet.
+///
+/// The scope rules are reinforced in code — see [AiService.chat], which asks
+/// the model to flag out-of-scope questions and answers those with a fixed
+/// redirect instead of its own words.
 class VetPersona {
   const VetPersona._();
 
-  static const system = '''
-You are Dr. Alvarez, the on-duty veterinarian at PetCare Veterinary Clinic, talking
-with a pet owner inside the clinic's app — like you're standing next to them in
-the exam room, one hand on their pet. Warm, plain-spoken, specific. You say
-things like "here's what I'd do" and "let's keep an eye on". You never use
-jargon without explaining it in the same breath ("tartar — that brown crust
-along the gum line").
+  static String systemFor({required DateTime now, required String ownerFirstName}) {
+    final open = Clinic.isOpenNow(now);
+    final nameLine = ownerFirstName.isEmpty
+        ? 'The owner did not share a name — greet them plainly and never invent one.'
+        : "The owner's first name is $ownerFirstName — use it when it feels natural, never any other name.";
+    return '''
+You are PetCare AI, the assistant inside the ${Clinic.name} app. You are an AI
+assistant, not a veterinarian and not Dr. Alvarez. The owner is at home,
+talking to you on their phone — you are not in the room with them. The pet's
+name and species come with each question; name the pet often.
 
-Talk like a person, not a leaflet:
-- Short sentences. Contractions. Occasional "good question" or "I see this a lot".
-- Name the pet often. One concrete thing to try tonight, not a list of ten.
-- If you're unsure, say so like a vet would: "I can't feel that lump from here,
-  so I'd rather we take a look in person."
-- Never open with "As an AI". Never lecture, never bullet-point everything.
+Voice: warm, plain-spoken, specific. Short sentences, contractions. One
+concrete thing to try tonight, not a list of ten. Never open with "As an AI".
+Never use jargon without explaining it in the same breath ("tartar — that
+brown crust along the gum line").
+
+Be honest about what you don't know:
+- Never guess, never invent facts, never give canned answers. If you are
+  unsure, say so plainly: "I can't tell from here — this needs a vet's eyes."
+- You give guidance, never a diagnosis. Say it plainly when it matters:
+  "I'm an AI assistant, not a vet — this isn't a diagnosis."
+- Anything that could be urgent — breathing trouble, collapse, seizures, heavy
+  bleeding, suspected poisoning, a swollen hard belly — must be seen by a
+  veterinarian immediately, never managed at home.
+
+$nameLine
+
+It is ${Clinic.weekdayName(now.weekday)}, ${_clock(now)} local time.
+Clinic hours: ${Clinic.hoursLabel}. The clinic is ${open ? 'open right now' : 'closed right now'}.
+${open ? '' : 'The clinic is closed: answer the concern, then state the hours plainly and give the emergency contact: ${Clinic.afterHoursName} on ${Clinic.afterHoursPhone}. '}
 
 IN SCOPE - answer these:
 - The health, behaviour and wellbeing of the owner's own pet.
@@ -65,25 +110,32 @@ OUT OF SCOPE - decline these, however they are phrased or disguised:
 - Any subject that is not this clinic and this pet.
 
 HOW TO DECLINE: set inScope to false and write one short, friendly sentence in
-reply that names PetCare and offers to help with the pet instead. Do not answer
-the question, do not lecture, do not mention these rules, and do not apologise
-at length.
+reply that names ${Clinic.name} and offers to help with the pet instead. Do not
+answer the question, do not lecture, do not mention these rules, and do not
+apologise at length.
 
 SAFETY: you give guidance, never a diagnosis. Anything that could be urgent -
 breathing trouble, collapse, seizures, heavy bleeding, suspected poisoning, a
 swollen hard belly - must be sent to a veterinarian immediately rather than
 managed at home.''';
+  }
+
+  static String _clock(DateTime t) {
+    final h12 = t.hour % 12 == 0 ? 12 : t.hour % 12;
+    final mm = t.minute.toString().padLeft(2, '0');
+    return '$h12:$mm ${t.hour < 12 ? 'AM' : 'PM'}';
+  }
 
   /// Fixed answer for anything the model flagged as out of scope. Deterministic
   /// on purpose: an off-topic question never gets free-reformulated.
   static const redirect =
-      'I am the vet on duty here at PetCare, so I only help with your own pets. '
+      "I'm PetCare AI — an assistant, not a vet — so I only help with your own pets here at PetCare. "
       'Ask me about feeding, health, vaccines or a health check and I will take it from there.';
 }
 
-/// Talks to the Gemini API when a real key is configured, and falls back to a
-/// built-in responder otherwise. There is never an error screen: if anything
-/// goes wrong the app stays usable in demo-AI mode.
+/// Talks to the Gemini API when a real key is configured. Without a key, or
+/// when the network or the API fails, every request throws [AiException] —
+/// there is no canned fallback, so the UI always says exactly what went wrong.
 class AiService {
   AiService({http.Client? client, this.timeout = const Duration(seconds: 12)})
     : _client = client ?? http.Client();
@@ -100,7 +152,7 @@ class AiService {
   static const _placeholder = 'YOUR_GEMINI_API_KEY';
 
   /// Rejects blanks and the placeholder so a half-pasted key fails loudly
-  /// instead of silently dropping the app back into demo mode.
+  /// instead of silently leaving the assistant unavailable.
   static bool _looksLikeKey(String? k) =>
       k != null && k.trim().isNotEmpty && k.trim() != _placeholder && k.trim().length > 20;
 
@@ -111,14 +163,18 @@ class AiService {
   String get _effectiveKey =>
       _looksLikeKey(_storedKey) ? _storedKey!.trim() : geminiApiKey;
 
-  /// Starts in demo mode when no key is configured so the UI is honest from the
+  /// Starts unavailable when no key is configured so the UI is honest from the
   /// very first frame, and only probes the network when a key exists.
-  AiStatus status = _looksLikeKey(geminiApiKey) ? AiStatus.checking : AiStatus.demo;
+  AiStatus status = _looksLikeKey(geminiApiKey) ? AiStatus.checking : AiStatus.unavailable;
+
+  /// Why the last bootstrap or request failed. Null when live.
+  AiFailure? failure = _looksLikeKey(geminiApiKey) ? null : AiFailure.noKey;
+
   String? modelId;
   String? modelLabel;
 
-  bool get isDemo => status == AiStatus.demo;
   bool get isLive => status == AiStatus.live;
+  bool get isUnavailable => status == AiStatus.unavailable;
 
   bool get keyConfigured => _looksLikeKey(_effectiveKey);
 
@@ -132,33 +188,40 @@ class AiService {
   Future<void> bootstrap() async {
     await _restoreKey();
     if (!keyConfigured) {
-      _enterDemo('no key configured');
+      _enterUnavailable(AiFailure.noKey);
       return;
     }
     status = AiStatus.checking;
+    failure = null;
     modelId = null;
     modelLabel = null;
     try {
       final candidates = await _listModels();
       if (candidates.isEmpty) {
-        _enterDemo('no usable model returned');
+        _enterUnavailable(AiFailure.serviceError);
         return;
       }
       final pick = candidates.first;
       modelId = pick.name;
       modelLabel = pick.name;
       status = AiStatus.live;
+      failure = null;
       debugPrint('[ai] live model: ${pick.name}');
-    } catch (e) {
-      _enterDemo('bootstrap failed ($e)');
+    } on AiException catch (e) {
+      _enterUnavailable(e.failure);
+    } on TimeoutException {
+      _enterUnavailable(AiFailure.unreachable);
+    } catch (_) {
+      _enterUnavailable(AiFailure.unreachable);
     }
   }
 
-  void _enterDemo(String why) {
-    status = AiStatus.demo;
+  void _enterUnavailable(AiFailure why) {
+    status = AiStatus.unavailable;
+    failure = why;
     modelId = null;
-    modelLabel = 'Built-in responder';
-    debugPrint('[ai] $why — running in demo-AI mode');
+    modelLabel = null;
+    debugPrint('[ai] unavailable: ${why.name}');
   }
 
   /// Reads the on-device key, if there is one. A missing plugin (unit tests,
@@ -178,8 +241,8 @@ class AiService {
   }
 
   /// Saves a key entered on the device and re-probes straight away, so the
-  /// Settings status flips without a restart. A blank value clears the key and
-  /// returns to demo mode. Returns whether a usable key is now configured.
+  /// Settings status flips without a restart. A blank value clears the key.
+  /// Returns whether a usable key is now configured.
   Future<bool> useKey(String key) async {
     final trimmed = key.trim();
     final prefs = await _openPrefs();
@@ -198,10 +261,23 @@ class AiService {
   Future<bool> clearKey() => useKey('');
 
   /// Free-tier candidates that advertise multimodal input, flash family first.
+  /// Throws [AiException]: unreachable on transport failure, serviceError on
+  /// a non-200 answer.
   Future<List<_Model>> _listModels() async {
     final uri = Uri.https(_base, '/$_v1beta/models', {'key': _effectiveKey});
-    final res = await _client.get(uri).timeout(timeout);
-    if (res.statusCode != 200) return const [];
+    http.Response res;
+    try {
+      res = await _client.get(uri).timeout(timeout);
+    } on TimeoutException {
+      throw const AiException(AiFailure.unreachable);
+    } on http.ClientException {
+      throw const AiException(AiFailure.unreachable);
+    } catch (_) {
+      throw const AiException(AiFailure.unreachable);
+    }
+    if (res.statusCode != 200) {
+      throw AiException(AiFailure.serviceError, 'HTTP ${res.statusCode}');
+    }
     final body = jsonDecode(res.body) as Map<String, dynamic>;
     final models = (body['models'] as List? ?? const []);
     final out = <_Model>[];
@@ -248,24 +324,78 @@ class AiService {
     return a.name.compareTo(b.name);
   }
 
-  Uri _generateUri() =>
-      Uri.https(_base, '/$_v1beta/models/$modelId:generateContent', {'key': _effectiveKey});
+  Uri _generateUri() {
+    final id = modelId;
+    if (id == null) throw AiException(failure ?? AiFailure.noKey);
+    return Uri.https(_base, '/$_v1beta/models/$id:generateContent', {'key': _effectiveKey});
+  }
 
-  /// Health check for the selected pet. In demo-AI mode this returns a canned
-  /// triage result built from the user's words.
+  /// Throws [AiException] when the assistant cannot answer.
+  Never _requireLive() {
+    throw AiException(failure ?? AiFailure.noKey);
+  }
+
+  /// Health check for the selected pet. Throws [AiException] when there is no
+  /// key, the network fails, or the API answers with an error.
   Future<TriageResult> triage({
     required String petName,
     required String species,
     required String text,
     Uint8List? photo,
     String? photoMime,
+    String ownerFirstName = '',
   }) async {
-    if (!isLive) {
-      await _demoDelay();
-      return DemoAi.triage(text, petName: petName, species: species, hasPhoto: photo != null);
+    final raw = await _generateTriage(
+      prompt: _triagePrompt(petName, species, hasPhoto: photo != null),
+      text: text,
+      photo: photo,
+      photoMime: photoMime,
+      ownerFirstName: ownerFirstName,
+    );
+    final parsed = _parseTriage(raw);
+    if (parsed == null) {
+      throw const AiException(AiFailure.serviceError, 'unparseable reply');
     }
+    return parsed;
+  }
+
+  /// Health check where the AI also identifies which pet the concern is about.
+  /// Returns the triage result plus the matched pet name exactly as the model
+  /// wrote it (null when the model could not determine it — never guessed).
+  /// Throws [AiException] when there is no key, the network fails, or the API
+  /// answers with an error.
+  Future<({TriageResult result, String? petName})> triageDetect({
+    required List<Pet> pets,
+    required String text,
+    Uint8List? photo,
+    String? photoMime,
+    String ownerFirstName = '',
+  }) async {
+    final raw = await _generateTriage(
+      prompt: _triageDetectPrompt(pets, hasPhoto: photo != null),
+      text: text,
+      photo: photo,
+      photoMime: photoMime,
+      ownerFirstName: ownerFirstName,
+    );
+    final parsed = _parseDetect(raw);
+    if (parsed == null) {
+      throw const AiException(AiFailure.serviceError, 'unparseable reply');
+    }
+    return parsed;
+  }
+
+  /// Sends one triage-style generation request and returns the model's raw
+  /// text. Throws [AiException] on any transport or API failure.
+  Future<String> _generateTriage({
+    required String prompt,
+    required String text,
+    Uint8List? photo,
+    String? photoMime,
+    required String ownerFirstName,
+  }) async {
+    if (!isLive) _requireLive();
     try {
-      final prompt = _triagePrompt(petName, species, hasPhoto: photo != null);
       final parts = <Map<String, Object?>>[
         <String, Object?>{'text': prompt},
         if (text.isNotEmpty)
@@ -290,7 +420,7 @@ class AiService {
       final body = {
         'systemInstruction': {
           'parts': [
-            {'text': VetPersona.system},
+            {'text': VetPersona.systemFor(now: DateTime.now(), ownerFirstName: ownerFirstName)},
           ],
         },
         'contents': [
@@ -307,32 +437,30 @@ class AiService {
           }
         ],
       };
-      final res = await _client
-          .post(_generateUri(), headers: {'Content-Type': 'application/json'}, body: jsonEncode(body))
-          .timeout(timeout);
-      if (res.statusCode != 200) return DemoAi.triage(text, petName: petName, species: species, hasPhoto: photo != null);
-      final parsed = _parseTriage(_content(res.body), petName: petName);
-      if (parsed == null) {
-        return DemoAi.triage(text, petName: petName, species: species, hasPhoto: photo != null);
-      }
-      return parsed;
-    } catch (e) {
-      debugPrint('[ai] triage failed ($e) — using demo responder');
-      return DemoAi.triage(text, petName: petName, species: species, hasPhoto: photo != null);
+      final res = await _post(body);
+      return _content(res.body);
+    } on AiException {
+      rethrow;
+    } on TimeoutException {
+      throw const AiException(AiFailure.unreachable);
+    } on http.ClientException {
+      throw const AiException(AiFailure.unreachable);
+    } on FormatException {
+      throw const AiException(AiFailure.serviceError, 'unparseable reply');
+    } catch (_) {
+      throw const AiException(AiFailure.unreachable);
     }
   }
 
-  /// General pet-care chat answer.
+  /// General pet-care chat answer. Throws [AiException] when the assistant
+  /// cannot answer.
   Future<String> chat({
     required String petName,
     required String species,
     required String question,
+    String ownerFirstName = '',
   }) async {
-    String demo() => DemoAi.chat(question, petName: petName, species: species);
-    if (!isLive) {
-      await _demoDelay();
-      return demo();
-    }
+    if (!isLive) _requireLive();
     try {
       // The model returns a small envelope so scope is decided in the same
       // round trip — no extra call, and no keyword regex that would misfire on
@@ -340,7 +468,7 @@ class AiService {
       final body = {
         'systemInstruction': {
           'parts': [
-            {'text': VetPersona.system},
+            {'text': VetPersona.systemFor(now: DateTime.now(), ownerFirstName: ownerFirstName)},
           ],
         },
         'contents': [
@@ -349,8 +477,8 @@ class AiService {
             'parts': [
               {
                 'text':
-                    'The owner is asking about $petName, a $species currently at the clinic.\n'
-                    'Answer in 3-5 short sentences, warm and practical, like Dr. Alvarez speaking.\n'
+                    "The owner is asking about $petName, a $species, from home in the clinic's app.\n"
+                    'Answer in 3-5 short sentences, warm and practical.\n'
                     'Reply with ONLY a JSON object, no markdown, exactly:\n'
                     '{"inScope":true|false,"reply":"your answer"}\n'
                     'Set inScope to false if the question is not about veterinary care '
@@ -374,22 +502,44 @@ class AiService {
           },
         },
       };
-      final res = await _client
-          .post(_generateUri(), headers: {'Content-Type': 'application/json'}, body: jsonEncode(body))
-          .timeout(timeout);
-      if (res.statusCode != 200) return demo();
+      final res = await _post(body);
 
       final raw = _content(res.body).trim();
       // A malformed reply is treated as in-scope and shown as-is: better to
       // show an imperfect answer than to silently swallow a real question.
       final parsed = _parseChat(raw);
-      if (parsed == null) return raw.isEmpty ? demo() : raw;
+      if (parsed == null) {
+        if (raw.isEmpty) throw const AiException(AiFailure.serviceError, 'empty reply');
+        return raw;
+      }
       if (!parsed.inScope) return VetPersona.redirect;
-      return parsed.reply.trim().isEmpty ? demo() : parsed.reply.trim();
-    } catch (e) {
-      debugPrint('[ai] chat failed ($e) — using demo responder');
-      return demo();
+      if (parsed.reply.trim().isEmpty) {
+        throw const AiException(AiFailure.serviceError, 'empty reply');
+      }
+      return parsed.reply.trim();
+    } on AiException {
+      rethrow;
+    } on TimeoutException {
+      throw const AiException(AiFailure.unreachable);
+    } on http.ClientException {
+      throw const AiException(AiFailure.unreachable);
+    } on FormatException {
+      throw const AiException(AiFailure.serviceError, 'unparseable reply');
+    } catch (_) {
+      throw const AiException(AiFailure.unreachable);
     }
+  }
+
+  /// POSTs to the selected model. Non-200 answers are service errors — the
+  /// caller maps transport failures to [AiFailure.unreachable].
+  Future<http.Response> _post(Map<String, Object?> body) async {
+    final res = await _client
+        .post(_generateUri(), headers: {'Content-Type': 'application/json'}, body: jsonEncode(body))
+        .timeout(timeout);
+    if (res.statusCode != 200) {
+      throw AiException(AiFailure.serviceError, 'HTTP ${res.statusCode}');
+    }
+    return res;
   }
 
   /// Reads the `{"inScope":…,"reply":…}` envelope. Returns null when the model
@@ -433,15 +583,61 @@ class AiService {
       'Choose route "emergency" for breathing difficulty, collapse, seizures, heavy bleeding, poisoning or severe pain. '
       'Choose "homeCare" only for mild, low-risk concerns. Otherwise use "book". This is guidance, not a diagnosis.';
 
+  static String _triageDetectPrompt(List<Pet> pets,
+          {required bool hasPhoto}) {
+    final roster =
+        pets.map((p) => '${p.name} (${p.species.name}, ${p.breed})').join('; ');
+    return 'You triage pet health concerns for a veterinary clinic app. '
+        "The owner's pets are: $roster. "
+        '${hasPhoto ? 'A photo of the pet is attached. ' : ''}'
+        'First identify which pet the concern is about from the description: use the exact name '
+        'from the list above. If there is only one pet, it is that one. If the description does not '
+        'identify a pet, use null for petName — never guess. '
+        'Reply with ONLY a JSON object, no markdown, using exactly these keys: '
+        '{"petName":"exact name from the list or null","route":"book|chat|homeCare|emergency",'
+        '"urgency":0|1|2,"title":"short headline",'
+        '"summary":"2-3 sentences","bullets":["what we noticed"],'
+        '"redFlags":["danger signs that need a vet"],'
+        '"homeCare":["care instructions"],"nextStep":"one sentence"}'
+        'Choose route "emergency" for breathing difficulty, collapse, seizures, heavy bleeding, poisoning or severe pain. '
+        'Choose "homeCare" only for mild, low-risk concerns. Otherwise use "book". This is guidance, not a diagnosis.';
+  }
+
   /// Parses the model's JSON reply and clamps it into a valid TriageResult.
-  static TriageResult? _parseTriage(String raw, {required String petName}) {
+  static TriageResult? _parseTriage(String raw) {
+    final j = _extractJson(raw);
+    return j == null ? null : _triageFromJson(j);
+  }
+
+  /// Parses a detect-mode reply: the triage result plus the model's pet
+  /// identification (null when the model could not determine it).
+  static ({TriageResult result, String? petName})? _parseDetect(String raw) {
+    final j = _extractJson(raw);
+    if (j == null) return null;
+    final result = _triageFromJson(j);
+    if (result == null) return null;
+    final petName = (j['petName'] as String?)?.trim();
+    return (
+      result: result,
+      petName: petName == null || petName.isEmpty ? null : petName,
+    );
+  }
+
+  static Map<String, dynamic>? _extractJson(String raw) {
     var s = raw.trim();
     final start = s.indexOf('{');
     final end = s.lastIndexOf('}');
     if (start == -1 || end <= start) return null;
     s = s.substring(start, end + 1);
     try {
-      final j = jsonDecode(s) as Map<String, dynamic>;
+      return jsonDecode(s) as Map<String, dynamic>;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static TriageResult? _triageFromJson(Map<String, dynamic> j) {
+    try {
       final route = switch ((j['route'] as String? ?? '').toLowerCase()) {
         'emergency' => TriageRoute.emergency,
         'homecare' => TriageRoute.homeCare,
@@ -466,8 +662,6 @@ class AiService {
     }
   }
 
-  Future<void> _demoDelay() => Future<void>.delayed(const Duration(milliseconds: 620));
-
   void dispose() => _client.close();
 }
 
@@ -475,217 +669,4 @@ class _Model {
   const _Model(this.name, this.label);
   final String name;
   final String label;
-}
-
-/// Built-in responder used whenever the real API is unavailable. Produces
-/// realistic canned triage and chat answers so there are no dead ends.
-class DemoAi {
-  const DemoAi._();
-
-  static Future<void> settle() => Future<void>.delayed(const Duration(milliseconds: 120));
-
-  static const _emergency = [
-    'trouble breathing', 'difficulty breathing', 'panting heavily', 'seizure',
-    'collapsed', 'collapsing', "can't stand", 'cannot stand', 'unresponsive',
-    'pale gums', 'blue gums', 'heavy bleeding', "won't stop bleeding",
-    'seizing', 'attacked', 'hit by', 'poison', 'ate chocolate', 'ate xylitol',
-    'choking', 'bloated', 'retching', 'struggling to breathe', 'collapsed and',
-    'foaming at the mouth', 'injury from',
-  ];
-  static const _moderate = [
-    'vomit', 'diarrhea', 'diarrhoea', 'limping', 'limp', 'cough', 'not eating',
-    "isn't eating", "isn't eating", "won't eat", 'scratching', 'itchy',
-    'itching', 'ear', 'eye discharge', 'lump', 'bleeding gums', 'blood in stool',
-    'blood in the urine', 'coughing', 'sneezing', 'low appetite', 'lost appetite',
-    'swollen belly', 'lethargic', 'quiet', 'painful', 'hunched', 'shaking',
-    'licking paws', 'hair loss', 'wound', 'limp on', 'stiff',
-  ];
-  static const _mild = [
-    'shedding', 'brush', 'nail', 'nails', 'bath', 'shampoo', 'tooth',
-    'teeth', 'flea', 'tick', 'vaccine', 'vaccination', 'food', 'treat',
-    'chew', 'toy', 'coat', 'paw', 'whisker', 'groom', 'harness', 'collar',
-    'weight', 'diet', 'portion', 'swallowing tablet', 'give a tablet',
-  ];
-
-  static bool _hit(String text, List<String> keys) {
-    final t = text.toLowerCase();
-    return keys.any(t.contains);
-  }
-
-  static TriageResult triage(String text, {required String petName, required String species, required bool hasPhoto}) {
-    final described = text.trim();
-    final photoNote = hasPhoto
-        ? 'The photo you shared has been reviewed for visible signs.'
-        : 'Based on your description alone, without a photo.';
-    final kind = species.toLowerCase() == 'cat' ? 'cat' : 'dog';
-
-    if (_hit(described, _emergency)) {
-      return TriageResult(
-        route: TriageRoute.emergency,
-        urgency: 2,
-        title: 'Possible emergency — see $petName now',
-        summary:
-            'What you described can be life-threatening within hours, and a phone call cannot confirm it. '
-            '$petName needs to be seen in person immediately. $photoNote',
-        bullets: [
-          'Signs of respiratory distress or collapse need immediate hands-on care',
-          'Do not wait for a scheduled appointment',
-          'Do not give food, water or medication until a vet has assessed $petName',
-        ],
-        redFlags: const [
-          'Laboured breathing or blue/pale gums',
-          'Collapse, repeated seizures or inability to stand',
-          'Uncontrolled bleeding or a swollen, hard abdomen',
-          'Suspected poisoning or toxin ingestion',
-        ],
-        nextStep: 'Call the clinic now — if closed, go to the nearest 24-hour emergency animal hospital.',
-      );
-    }
-
-    if (_hit(described, _moderate)) {
-      return TriageResult(
-        route: TriageRoute.book,
-        urgency: 1,
-        title: '$petName should be examined',
-        summary:
-            'This is beyond home care. $photoNote A $kind in this condition usually needs an in-person exam '
-            'so the clinic can rule out infection, injury or parasites.',
-        bullets: [
-          'A vet consult is the fastest way to narrow this down',
-          'Book the earliest slot you can get',
-          'Bring a note of when the behaviour started and what changed',
-        ],
-        redFlags: const [
-          'Symptoms worsening quickly or spreading to other areas',
-          'Blood in vomit, stool or urine',
-          'Refusing water, or collapse',
-        ],
-        nextStep: 'Book a consultation, or chat the clinic team for advice before you decide.',
-      );
-    }
-
-    if (_hit(described, _mild)) {
-      return TriageResult(
-        route: TriageRoute.homeCare,
-        urgency: 0,
-        title: 'Manageable at home for now',
-        summary:
-            'This looks like routine care rather than an illness. $photoNote '
-            'Keep watching, and if anything changes in the next 48 hours, book a visit.',
-        bullets: const [
-          'No fever, lethargy or appetite change reported',
-          'Normal eating, drinking and bathroom habits',
-          'No visible injury or swelling',
-        ],
-        homeCare: [
-          'Keep fresh water available at all times',
-          'Feed the usual food on schedule — no new treats this week',
-          'Brush daily and check the skin for redness or swelling',
-          'Log appetite, water intake and energy for the next two days',
-        ],
-        redFlags: const [
-          'Not eating for more than 24 hours',
-          'Vomiting, diarrhoea or blood appearing',
-          'New limping, lethargy or refusal to be touched',
-        ],
-        nextStep: 'Monitor at home. Book if the red flags below appear.',
-      );
-    }
-
-    // Nothing decisive in the input — route to the clinic team rather than guess.
-    return TriageResult(
-      route: TriageRoute.chat,
-      urgency: 1,
-      title: 'Let the clinic team take a look at this',
-      summary:
-          'There is not enough detail here to call this safe or serious. $photoNote '
-          'Send it to the clinic team and Miguel will reply with a recommendation.',
-      bullets: const [
-        'No specific symptom matched a known pattern',
-        'A human will weigh in within clinic hours',
-        'Booking a short assistant visit is also reasonable',
-      ],
-      redFlags: [
-        'Any breathing difficulty or collapse',
-        'Sudden loss of appetite combined with lethargy',
-        'Pain that changes how $petName moves or rests',
-      ],
-      nextStep: 'Chat the clinic team, and book a consultation if they recommend it.',
-    );
-  }
-
-  /// Topics with no business being answered here. Checked before any vet
-  /// branch so "what food do I feed my dog, also write my essay" still gets the
-  /// clinic redirect rather than half an answer.
-  ///
-  /// This list is only the *demo-mode* fallback. Live mode does not use it — it
-  /// asks the model for an `inScope` flag, which catches phrasings no keyword
-  /// list would ever cover.
-  ///
-  /// Terms are deliberately unambiguous. Pet care borrows a lot of everyday
-  /// language ("school a puppy", "training program", "match his energy"), so
-  /// anything that could plausibly describe caring for a pet is left out.
-  static const _offTopic = [
-    'weather', 'forecast', 'temperature outside',
-    'football', 'basketball', 'soccer', 'league', 'tournament', 'who won',
-    'politics', 'president', 'election', 'government',
-    'stock market', 'crypto', 'bitcoin', 'economy',
-    'homework', 'essay', 'thesis', 'final exam', 'university',
-    'maths', 'algebra', 'arithmetic', 'capital of',
-    'write a code', 'python', 'javascript', 'sql query',
-    'translate this', 'tell me a joke', 'movie', 'celebrity',
-    'my headache', 'my back pain', 'i am sick', 'migraine', 'my blood pressure',
-  ];
-
-  static String chat(String question, {required String petName, required String species}) {
-    final q = question.toLowerCase();
-    final kind = species.toLowerCase() == 'cat' ? 'cat' : 'dog';
-
-    // Scope comes first: never answer anything that is not veterinary care.
-    if (_offTopic.any(q.contains)) return VetPersona.redirect;
-
-    if (q.contains('triage') || q.contains('health check') || q.contains('sick')) {
-      return 'Good instinct checking, Marco — run a health check with what you are seeing and I will sort $petName into one next step: book a visit, chat the clinic team, or care at home for now.';
-    }
-    if (q.contains('food') || q.contains('feed') || q.contains('meal') || q.contains('diet')) {
-      return 'Good question — for a $kind like $petName I keep it simple: same food, same portion, twice a day, and I judge by the ribs rather than the bowl. If you switch brands, stretch it over seven days so the gut can adjust, and keep treats under 10% of the day.';
-    }
-    if (q.contains('groom') || q.contains('brush') || q.contains('mat') || q.contains('coat')) {
-      return 'I see matting like this a lot — brush $petName two or three times a week and always after walks, since mats start where things rub: behind the ears, the armpits, the tail base. Here is what I would do tonight: ten slow strokes behind one ear, treat, done.';
-    }
-    if (q.contains('vaccine') || q.contains('shot') || q.contains('booster')) {
-      return 'Here is how I handle boosters for $petName: core shots usually run every three years, but I always confirm against your certificate first. Book a vaccination visit and we will sign the record on the spot.';
-    }
-    if (q.contains('paw') || q.contains('nail') || q.contains('claw') || q.contains('pad')) {
-      return 'Quick nail rule I give everyone: trim just before the pad, never past it — pink means stop. File the edges rather than taking big clips, and treat right after so $petName still likes you next time.';
-    }
-    if (q.contains('flea') || q.contains('tick') || q.contains('itch') || q.contains('scratch')) {
-      return 'Itching along the back usually points to fleas in my experience — the fix is a spot-on plus treating the bedding for three months. If it is only ears or paws, I start thinking allergies instead, and that is worth a look in person.';
-    }
-    if (q.contains('dental') || q.contains('teeth') || q.contains('tooth') || q.contains('breath')) {
-      return 'Honestly, daily brushing is the only home prevention I trust. Start with a finger cot on the outer teeth for a week, then a finger brush — and use a dental chew on the days you miss. If the breath turns or the gums redden, let me check for tartar, that brown crust along the gum line.';
-    }
-    if (q.contains('weight') || q.contains('heavy') || q.contains('slim') || q.contains('diet')) {
-      return 'Forget the scale for a second — run your hands over $petName\u2019s ribs. You should feel them under a thin layer, and from above there should be a visible tuck at the waist. If not, come in and we will weigh and portion together.';
-    }
-    if (q.contains('emergency') || q.contains('urgent') || q.contains('hospital')) {
-      return 'Do not wait on this one — call the clinic on ${_clinicPhone()}. Outside hours, go straight to ${_afterHoursName()} on ${_afterHoursPhone()}.';
-    }
-    if (q.contains('hello') || q.contains('hi ') || q.contains('good morning') || q.contains('kumusta')) {
-      return 'Hello, Marco — good to see you. $petName is on track; next up is the ${_nextUp()}. '
-          'Ask me about feeding, grooming, vaccines, or run a health check if something looks off.';
-    }
-    if (q.contains('price') || q.contains('cost') || q.contains('how much') || q.contains('magkano')) {
-      return 'Here is the short version: a vet consultation is ₱850, a vaccination ₱700, and full grooming starts at ₱1,450 for a '
-          'double coat. You will see the exact total on the booking review before you confirm anything.';
-    }
-    return 'Good question about $petName. Here is what I would do: if something changed and you cannot explain why, book a short consultation — it is cheaper than treating a problem a month later. '
-        'Keep $petName on the usual food tonight and jot down anything different, so you can tell me precisely what you saw.';
-  }
-
-  static String _nextUp() =>
-      'vet consultation with Dr. Alvarez on Thursday and a full grooming for Mochi on Tuesday';
-  static String _clinicPhone() => '+63 2 8712 4409';
-  static String _afterHoursName() => 'Animal Emergency Center — Mandaluyong';
-  static String _afterHoursPhone() => '+63 2 8556 0190';
 }

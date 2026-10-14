@@ -5,6 +5,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:petcare_artifact/app.dart';
+import 'package:petcare_artifact/data/clinic.dart';
 import 'package:petcare_artifact/data/models.dart';
 import 'package:petcare_artifact/data/seed.dart';
 import 'package:petcare_artifact/design/theme.dart';
@@ -12,6 +13,7 @@ import 'package:petcare_artifact/design/tokens.dart';
 import 'package:petcare_artifact/services/ai_service.dart';
 import 'package:petcare_artifact/services/photo_store.dart';
 import 'package:petcare_artifact/state/app_store.dart';
+import 'package:petcare_artifact/widgets/ai_unavailable.dart';
 import 'package:petcare_artifact/widgets/common.dart';
 
 /// Fixed clock so every countdown / date assertion is deterministic.
@@ -137,11 +139,12 @@ void main() {
           'in 3d');
     });
 
-    test('clinicOpenAt respects weekday + Sunday hours', () {
-      expect(clinicOpenAt(DateTime(2026, 10, 14, 9, 0)), isTrue); // Wed
-      expect(clinicOpenAt(DateTime(2026, 10, 14, 19, 0)), isFalse);
-      expect(clinicOpenAt(DateTime(2026, 10, 18, 10, 0)), isTrue); // Sun 10am
-      expect(clinicOpenAt(DateTime(2026, 10, 18, 8, 0)), isFalse); // Sun 8am
+    test('clinicOpenAt respects weekday hours and closed Sundays', () {
+      expect(clinicOpenAt(DateTime(2026, 10, 14, 9, 0)), isTrue); // Wed 9am
+      expect(clinicOpenAt(DateTime(2026, 10, 14, 17, 59)), isTrue); // Wed
+      expect(clinicOpenAt(DateTime(2026, 10, 14, 8, 59)), isFalse); // Wed early
+      expect(clinicOpenAt(DateTime(2026, 10, 14, 18, 0)), isFalse); // Wed 6pm
+      expect(clinicOpenAt(DateTime(2026, 10, 18, 10, 0)), isFalse); // Sun 10am
     });
   });
 
@@ -161,6 +164,38 @@ void main() {
       for (var i = 1; i < s.upcoming.length; i++) {
         expect(s.upcoming[i - 1].start.isAfter(s.upcoming[i].start), isFalse);
       }
+    });
+
+    test('upcomingAppointments is the sorted source; upcoming aliases it', () {
+      final s = AppStore(now: fixedNow());
+      final list = s.upcomingAppointments;
+      expect(list, isNotEmpty);
+      expect(list.map((a) => a.id).toList(),
+          s.upcoming.map((a) => a.id).toList());
+      for (var i = 1; i < list.length; i++) {
+        expect(list[i - 1].start.isAfter(list[i].start), isFalse);
+      }
+      expect(s.nextAppointment!.id, list.first.id);
+    });
+
+    test('upcomingAppointments drops finished visits as the clock moves', () {
+      final s = AppStore(now: fixedNow());
+      final first = s.upcomingAppointments.first;
+      // Jump past the first visit's end: it leaves the upcoming list.
+      s.advanceClock(first.end.difference(fixedNow()) + const Duration(minutes: 1));
+      expect(
+        s.upcomingAppointments.any((a) => a.id == first.id),
+        isFalse,
+      );
+    });
+
+    test('startClock is idempotent; stopClock and dispose are safe', () {
+      final s = AppStore(now: fixedNow());
+      s.startClock();
+      s.startClock();
+      s.stopClock();
+      s.stopClock();
+      s.dispose();
     });
 
     test('cancelAppointment moves a visit to past and sets cancelled status', () {
@@ -335,7 +370,7 @@ void main() {
     test('offlineNote names the resume time when closed', () {
       final s = AppStore(now: DateTime(2026, 10, 13, 22));
       expect(s.staffOnline(), isFalse);
-      expect(s.offlineNote, contains('8:00 AM'));
+      expect(s.offlineNote, contains('9:00 AM'));
     });
 
     test('handoff carries pet + triage into the clinic thread', () {
@@ -483,60 +518,81 @@ void main() {
     });
   });
 
-  group('The assistant stays on veterinary topics', () {
-    String ask(String q) => DemoAi.chat(q, petName: 'Biscuit', species: 'dog');
+  group('The assistant prompt is honest and injects live clinic context', () {
+    String prompt({required DateTime now, String name = 'Marco'}) =>
+        VetPersona.systemFor(now: now, ownerFirstName: name);
 
-    test('off-topic questions get the clinic redirect, not an answer', () {
-      const offTopic = [
-        'what is the weather today',
-        'who won the football match',
-        'write my history essay about the elections',
-        'do the maths for me',
-        'what is the capital of france',
-        'translate this into french',
-        'tell me a joke',
-        'should I take my headache medicine',
-      ];
-      for (final q in offTopic) {
-        expect(ask(q), VetPersona.redirect, reason: 'should refuse: $q');
-      }
+    test('it never claims to be a vet and never offers a diagnosis', () {
+      final p = prompt(now: DateTime(2026, 10, 13, 10));
+      expect(p, contains("I'm an AI assistant, not a vet"));
+      expect(p, contains("this isn't a diagnosis"));
+      expect(p, contains('Never guess'));
+      expect(p, isNot(contains('You are Dr. Alvarez')));
     });
 
-    test('vet questions still get real guidance', () {
-      final food = ask('what food should I feed my dog');
-      expect(food, isNot(VetPersona.redirect));
-      expect(food.length, greaterThan(40));
-
-      final vaccine = ask('when is the next vaccine due');
-      expect(vaccine, isNot(VetPersona.redirect));
-      expect(vaccine.toLowerCase(), contains('booster'));
+    test('it never claims the owner is at the clinic', () {
+      final p = prompt(now: DateTime(2026, 10, 13, 10));
+      expect(p, isNot(contains('at the clinic')));
+      expect(p, contains('at home'));
     });
 
-    test('training words that merely sound off-topic still get answered', () {
-      // "school a puppy" and "training program" are real pet-care questions —
-      // the demo keyword list must not swallow them.
-      expect(ask('how do I school my puppy'), isNot(VetPersona.redirect));
-      expect(ask('is there a training program for shy dogs'), isNot(VetPersona.redirect));
+    test('it injects the current time, the hours and the open state', () {
+      final open = prompt(now: DateTime(2026, 10, 13, 10)); // Tue 10:00 AM
+      expect(open, contains('Tuesday'));
+      expect(open, contains('Mon–Sat 9:00 AM – 6:00 PM · Closed Sundays'));
+      expect(open, contains('open right now'));
+
+      final closed = prompt(now: DateTime(2026, 10, 11, 10)); // Sunday
+      expect(closed, contains('closed right now'));
+      expect(closed, contains('Animal Emergency Center — Mandaluyong'));
+      expect(closed, contains('+63 2 8556 0190'));
     });
 
-    test('the scope check runs before the vet branches', () {
-      // Mixed message: the in-scope half must not get through.
-      expect(
-        ask('what food do I feed my dog, also write my essay'),
-        VetPersona.redirect,
-      );
+    test('it addresses the owner by first name, with a no-name fallback', () {
+      expect(prompt(now: DateTime(2026, 10, 13, 10), name: 'Marco'),
+          contains('Marco'));
+      final anon = prompt(now: DateTime(2026, 10, 13, 10), name: '');
+      expect(anon, contains('never invent one'));
+      expect(anon, isNot(contains('Marco')));
     });
 
-    test('the redirect itself names the clinic and points back to the pet', () {
+    test('the redirect names the clinic and points back to the pet', () {
       expect(VetPersona.redirect, contains('PetCare'));
       expect(VetPersona.redirect, contains('pet'));
+      expect(VetPersona.redirect, contains('not a vet'));
     });
 
     test('the persona instructs an in-scope / out-of-scope decision', () {
-      expect(VetPersona.system, contains('veterinarian'));
-      expect(VetPersona.system, contains('OUT OF SCOPE'));
-      expect(VetPersona.system, contains('inScope'));
-      expect(VetPersona.system, contains('never a diagnosis'));
+      final p = prompt(now: DateTime(2026, 10, 13, 10));
+      expect(p, contains('OUT OF SCOPE'));
+      expect(p, contains('inScope'));
+      expect(p, contains('never a diagnosis'));
+    });
+  });
+
+  group('Clinic hours are one config', () {
+    test('Mon–Sat 9:00–18:00 is open, Sundays are closed', () {
+      expect(Clinic.isOpenNow(DateTime(2026, 10, 12, 9)), isTrue); // Mon 9:00
+      expect(Clinic.isOpenNow(DateTime(2026, 10, 17, 17, 59)), isTrue); // Sat
+      expect(Clinic.isOpenNow(DateTime(2026, 10, 12, 8, 59)), isFalse); // Mon early
+      expect(Clinic.isOpenNow(DateTime(2026, 10, 17, 18)), isFalse); // Sat evening
+      expect(Clinic.isOpenNow(DateTime(2026, 10, 11, 12)), isFalse); // Sunday
+    });
+
+    test('nextOpening skips Sunday', () {
+      expect(Clinic.nextOpening(DateTime(2026, 10, 17, 20)),
+          DateTime(2026, 10, 19, 9)); // Sat night -> Mon 9:00
+      expect(Clinic.nextOpening(DateTime(2026, 10, 11, 12)),
+          DateTime(2026, 10, 12, 9)); // Sunday -> Mon 9:00
+      expect(Clinic.nextOpening(DateTime(2026, 10, 12, 7)),
+          DateTime(2026, 10, 12, 9)); // Mon early -> Mon 9:00
+    });
+
+    test('the seed aliases match the config', () {
+      expect(Seed.clinicName, Clinic.name);
+      expect(Seed.clinicAddress, Clinic.address);
+      expect(Seed.clinicPhone, Clinic.phone);
+      expect(Seed.afterHoursPhone, Clinic.afterHoursPhone);
     });
   });
 
@@ -578,7 +634,7 @@ void main() {
       expect(next.keyFromDevice, isTrue);
     });
 
-    test('removing the key clears storage and returns to demo mode', () async {
+    test('removing the key clears storage and returns to unavailable', () async {
       final ai = AiService();
       addTearDown(ai.dispose);
       await ai.useKey(key);
@@ -587,6 +643,8 @@ void main() {
       await ai.clearKey();
       expect(ai.keyConfigured, isFalse);
       expect(ai.keyFromDevice, isFalse);
+      expect(ai.status, AiStatus.unavailable);
+      expect(ai.failure, AiFailure.noKey);
 
       final prefs = await SharedPreferences.getInstance();
       expect(prefs.getString(AiService.keyPrefName), isNull);
@@ -614,6 +672,47 @@ void main() {
 
       final prefs = await SharedPreferences.getInstance();
       expect(prefs.getString(AiService.keyPrefName), key);
+    });
+  });
+
+  group('Without a key the assistant is honestly unavailable', () {
+    setUp(() => SharedPreferences.setMockInitialValues({}));
+
+    test('bootstrap lands on unavailable with the no-key reason', () async {
+      final ai = AiService();
+      addTearDown(ai.dispose);
+      await ai.bootstrap();
+      expect(ai.status, AiStatus.unavailable);
+      expect(ai.failure, AiFailure.noKey);
+      expect(ai.isLive, isFalse);
+      expect(ai.modelId, isNull);
+    });
+
+    test('triage throws noKey instead of a canned answer', () async {
+      final ai = AiService();
+      addTearDown(ai.dispose);
+      await ai.bootstrap();
+      await expectLater(
+        ai.triage(petName: 'Biscuit', species: 'dog', text: 'he is limping'),
+        throwsA(isA<AiException>().having((e) => e.failure, 'failure', AiFailure.noKey)),
+      );
+    });
+
+    test('chat throws noKey instead of a canned answer', () async {
+      final ai = AiService();
+      addTearDown(ai.dispose);
+      await ai.bootstrap();
+      await expectLater(
+        ai.chat(petName: 'Biscuit', species: 'dog', question: 'what should he eat'),
+        throwsA(isA<AiException>().having((e) => e.failure, 'failure', AiFailure.noKey)),
+      );
+    });
+
+    test('the unavailable UI copy names the failure and the fix', () {
+      expect(aiUnavailableText(AiFailure.noKey), contains('no API key'));
+      expect(aiUnavailableText(AiFailure.noKey), contains('Settings → PetCare AI'));
+      expect(aiUnavailableText(AiFailure.unreachable), contains("couldn't reach"));
+      expect(aiUnavailableText(AiFailure.serviceError), contains('returned an error'));
     });
   });
 

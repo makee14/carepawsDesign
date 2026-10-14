@@ -402,7 +402,7 @@ Future<void> addToCartWithFeedback(BuildContext context, Product product) async 
     context,
     scrollable: false,
     child: Padding(
-      padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -431,7 +431,7 @@ Future<void> _addedSheet(BuildContext context, Product product) async {
     context,
     scrollable: false,
     child: Padding(
-      padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [

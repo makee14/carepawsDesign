@@ -33,10 +33,18 @@ class _AddPetScreenState extends State<AddPetScreen> {
   final _allergy = TextEditingController();
 
   static const dogBreeds = [
-    'Golden Retriever', 'Labrador Retriever', 'Mixed breed', 'Shih Tzu', 'Poodle',
+    'Golden Retriever',
+    'Labrador Retriever',
+    'Mixed breed',
+    'Shih Tzu',
+    'Poodle',
   ];
   static const catBreeds = [
-    'British Shorthair', 'Domestic Shorthair', 'Persian', 'Siamese', 'Maine Coon',
+    'British Shorthair',
+    'Domestic Shorthair',
+    'Persian',
+    'Siamese',
+    'Maine Coon',
   ];
 
   @override
@@ -66,7 +74,9 @@ class _AddPetScreenState extends State<AddPetScreen> {
 
   String? get _weightError {
     if (_weight.text.trim().isEmpty) return null;
-    if (_parsedWeight == null) return 'Use a number like 4.6 — between 0.2 and 120 kg.';
+    if (_parsedWeight == null) {
+      return 'Use a number like 4.6 — between 0.2 and 120 kg.';
+    }
     return null;
   }
 
@@ -96,14 +106,33 @@ class _AddPetScreenState extends State<AddPetScreen> {
       sex: _sex,
       birthDate: birth,
       weightKg: w,
-      color: _species == Species.dog ? const Color(0xFFE4843E) : const Color(0xFF9B8A76),
+      color: _species == Species.dog
+          ? const Color(0xFFE4843E)
+          : const Color(0xFF9B8A76),
       microchip: 'Not registered yet',
-      allergies: _allergy.text.trim().isEmpty ? const [] : [_allergy.text.trim()],
+      allergies: _allergy.text.trim().isEmpty
+          ? const []
+          : [_allergy.text.trim()],
       vitals: [
-        Vital(label: 'Weight', value: w.toStringAsFixed(1), unit: 'kg', icon: 'scale'),
+        Vital(
+          label: 'Weight',
+          value: w.toStringAsFixed(1),
+          unit: 'kg',
+          icon: 'scale',
+        ),
         const Vital(label: 'Temperature', value: '—', unit: '', icon: 'fire'),
-        const Vital(label: 'Heart rate', value: '—', unit: 'bpm', icon: 'heartPulse'),
-        const Vital(label: 'Next check', value: '—', unit: '', icon: 'calendar'),
+        const Vital(
+          label: 'Heart rate',
+          value: '—',
+          unit: 'bpm',
+          icon: 'heartPulse',
+        ),
+        const Vital(
+          label: 'Next check',
+          value: '—',
+          unit: '',
+          icon: 'calendar',
+        ),
       ],
       timeline: [
         TimelineEntry(
@@ -138,7 +167,9 @@ class _AddPetScreenState extends State<AddPetScreen> {
 
     return CupertinoPageScaffold(
       backgroundColor: p.background,
-      navigationBar: DetailNavBar(title: _step == 0 ? 'Add pet' : 'Almost done'),
+      navigationBar: DetailNavBar(
+        title: _step == 0 ? 'Add pet' : 'Almost done',
+      ),
       child: SafeArea(
         child: Column(
           children: [
@@ -214,7 +245,9 @@ class _AddPetScreenState extends State<AddPetScreen> {
                       _LabeledField(
                         label: 'Type the breed',
                         controller: _customBreed,
-                        hint: _species == Species.dog ? 'e.g. Aspin' : 'e.g. Puspin',
+                        hint: _species == Species.dog
+                            ? 'e.g. Aspin'
+                            : 'e.g. Puspin',
                         onChanged: () => setState(() {}),
                       ),
                     ],
@@ -236,7 +269,11 @@ class _AddPetScreenState extends State<AddPetScreen> {
                   ] else ...[
                     Ic.svg(Ic.paw, color: p.accent, size: 40, stroke: 1.8),
                     const SizedBox(height: T.s12),
-                    Text('One more detail', style: Type.title1(p), textAlign: TextAlign.center),
+                    Text(
+                      'One more detail',
+                      style: Type.title1(p),
+                      textAlign: TextAlign.center,
+                    ),
                     const SizedBox(height: 8),
                     Text(
                       'Weight lets the clinic dose correctly. Everything else can be filled in at the visit.',
@@ -248,12 +285,17 @@ class _AddPetScreenState extends State<AddPetScreen> {
                       label: 'Weight (kg)',
                       controller: _weight,
                       hint: _species == Species.dog ? 'e.g. 12.5' : 'e.g. 4.2',
-                      keyboard: const TextInputType.numberWithOptions(decimal: true),
+                      keyboard: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
                       onChanged: () => setState(() {}),
                     ),
                     if (_weightError != null) ...[
                       const SizedBox(height: 6),
-                      Text(_weightError!, style: Type.footnote(p).copyWith(color: p.destructive)),
+                      Text(
+                        _weightError!,
+                        style: Type.footnote(p).copyWith(color: p.destructive),
+                      ),
                     ],
                     const SizedBox(height: T.s16),
                     Text('Birthdate', style: Type.headline(p)),
@@ -261,51 +303,40 @@ class _AddPetScreenState extends State<AddPetScreen> {
                     PressScale(
                       onTap: () async {
                         final now = DateTime.now();
-                        var temp = _birthDate ?? DateTime(now.year - 2, now.month, now.day);
-                        await showCupertinoModalPopup<void>(
-                          context: context,
-                          builder: (ctx) => Container(
-                            height: 300,
-                            color: p.surface,
-                            child: SafeArea(
-                              top: false,
-                              child: Column(children: [
-                                Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                                  CupertinoButton(onPressed: () => dismissSheet(ctx), child: const Text('Cancel')),
-                                  CupertinoButton(
-                                      onPressed: () {
-                                        setState(() => _birthDate = temp);
-                                        dismissSheet(ctx);
-                                      },
-                                      child: const Text('Done')),
-                                ]),
-                                Expanded(
-                                    child: CupertinoDatePicker(
-                                        mode: CupertinoDatePickerMode.date,
-                                        initialDateTime: temp,
-                                        minimumDate: DateTime(now.year - 30),
-                                        maximumDate: now,
-                                        onDateTimeChanged: (d) => temp = d)),
-                              ]),
-                            ),
-                          ),
+                        final picked = await showDatePickerSheet(
+                          context,
+                          initial:
+                              _birthDate ??
+                              DateTime(now.year - 2, now.month, now.day),
+                          minimum: DateTime(now.year - 30),
+                          maximum: now,
                         );
+                        if (picked != null) setState(() => _birthDate = picked);
                       },
                       child: Container(
                         padding: const EdgeInsets.all(14),
                         decoration: BoxDecoration(
-                            color: p.surface,
-                            borderRadius: BorderRadius.circular(T.rCard),
-                            border: Border.all(color: p.divider)),
-                        child: Row(children: [
-                          Expanded(
+                          color: p.surface,
+                          borderRadius: BorderRadius.circular(T.rCard),
+                          border: Border.all(color: p.divider),
+                        ),
+                        child: Row(
+                          children: [
+                            Expanded(
                               child: Text(
-                                  _birthDate == null
-                                      ? 'About 2 years old (tap to change)'
-                                      : '${_birthDate!.month}/${_birthDate!.day}/${_birthDate!.year} · ${_ageLabel(_birthDate!)}',
-                                  style: Type.body(p))),
-                          Ic.svg(Ic.calendar, color: p.textSecondary, size: 18),
-                        ]),
+                                _birthDate == null
+                                    ? 'About 2 years old (tap to change)'
+                                    : '${_birthDate!.month}/${_birthDate!.day}/${_birthDate!.year} · ${_ageLabel(_birthDate!)}',
+                                style: Type.body(p),
+                              ),
+                            ),
+                            Ic.svg(
+                              Ic.calendar,
+                              color: p.textSecondary,
+                              size: 18,
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                     const SizedBox(height: T.s16),
@@ -327,9 +358,20 @@ class _AddPetScreenState extends State<AddPetScreen> {
                         children: [
                           Text('Summary', style: Type.headline(p)),
                           const SizedBox(height: 8),
-                          AmountRow(label: 'Name', value: _name.text.trim().isEmpty ? '—' : _name.text.trim()),
-                          AmountRow(label: 'Type', value: _species == Species.dog ? 'Dog' : 'Cat'),
-                          AmountRow(label: 'Breed', value: _breedValue.isEmpty ? '—' : _breedValue),
+                          AmountRow(
+                            label: 'Name',
+                            value: _name.text.trim().isEmpty
+                                ? '—'
+                                : _name.text.trim(),
+                          ),
+                          AmountRow(
+                            label: 'Type',
+                            value: _species == Species.dog ? 'Dog' : 'Cat',
+                          ),
+                          AmountRow(
+                            label: 'Breed',
+                            value: _breedValue.isEmpty ? '—' : _breedValue,
+                          ),
                           AmountRow(label: 'Sex', value: _sex),
                           AmountRow(
                             label: 'Weight',
@@ -349,12 +391,12 @@ class _AddPetScreenState extends State<AddPetScreen> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   PrimaryButton(
-                    label: _step == 0 ? 'Continue' : 'Add ${_name.text.trim().isEmpty ? 'pet' : _name.text.trim()}',
+                    label: _step == 0
+                        ? 'Continue'
+                        : 'Add ${_name.text.trim().isEmpty ? 'pet' : _name.text.trim()}',
                     icon: _step == 0 ? Ic.arrowRight : Ic.check,
                     onPressed: _step == 0
-                        ? (_valid
-                              ? () => setState(() => _step = 1)
-                              : null)
+                        ? (_valid ? () => setState(() => _step = 1) : null)
                         : _save,
                   ),
                   const SizedBox(height: 8),
@@ -377,7 +419,10 @@ String _ageLabel(DateTime birth) {
   int y = now.year - birth.year;
   int m = now.month - birth.month;
   if (now.day < birth.day) m--;
-  if (m < 0) { y--; m += 12; }
+  if (m < 0) {
+    y--;
+    m += 12;
+  }
   if (y <= 0) return '$m mo old';
   return '$y yr old';
 }
@@ -411,7 +456,11 @@ class _SpeciesCard extends StatelessWidget {
             color: selected ? T.amber.withValues(alpha: 0.14) : null,
             child: Column(
               children: [
-                Ic.svg(icon, color: selected ? p.primaryFill : p.textSecondary, size: 30),
+                Ic.svg(
+                  icon,
+                  color: selected ? p.primaryFill : p.textSecondary,
+                  size: 30,
+                ),
                 const SizedBox(height: 10),
                 Text(label, style: Type.headline(p)),
               ],

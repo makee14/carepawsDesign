@@ -1,5 +1,6 @@
 import 'package:flutter/widgets.dart';
 
+import 'clinic.dart';
 import 'models.dart';
 
 /// All sample content. No lorem ipsum, no placeholder copy.
@@ -521,7 +522,7 @@ class Seed {
       threadId: 'th_ai',
       author: ChatAuthor.ai,
       text:
-          'Hi Marco. I can answer questions about feeding, grooming, vaccines and general care. For anything that needs a physical exam, run a health check and I will point you to the right next step.',
+          'Hi there. I can answer questions about feeding, grooming, vaccines and general care. For anything that needs a physical exam, run a health check and I will point you to the right next step.',
       at: DateTime(2026, 10, 12, 20, 5),
     ),
     ChatMessage(
@@ -538,20 +539,21 @@ class Seed {
       threadId: 'th_clinic',
       author: ChatAuthor.ai,
       text:
-          'Auto-reply: the clinic team is offline until 8:00 AM. Your message is queued and Miguel will see it first thing.',
+          'Auto-reply: the clinic team is offline until 9:00 AM. Your message is queued and Miguel will see it first thing.',
       at: DateTime(2026, 10, 12, 21, 40),
       kind: ChatKind.system,
     ),
   ];
 
   // ----------------------------------------------------------------- clinic
-  static const clinicName = 'PetCare Veterinary Clinic';
-  static const clinicAddress =
-      'Unit 12, Greenhills Shopping Centre, Shaw Blvd, Brgy. Shaw, Mandaluyong City';
-  static const clinicPhone = '+63 2 8712 4409';
-  static const clinicHours = 'Mon–Sat 8:00 AM – 7:00 PM · Sun 9:00 AM – 4:00 PM';
-  static const afterHoursName = 'Animal Emergency Center — Mandaluyong';
-  static const afterHoursPhone = '+63 2 8556 0190';
+  // Single source of truth lives in [Clinic] (lib/data/clinic.dart); these
+  // aliases keep existing call sites compiling without duplicating values.
+  static const clinicName = Clinic.name;
+  static const clinicAddress = Clinic.address;
+  static const clinicPhone = Clinic.phone;
+  static const clinicHours = Clinic.hoursLabel;
+  static const afterHoursName = Clinic.afterHoursName;
+  static const afterHoursPhone = Clinic.afterHoursPhone;
   static const ownerName = 'Marco Dela Cruz';
   static const ownerContact = '0917 555 0142 · marco.delacruz@petcare.ph';
   static const appVersion = '1.4.0 (204)';

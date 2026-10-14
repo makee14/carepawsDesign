@@ -43,10 +43,13 @@ class _PetProfileScreenState extends State<PetProfileScreen> {
       );
     }
 
-    final entries = pet.timeline
-        .where((e) => _timelineFilter == 'all' || e.role.chip == _timelineFilter)
-        .toList()
-      ..sort((a, b) => b.date.compareTo(a.date));
+    final entries =
+        pet.timeline
+            .where(
+              (e) => _timelineFilter == 'all' || e.role.chip == _timelineFilter,
+            )
+            .toList()
+          ..sort((a, b) => b.date.compareTo(a.date));
 
     return CupertinoPageScaffold(
       backgroundColor: p.background,
@@ -57,9 +60,9 @@ class _PetProfileScreenState extends State<PetProfileScreen> {
             path: Ic.pencil,
             label: 'Edit ${pet.name}',
             color: p.primaryFill,
-            onPressed: () => Navigator.of(context).push(
-              appRoute(EditPetScreen(petId: pet.id)),
-            ),
+            onPressed: () =>
+                Navigator.of(context)
+                    .push(appRoute(EditPetScreen(petId: pet.id))),
           ),
           const SizedBox(width: 4),
           IconTap(
@@ -67,7 +70,12 @@ class _PetProfileScreenState extends State<PetProfileScreen> {
             label: 'Chat about ${pet.name}',
             color: p.primaryFill,
             onPressed: () => Navigator.of(context).push(
-              appRoute(ChatThreadScreen(threadId: 'th_clinic', openedWithPetId: pet.id)),
+              appRoute(
+                ChatThreadScreen(
+                  threadId: 'th_clinic',
+                  openedWithPetId: pet.id,
+                ),
+              ),
             ),
           ),
           const SizedBox(width: 4),
@@ -80,71 +88,95 @@ class _PetProfileScreenState extends State<PetProfileScreen> {
               child: ListView(
                 padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
                 children: [
-                  // Photo hero with floating vitals card.
-                  SizedBox(
-                    height: Layout.heroHeight(context, 250),
-                    child: Stack(
-                      clipBehavior: Clip.none,
-                      children: [
-                        Positioned.fill(
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(T.rCard),
-                            child: PetAvatar(
-                              pet: pet,
-                              iconSize: 160,
-                              label: '${pet.name} portrait',
-                            ),
-                          ),
-                        ),
-                        Positioned(
-                          left: 12,
-                          top: 12,
-                          child: StatusChip(
-                            label: '${pet.breed} · ${pet.sex}',
-                            icon: pet.species == Species.dog ? Ic.dog : Ic.cat,
-                            fg: T.espresso,
-                            bg: T.cream.withValues(alpha: 0.9),
-                          ),
-                        ),
-                        Positioned(
-                          left: 12,
-                          right: 12,
-                          bottom: -34,
-                          child: GlassCard(
-                            padding: const EdgeInsets.all(T.s16),
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  children: [
-                                    Expanded(
-                                      child: Text(pet.name, style: Type.title1(p)),
-                                    ),
-                                    StatusChip(
-                                      label: pet.ageLabel,
-                                      compact: true,
-                                      fg: p.accentText,
-                                      bg: p.accent.withValues(alpha: 0.12),
-                                    ),
-                                  ],
+                  // Photo hero with floating vitals card — structural overlap: the
+                  // Column (spacer + card) sizes the hero in normal flow; the
+                  // photo is a fixed-size slot painted behind. Nothing
+                  // overflows, so no ancestor can clip the card.
+                  Stack(
+                    children: [
+                      Positioned(
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        height: Layout.heroHeight(context, 250),
+                        child: Stack(
+                          children: [
+                            Positioned.fill(
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(T.rCard),
+                                child: PetAvatar(
+                                  pet: pet,
+                                  iconSize: 160,
+                                  label: '${pet.name} portrait',
                                 ),
-                                const SizedBox(height: 10),
-                                _VitalsInline(pet: pet),
-                              ],
+                              ),
+                            ),
+                            Positioned(
+                              left: 12,
+                              top: 12,
+                              child: StatusChip(
+                                label: '${pet.breed} · ${pet.sex}',
+                                icon: pet.species == Species.dog
+                                    ? Ic.dog
+                                    : Ic.cat,
+                                fg: T.espresso,
+                                bg: T.cream.withValues(alpha: 0.9),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          SizedBox(
+                            height: Layout.heroHeight(context, 250) - 34,
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                            child: GlassCard(
+                              padding: const EdgeInsets.all(T.s16),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: Text(
+                                          pet.name,
+                                          style: Type.title1(p),
+                                        ),
+                                      ),
+                                      StatusChip(
+                                        label: pet.ageLabel,
+                                        compact: true,
+                                        fg: p.accentText,
+                                        bg: p.accent.withValues(alpha: 0.12),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 10),
+                                  _VitalsInline(pet: pet),
+                                ],
+                              ),
                             ),
                           ),
-                        ),
-                      ],
-                    ),
+                        ],
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 48),
+                  const SizedBox(height: T.s16),
 
                   // Stat strip
                   StatStrip(
                     stats: [
                       (Ic.scale, '${pet.weightKg} kg', 'Weight'),
-                      (Ic.paw, pet.species == Species.dog ? 'Dog' : 'Cat', 'Type'),
+                      (
+                        Ic.paw,
+                        pet.species == Species.dog ? 'Dog' : 'Cat',
+                        'Type',
+                      ),
                       (Ic.doc, '${pet.docs.length}', 'Documents'),
                     ],
                   ),
@@ -156,9 +188,8 @@ class _PetProfileScreenState extends State<PetProfileScreen> {
                         child: PrimaryButton(
                           label: 'Book visit',
                           icon: Ic.calendar,
-                          onPressed: () => Navigator.of(context).push(
-                            appRoute(BookFlow(initialPetId: pet.id)),
-                          ),
+                          onPressed: () => Navigator.of(context)
+                              .push(appRoute(BookFlow(initialPetId: pet.id))),
                         ),
                       ),
                       const SizedBox(width: 10),
@@ -183,17 +214,30 @@ class _PetProfileScreenState extends State<PetProfileScreen> {
                   Text('Details', style: Type.headline(p)),
                   const SizedBox(height: 10),
                   SoftCard(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 6,
+                    ),
                     child: Column(
                       children: [
                         AmountRow(label: 'Breed', value: pet.breed, bold: true),
                         AmountRow(label: 'Sex', value: pet.sex),
-                        AmountRow(label: 'Born', value: shortDate(pet.birthDate)),
-                        AmountRow(label: 'Weight', value: '${pet.weightKg} kg', bold: true),
+                        AmountRow(
+                          label: 'Born',
+                          value:
+                              '${shortDate(pet.birthDate)}, ${pet.birthDate.year}',
+                        ),
+                        AmountRow(
+                          label: 'Weight',
+                          value: '${pet.weightKg} kg',
+                          bold: true,
+                        ),
                         AmountRow(label: 'Microchip', value: pet.microchip),
                         AmountRow(
                           label: 'Allergies',
-                          value: pet.allergies.isEmpty ? 'None known' : pet.allergies.join(', '),
+                          value: pet.allergies.isEmpty
+                              ? 'None known'
+                              : pet.allergies.join(', '),
                         ),
                       ],
                     ),
@@ -207,7 +251,9 @@ class _PetProfileScreenState extends State<PetProfileScreen> {
                   const SizedBox(height: T.s20),
                   Row(
                     children: [
-                      Expanded(child: Text('Timeline', style: Type.headline(p))),
+                      Expanded(
+                        child: Text('Timeline', style: Type.headline(p)),
+                      ),
                     ],
                   ),
                   const SizedBox(height: 10),
@@ -226,7 +272,8 @@ class _PetProfileScreenState extends State<PetProfileScreen> {
                           FilterPill(
                             label: role.short,
                             selected: _timelineFilter == role.chip,
-                            onTap: () => setState(() => _timelineFilter = role.chip),
+                            onTap: () =>
+                                setState(() => _timelineFilter = role.chip),
                           ),
                           const SizedBox(width: 8),
                         ],
@@ -290,7 +337,7 @@ class _PetProfileScreenState extends State<PetProfileScreen> {
     showAppSheet(
       context,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -313,7 +360,12 @@ class _PetProfileScreenState extends State<PetProfileScreen> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Ic.svg(Ic.doc, color: context.p.accent, size: 42, stroke: 1.7),
+                  Ic.svg(
+                    Ic.doc,
+                    color: context.p.accent,
+                    size: 42,
+                    stroke: 1.7,
+                  ),
                   const SizedBox(height: 10),
                   Text('Preview', style: Type.footnote(context.p)),
                 ],
@@ -355,13 +407,15 @@ class _VitalsInline extends StatelessWidget {
             Container(
               width: 1,
               height: 34,
-              color: p.isDark ? T.card.withValues(alpha: 0.18) : T.taupe.withValues(alpha: 0.3),
+              color: p.isDark
+                  ? T.card.withValues(alpha: 0.18)
+                  : T.taupe.withValues(alpha: 0.3),
             ),
           Expanded(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Ic.svg(shown[i].icon, color: p.accent, size: 16),
+                Ic.svg(Ic.byName(shown[i].icon), color: p.accent, size: 16),
                 const SizedBox(height: 4),
                 FittedBox(
                   fit: BoxFit.scaleDown,
@@ -406,7 +460,12 @@ class _VitalsGrid extends StatelessWidget {
               semanticLabel: '${v.label}: ${v.value} ${v.unit}',
               child: Row(
                 children: [
-                  Ic.svg(v.icon, color: p.accent, size: 22, stroke: 1.9),
+                  Ic.svg(
+                    Ic.byName(v.icon),
+                    color: p.accent,
+                    size: 22,
+                    stroke: 1.9,
+                  ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Column(
@@ -441,29 +500,38 @@ class _VitalsGrid extends StatelessWidget {
       context,
       scrollable: false,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Ic.svg(v.icon, color: context.p.accent, size: 36, stroke: 1.8),
+            Ic.svg(
+              Ic.byName(v.icon),
+              color: context.p.accent,
+              size: 36,
+              stroke: 1.8,
+            ),
             const SizedBox(height: 12),
             Text(v.label, style: Type.title2(context.p)),
             const SizedBox(height: 6),
             Text(
               '${v.value} ${v.unit}'.trim(),
-              style: Type.largeTitle(context.p).copyWith(color: context.p.accentText),
+              style: Type.largeTitle(context.p)
+                  .copyWith(color: context.p.accentText),
             ),
             const SizedBox(height: 10),
             Text(
               v.value.trim() == '—' || v.value.trim().isEmpty
                   ? 'No reading yet — the clinic records this at ${pet.name}\u2019s first visit.'
                   : 'Recorded for ${pet.name} at the last clinic visit. Your vet updates these after each '
-                      'examination.',
+                        'examination.',
               style: Type.footnote(context.p),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: T.s20),
-            PrimaryButton(label: 'Done', onPressed: () => dismissSheet(context)),
+            PrimaryButton(
+              label: 'Done',
+              onPressed: () => dismissSheet(context),
+            ),
           ],
         ),
       ),
@@ -530,10 +598,7 @@ class _TimelineCard extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(width: 8),
-                      Text(
-                        shortDate(entry.date),
-                        style: Type.caption(p),
-                      ),
+                      Text(shortDate(entry.date), style: Type.caption(p)),
                     ],
                   ),
                   const SizedBox(height: 8),
@@ -543,7 +608,8 @@ class _TimelineCard extends StatelessWidget {
                   const SizedBox(height: 6),
                   Text(
                     entry.staffName,
-                    style: Type.caption(p).copyWith(fontWeight: FontWeight.w600),
+                    style: Type.caption(p)
+                        .copyWith(fontWeight: FontWeight.w600),
                   ),
                 ],
               ),
@@ -558,7 +624,7 @@ class _TimelineCard extends StatelessWidget {
     showAppSheet(
       context,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -577,7 +643,10 @@ class _TimelineCard extends StatelessWidget {
             const SizedBox(height: 14),
             Text(entry.staffName, style: Type.footnote(context.p)),
             const SizedBox(height: T.s20),
-            PrimaryButton(label: 'Done', onPressed: () => dismissSheet(context)),
+            PrimaryButton(
+              label: 'Done',
+              onPressed: () => dismissSheet(context),
+            ),
           ],
         ),
       ),
@@ -592,13 +661,22 @@ class ScaffoldlessNotice {
       context,
       scrollable: false,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Ic.svg(Ic.checkCircle, color: context.p.success, size: 40, stroke: 1.9),
+            Ic.svg(
+              Ic.checkCircle,
+              color: context.p.success,
+              size: 40,
+              stroke: 1.9,
+            ),
             const SizedBox(height: 12),
-            Text(message, style: Type.headline(context.p), textAlign: TextAlign.center),
+            Text(
+              message,
+              style: Type.headline(context.p),
+              textAlign: TextAlign.center,
+            ),
             const SizedBox(height: T.s20),
             PrimaryButton(label: 'OK', onPressed: () => dismissSheet(context)),
           ],

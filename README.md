@@ -15,7 +15,7 @@ included so the prototype can be run and reviewed without a simulator.
 ### Fastest options
 
 ```bash
-# Demo AI mode (no key required — the app is fully usable)
+# AI unavailable without a key — the app runs, the assistant explains why
 flutter run
 
 # Live Gemini AI — one-time setup, then just this:
@@ -199,7 +199,13 @@ The flow is **splash → onboarding (first launch) → sign-in → app**. The sp
 waits for you — it no longer pushes the app on a timer, which made the "Get
 started" button almost impossible to press. First launch then shows a five-page
 Apple-style onboarding tour (swipe or Continue; Skip ends it early). It runs
-once — Settings ▸ Help ▸ "Take the tour again" replays it. Sign in with the
+once — Settings ▸ Help ▸ "Take the tour again" replays it. Each of the five
+pages carries a one-shot animated illustration in the locked warm palette (a
+paw mark that draws itself in, a pulsing AI orb with a triage question, a mini
+calendar with a docking time chip, chat bubbles where typing dots resolve into
+the clinic's reply, a product card with a popping cart badge) — entrances
+replay when you swipe back to a page, and reduced motion shows the final
+static frame instead. Sign in with the
 demo account:
 
 | Field | Value |
@@ -252,17 +258,21 @@ No key is hardcoded anywhere in the project.
 
 At startup `AiService.bootstrap()`:
 
-1. If no key is configured → **demo-AI mode**, using the built-in responder.
-   AI surfaces show a small "Demo AI" badge. Nothing is a dead end.
+1. If no key is configured → the assistant is **unavailable**. Every AI
+   surface (chat thread, triage screen, booking AI step) shows an "AI
+   unavailable" card naming exactly what went wrong and what to do, with
+   working alternatives (book directly, call the clinic). Nothing is a dead
+   end, and there are no canned answers.
 2. Otherwise it lists `models`, filters to `generateContent` models that accept
    text **and** image input, and ranks them — flash family first, full flash
    over lite, stable builds over previews and rolling aliases. **No model name
    is hardcoded.**
-3. If the network call fails for any reason, the app falls back to demo-AI mode.
-   There is no error screen and no dead end.
+3. If the network call fails for any reason, the assistant reports
+   `unreachable` or `serviceError` — the UI states which, and offers the same
+   alternatives.
 
-`DemoAi` covers all four triage routes and a set of realistic chat answers, so
-the prototype behaves identically with and without a key.
+There is no demo responder: without a working key the assistant says so
+plainly instead of guessing.
 
 ---
 
@@ -392,7 +402,7 @@ lib/
     models.dart             Pet, Appointment, Product, Order, TriageResult, …
     seed.dart               realistic sample data (2 pets, 5 visits, 8 products)
   services/
-    ai_service.dart         Gemini client, model discovery, DemoAi responder
+    ai_service.dart         Gemini client, model discovery, honest AI-unavailable states
   state/
     app_store.dart          single ChangeNotifier store + AppScope
   widgets/
@@ -401,15 +411,18 @@ lib/
     time_of_day.dart
   screens/
     home_screen.dart …      one folder per tab, plus triage / booking / shop
-    onboarding_screen.dart  five-page first-run tour (replayable from Help)
+    onboarding_screen.dart  five-page first-run tour (replayable from Help);
+    onboarding_illustrations.dart  one-shot animated illustrations, one per page
 ```
 
 ---
 
 ## What is covered
 
-**HOME** — time-aware large title, search, notifications; next-appointment hero
-(photo, vet, date/time, live countdown) over a floating glass card; My Pets with
+**HOME** — time-aware large title, search, notifications; upcoming-appointments
+hero carousel (photo, vet, date/time, live countdown per page over a floating
+glass card; auto-advances every 5s, pauses while touched, dots for position,
+static with no timer under Reduce Motion); My Pets with
 pet cards → Pet Profile; zero-pet state; quick actions (Book / AI Triage / Chat /
 Shop); care reminders with Terracotta switches and an in-context notification
 permission sheet on the first toggle; clinic info with hours, address,
@@ -479,11 +492,29 @@ flutter test test/screens_test.dart --update-goldens
 
 ---
 
+## Releases & testing
+
+Every push to `main` runs the `build` workflow (`.github/workflows/build.yml`):
+
+- **`carepaws-debug-apk`** (Android, debug key): installable for testing —
+  `adb install app-debug.apk`. Good enough for on-device testing of the app.
+- **`carepaws-unsigned-ipa`** (iOS, no codesign): sideload with Sideloadly on
+  Windows — see [IOS_TESTING.md](IOS_TESTING.md) for the full steps and the
+  7-day certificate refresh caveat.
+
+Signed release APKs land in `releases/` (`carepaws-<version>.apk`). The release
+keystore lives outside the repo (see `android/app/build.gradle.kts`: the
+release `signingConfig` reads `CAREPAWS_KEYSTORE`, `CAREPAWS_KEY_ALIAS`,
+`CAREPAWS_STORE_PASSWORD`, `CAREPAWS_KEY_PASSWORD` from the environment — never
+from committed files).
+
 ## Known scope notes
 
 - Payments, SMS and push delivery are simulated locally — the prototype has no
-  server. Payment fails once on purpose so the inline retry path is reachable.
+  server. A genuine payment failure would keep the cart intact and surface the
+  inline retry UI.
 - `image_picker` has no Linux implementation, so on desktop the photo picker
   explains the situation and the text-only path continues — never a dead end.
 - `tel:` links have no handler on desktop; the number is shown instead.
-- The "Demo AI" badge is shown whenever no key is configured.
+- The "AI unavailable" card is shown whenever no key is configured or the
+  service cannot be reached — it names the failure and the fix.

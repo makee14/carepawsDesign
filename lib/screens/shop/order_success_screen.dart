@@ -25,7 +25,10 @@ class OrderSuccessScreen extends StatelessWidget {
 
     return CupertinoPageScaffold(
       backgroundColor: p.background,
-      navigationBar: const DetailNavBar(title: 'Order confirmed', showBack: false),
+      navigationBar: const DetailNavBar(
+        title: 'Order confirmed',
+        showBack: false,
+      ),
       child: SafeArea(
         child: Column(
           children: [
@@ -52,7 +55,11 @@ class OrderSuccessScreen extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: T.s16),
-                  Text('Paid', style: Type.largeTitle(p), textAlign: TextAlign.center),
+                  Text(
+                    'Paid',
+                    style: Type.largeTitle(p),
+                    textAlign: TextAlign.center,
+                  ),
                   const SizedBox(height: 8),
                   Text(
                     'Paid via ${order.method} · ready for pickup at the clinic',
@@ -65,7 +72,10 @@ class OrderSuccessScreen extends StatelessWidget {
                   Text('Receipt', style: Type.headline(p)),
                   const SizedBox(height: 10),
                   SoftCard(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 6,
+                    ),
                     child: Column(
                       children: [
                         for (final l in order.lines)
@@ -79,17 +89,21 @@ class OrderSuccessScreen extends StatelessWidget {
                                     style: Type.footnote(p),
                                   ),
                                 ),
-                                Text(peso(l.total), style: Type.footnoteEmph(p)),
+                                Text(
+                                  peso(l.total),
+                                  style: Type.footnoteEmph(p),
+                                ),
                               ],
                             ),
                           ),
                         Divider(height: 1, color: p.divider),
-                        AmountRow(label: 'Total paid', value: peso(order.total), emphasis: true),
-                        AmountRow(label: 'Order', value: order.id),
                         AmountRow(
-                          label: 'Status',
-                          value: order.status.label,
+                          label: 'Total paid',
+                          value: peso(order.total),
+                          emphasis: true,
                         ),
+                        AmountRow(label: 'Order', value: order.id),
+                        AmountRow(label: 'Status', value: order.status.label),
                       ],
                     ),
                   ),
@@ -100,19 +114,28 @@ class OrderSuccessScreen extends StatelessWidget {
                       children: [
                         Row(
                           children: [
-                            Ic.svg(Ic.location2, color: p.accent, size: 18),
+                            Ic.svg(Ic.pin, color: p.accent, size: 18),
                             const SizedBox(width: 9),
-                            Expanded(child: Text('Collect at', style: Type.headline(p))),
+                            Expanded(
+                              child: Text(
+                                'Collect at',
+                                style: Type.headline(p),
+                              ),
+                            ),
                           ],
                         ),
                         const SizedBox(height: 8),
                         Text('PetCare Veterinary Clinic', style: Type.body(p)),
                         const SizedBox(height: 4),
-                        Text('Unit 12, Greenhills Shopping Centre, Shaw Blvd, Mandaluyong City', style: Type.footnote(p)),
+                        Text(
+                          'Unit 12, Greenhills Shopping Centre, Shaw Blvd, Mandaluyong City',
+                          style: Type.footnote(p),
+                        ),
                         const SizedBox(height: 10),
                         Text(
                           'Show the pickup code at the counter. We hold orders for 7 days.',
-                          style: Type.footnote(p).copyWith(color: p.textSecondary),
+                          style: Type.footnote(p)
+                              .copyWith(color: p.textSecondary),
                         ),
                       ],
                     ),
@@ -127,14 +150,15 @@ class OrderSuccessScreen extends StatelessWidget {
                   PrimaryButton(
                     label: 'View my orders',
                     icon: Ic.doc,
-                    onPressed: () => Navigator.of(context).pushReplacement(
-                      appRoute(const OrdersScreen()),
-                    ),
+                    onPressed: () =>
+                        Navigator.of(context)
+                            .pushReplacement(appRoute(const OrdersScreen())),
                   ),
                   const SizedBox(height: 8),
                   SecondaryButton(
                     label: 'Done',
-                    onPressed: () => Navigator.of(context).popUntil((r) => r.isFirst),
+                    onPressed: () =>
+                        Navigator.of(context).popUntil((r) => r.isFirst),
                   ),
                 ],
               ),
@@ -171,10 +195,8 @@ class _PickupCodeCard extends StatelessWidget {
           const SizedBox(height: T.s16),
           Text(
             order.pickupCode,
-            style: Type.largeTitle(p).copyWith(
-              letterSpacing: 3,
-              color: p.accentText,
-            ),
+            style: Type.largeTitle(p)
+                .copyWith(letterSpacing: 3, color: p.accentText),
           ),
           const SizedBox(height: 6),
           Text('Show this at the clinic counter', style: Type.footnote(p)),
@@ -190,9 +212,33 @@ class _CodeMatrix extends StatelessWidget {
   final Color color;
 
   static const _finder = [
-    [0, 0], [0, 1], [0, 2], [1, 0], [1, 1], [1, 2], [2, 0], [2, 1], [2, 2],
-    [0, 6], [0, 7], [0, 8], [1, 6], [1, 7], [1, 8], [2, 6], [2, 7], [2, 8],
-    [6, 0], [6, 1], [6, 2], [7, 0], [7, 1], [7, 2], [8, 0], [8, 1], [8, 2],
+    [0, 0],
+    [0, 1],
+    [0, 2],
+    [1, 0],
+    [1, 1],
+    [1, 2],
+    [2, 0],
+    [2, 1],
+    [2, 2],
+    [0, 6],
+    [0, 7],
+    [0, 8],
+    [1, 6],
+    [1, 7],
+    [1, 8],
+    [2, 6],
+    [2, 7],
+    [2, 8],
+    [6, 0],
+    [6, 1],
+    [6, 2],
+    [7, 0],
+    [7, 1],
+    [7, 2],
+    [8, 0],
+    [8, 1],
+    [8, 2],
   ];
 
   @override
@@ -200,7 +246,9 @@ class _CodeMatrix extends StatelessWidget {
     var seed = code.codeUnits.fold<int>(7, (a, b) => a * 31 + b);
     bool filled(int x, int y) {
       if (_finder.any((f) => f[0] == x && f[1] == y)) return true;
-      if (x >= 3 && x <= 5 && y >= 3 && y <= 5) return false; // centre quiet zone
+      if (x >= 3 && x <= 5 && y >= 3 && y <= 5) {
+        return false; // centre quiet zone
+      }
       seed = (seed * 1103515245 + 12345) & 0x7FFFFFFF;
       return (seed >> 7) % 3 != 0;
     }
@@ -246,5 +294,6 @@ class _MatrixPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_MatrixPainter old) => old.filled != filled || old.color != color;
+  bool shouldRepaint(_MatrixPainter old) =>
+      old.filled != filled || old.color != color;
 }
