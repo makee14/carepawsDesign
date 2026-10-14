@@ -100,7 +100,7 @@ class SettingsScreen extends StatelessWidget {
                   RowTile(
                     title: 'Sign out',
                     subtitle: store.signedIn
-                        ? 'Signed in as ${AppStore.demoEmail}'
+                        ? 'Signed in as ${store.accountEmail ?? AppStore.demoEmail}'
                         : 'Not signed in',
                     leadingPath: Ic.close,
                     onTap: () => _confirmSignOut(context, store),

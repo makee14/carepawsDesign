@@ -26,13 +26,16 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
+  final _name = TextEditingController();
   final _email = TextEditingController();
   final _password = TextEditingController();
   final _passwordFocus = FocusNode();
   bool _hidden = true;
+  bool _registerMode = false;
 
   @override
   void dispose() {
+    _name.dispose();
     _email.dispose();
     _password.dispose();
     _passwordFocus.dispose();
@@ -42,7 +45,9 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _submit() async {
     final store = AppScope.read(context);
     HapticFeedback.lightImpact();
-    final ok = await store.signIn(_email.text, _password.text);
+    final ok = _registerMode
+        ? await store.register(_name.text, _email.text, _password.text)
+        : await store.signIn(_email.text, _password.text);
     if (!mounted) return;
     if (ok) {
       successHaptic();
@@ -52,16 +57,31 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+  void _switchMode(bool register) {
+    if (_registerMode == register) return;
+    setState(() {
+      _registerMode = register;
+      // Clear any stale error when switching modes.
+      AppScope.read(context).signInError = null;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final p = context.p;
     final store = AppScope.of(context);
     final busy = store.signingIn;
-    final canSubmit = !busy && _email.text.trim().isNotEmpty && _password.text.isNotEmpty;
+    final canSubmit = !busy &&
+        _email.text.trim().isNotEmpty &&
+        _password.text.isNotEmpty &&
+        (!_registerMode || _name.text.trim().isNotEmpty);
 
     return CupertinoPageScaffold(
       backgroundColor: p.background,
-      navigationBar: const DetailNavBar(title: 'Sign in', showBack: false),
+      navigationBar: DetailNavBar(
+        title: _registerMode ? 'Create account' : 'Sign in',
+        showBack: false,
+      ),
       child: SafeArea(
         child: ListView(
           padding: EdgeInsets.fromLTRB(
@@ -78,10 +98,16 @@ class _LoginScreenState extends State<LoginScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Text('Welcome back', style: Type.title1(p), textAlign: TextAlign.center),
+                  Text(
+                    _registerMode ? 'Join CarePaws' : 'Welcome back',
+                    style: Type.title1(p),
+                    textAlign: TextAlign.center,
+                  ),
                   const SizedBox(height: 6),
                   Text(
-                    'Sign in to reach your pets, visits and messages.',
+                    _registerMode
+                        ? 'Create an account to manage your pets, visits and messages.'
+                        : 'Sign in to reach your pets, visits and messages.',
                     style: Type.body(p).copyWith(color: p.textSecondary),
                     textAlign: TextAlign.center,
                   ),
@@ -94,6 +120,19 @@ class _LoginScreenState extends State<LoginScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  if (_registerMode) ...[
+                    _Field(
+                      label: 'Name',
+                      controller: _name,
+                      hint: 'Your first name',
+                      icon: Ic.person,
+                      keyboardType: TextInputType.name,
+                      textInputAction: TextInputAction.next,
+                      enabled: !busy,
+                      onChanged: (_) => setState(() {}),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
                   _Field(
                     label: 'Email',
                     controller: _email,
@@ -109,7 +148,9 @@ class _LoginScreenState extends State<LoginScreen> {
                   _Field(
                     label: 'Password',
                     controller: _password,
-                    hint: '••••••••••',
+                    hint: _registerMode
+                        ? 'At least 6 characters'
+                        : '••••••••••',
                     icon: Ic.lock,
                     obscure: _hidden,
                     enabled: !busy,
@@ -131,7 +172,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   ],
                   const SizedBox(height: T.s20),
                   PrimaryButton(
-                    label: 'Sign in',
+                    label: _registerMode ? 'Create account' : 'Sign in',
                     icon: Ic.check,
                     busy: busy,
                     onPressed: canSubmit ? _submit : null,
@@ -142,10 +183,16 @@ class _LoginScreenState extends State<LoginScreen> {
             const SizedBox(height: T.s16),
             FadeIn(
               index: 3,
-              child: Text(
-                'Use the account your clinic set up for you.',
-                style: Type.footnote(p).copyWith(color: p.textSecondary),
-                textAlign: TextAlign.center,
+              child: CupertinoButton(
+                padding: EdgeInsets.zero,
+                onPressed: busy ? null : () => _switchMode(!_registerMode),
+                child: Text(
+                  _registerMode
+                      ? 'Already have an account? Sign in'
+                      : "Don't have an account? Create one",
+                  style: Type.footnote(p).copyWith(color: p.accentText),
+                  textAlign: TextAlign.center,
+                ),
               ),
             ),
           ],

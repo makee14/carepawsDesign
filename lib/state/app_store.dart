@@ -9,6 +9,7 @@ import '../data/seed.dart';
 import '../data/clinic.dart';
 import '../design/theme.dart' show ThemeMode;
 import '../services/ai_service.dart';
+import '../services/auth_store.dart';
 import '../services/photo_store.dart';
 import '../services/settings_store.dart';
 
@@ -99,7 +100,9 @@ class AppStore extends ChangeNotifier {
   }
 
   // ------------------------------------------------------------- accessors
-  String get ownerName => Seed.ownerName;
+  /// Display name: the registered account's name when signed in with one,
+  /// otherwise the seeded owner name (demo account).
+  String get ownerName => accountName ?? Seed.ownerName;
 
   /// First name for conversational copy. Empty when the profile has no name —
   /// callers use a plain greeting instead of a hardcoded name.
@@ -471,9 +474,46 @@ class AppStore extends ChangeNotifier {
   /// User-facing reason the last attempt failed. Null when there was no error.
   String? signInError;
 
-  /// Validates against the demo credentials. The email is compared without
-  /// case or surrounding space; the password must match exactly. Returns true
-  /// only on success, leaving [signedIn] false on any mismatch.
+  /// Display name of the signed-in user. Null for the demo account (which
+  /// uses the seeded owner name) and when signed out.
+  String? accountName;
+
+  /// Email of the signed-in account, normalized to lowercase.
+  String? accountEmail;
+
+  /// Registers a new local account and signs in immediately. Returns true
+  /// on success; on failure [signInError] names the problem.
+  Future<bool> register(String name, String email, String password) async {
+    signingIn = true;
+    signInError = null;
+    notifyListeners();
+
+    // A short pause so the button state is visible — the check itself is local.
+    await Future<void>.delayed(const Duration(milliseconds: 420));
+
+    final err = await AuthStore.register(
+      name: name,
+      email: email,
+      password: password,
+    );
+
+    signingIn = false;
+    if (err != null) {
+      signInError = err;
+      notifyListeners();
+      return false;
+    }
+    signedIn = true;
+    accountName = name.trim();
+    accountEmail = email.trim().toLowerCase();
+    signInError = null;
+    notifyListeners();
+    return true;
+  }
+
+  /// Validates against registered local accounts first, then the demo
+  /// credentials. The email is compared without case or surrounding space.
+  /// Returns true only on success, leaving [signedIn] false on any mismatch.
   Future<bool> signIn(String email, String password) async {
     signingIn = true;
     signInError = null;
@@ -482,16 +522,25 @@ class AppStore extends ChangeNotifier {
     // A short pause so the button state is visible — the check itself is local.
     await Future<void>.delayed(const Duration(milliseconds: 420));
 
+    // Registered accounts take precedence over the demo login.
+    final registeredName = await AuthStore.authenticate(email, password);
+    final emailExists = await AuthStore.exists(email);
     final okEmail = email.trim().toLowerCase() == demoEmail;
     final okPass = password == demoPassword;
 
     signingIn = false;
-    signedIn = okEmail && okPass;
-    signInError = signedIn
-        ? null
-        : okEmail
-        ? 'That password is not right. Try again.'
-        : 'No account matches that email.';
+    signedIn = registeredName != null || (okEmail && okPass);
+    if (signedIn) {
+      accountName = registeredName; // null for the demo account
+      accountEmail = email.trim().toLowerCase();
+      signInError = null;
+    } else {
+      accountName = null;
+      accountEmail = null;
+      signInError = emailExists || okEmail
+          ? 'That password is not right. Try again.'
+          : 'No account matches that email.';
+    }
     notifyListeners();
     return signedIn;
   }
@@ -502,6 +551,8 @@ class AppStore extends ChangeNotifier {
     signedIn = false;
     signInError = null;
     signingIn = false;
+    accountName = null;
+    accountEmail = null;
     notifyListeners();
   }
 

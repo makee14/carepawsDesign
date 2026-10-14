@@ -518,6 +518,73 @@ void main() {
     });
   });
 
+  group('Local registration', () {
+    setUp(() => SharedPreferences.setMockInitialValues({}));
+
+    test('a new account registers and signs in immediately', () async {
+      final store = AppStore();
+      addTearDown(store.dispose);
+      final ok = await store.register('Mark', 'mark@example.com', 'secret123');
+      expect(ok, isTrue);
+      expect(store.signedIn, isTrue);
+      expect(store.accountName, 'Mark');
+      expect(store.accountEmail, 'mark@example.com');
+      expect(store.signInError, isNull);
+    });
+
+    test('the registered account can sign in again after sign-out', () async {
+      final store = AppStore();
+      addTearDown(store.dispose);
+      await store.register('Mark', 'mark@example.com', 'secret123');
+      store.signOut();
+      expect(store.signedIn, isFalse);
+
+      final ok = await store.signIn('mark@example.com', 'secret123');
+      expect(ok, isTrue);
+      expect(store.signedIn, isTrue);
+      expect(store.accountName, 'Mark');
+    });
+
+    test('duplicate email is rejected', () async {
+      final store = AppStore();
+      addTearDown(store.dispose);
+      expect(await store.register('Mark', 'mark@example.com', 'secret123'), isTrue);
+      expect(await store.register('Other', 'mark@example.com', 'other123'), isFalse);
+      expect(store.signInError, contains('already exists'));
+    });
+
+    test('bad input is rejected with a useful message', () async {
+      final store = AppStore();
+      addTearDown(store.dispose);
+      expect(await store.register('', 'mark@example.com', 'secret123'), isFalse);
+      expect(store.signInError, contains('name'));
+      expect(await store.register('Mark', 'not-an-email', 'secret123'), isFalse);
+      expect(store.signInError, contains('email'));
+      expect(await store.register('Mark', 'mark@example.com', '123'), isFalse);
+      expect(store.signInError, contains('6 characters'));
+    });
+
+    test('wrong password for a registered account is rejected', () async {
+      final store = AppStore();
+      addTearDown(store.dispose);
+      await store.register('Mark', 'mark@example.com', 'secret123');
+      store.signOut();
+      expect(await store.signIn('mark@example.com', 'wrong'), isFalse);
+      expect(store.signInError, contains('password'));
+    });
+
+    test('registered accounts take precedence over demo', () async {
+      final store = AppStore();
+      addTearDown(store.dispose);
+      // Register with the demo email (edge case): the registered name wins.
+      await store.register('Local User', AppStore.demoEmail, 'localpass123');
+      store.signOut();
+      final ok = await store.signIn(AppStore.demoEmail, 'localpass123');
+      expect(ok, isTrue);
+      expect(store.accountName, 'Local User');
+    });
+  });
+
   group('The assistant prompt is honest and injects live clinic context', () {
     String prompt({required DateTime now, String name = 'Marco'}) =>
         VetPersona.systemFor(now: now, ownerFirstName: name);
