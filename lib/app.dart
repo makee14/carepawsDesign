@@ -145,7 +145,10 @@ class _SplashScreenState extends State<SplashScreen>
               padding: const EdgeInsets.all(T.s24),
               child: Column(
                 children: [
-                  const Spacer(flex: 3),
+                  // Optical centering: the hero sits at the true screen
+                  // centre (8:5 split of the free space compensates the
+                  // bottom CTA block) instead of floating high.
+                  const Spacer(flex: 8),
                   // Staggered arrival: mark, wordmark, then tagline. Each piece
                   // waits on the one before it so the screen assembles instead
                   // of appearing all at once.
@@ -180,7 +183,7 @@ class _SplashScreenState extends State<SplashScreen>
                       ),
                     ],
                   ),
-                  const Spacer(flex: 3),
+                  const Spacer(flex: 5),
                   FadeIn(
                     index: 4,
                     child: SizedBox(
@@ -206,26 +209,14 @@ class _SplashScreenState extends State<SplashScreen>
   }
 }
 
-/// The CarePaws logo mark — the launcher icon artwork itself: an orange
-/// gradient squircle with the sitting-dog + nested-cat mark, no text.
-/// Used on splash and auth only, per the one-mark rule. It renders the same
-/// artwork as tool/icon/app_icon.svg so the in-app logo and the app icon are
-/// one and the same mark.
+/// The CarePaws logo mark — the launcher icon artwork itself, rendered from
+/// the byte-identical SVG string as tool/icon/app_icon.svg (see
+/// [Ic.launcherArtwork]). The in-app logo and the app icon are one and the
+/// same mark by construction: gradient, squircle and artwork shared.
+/// Used on splash and auth only, per the one-mark rule.
 class LogoMark extends StatelessWidget {
   const LogoMark({super.key, this.size = 120});
   final double size;
-
-  /// Corner radius as a fraction of the tile, matching the launcher SVG
-  /// (rx 228 on a 1024 canvas).
-  static const _corner = 0.223;
-
-  /// Mark size as a fraction of the tile, matching the launcher SVG
-  /// (the 120-grid mark scaled to 600 on a 1024 canvas).
-  static const _mark = 0.586;
-
-  /// The launcher SVG paints the dog in #FEFBF4 (not T.cream #FEF3E2) — the
-  /// in-app mark must be pixel-identical to the app icon.
-  static const _logoCream = Color(0xFFFEFBF4);
 
   @override
   Widget build(BuildContext context) {
@@ -234,32 +225,7 @@ class LogoMark extends StatelessWidget {
       label: 'CarePaws Veterinary Clinic logo',
       child: SizedBox.square(
         dimension: size,
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            // Same gradient geometry as the launcher SVG:
-            // x1=0,y1=0 → x2=0.35,y2=1 maps to Alignment(-1,-1) → (-0.3,1).
-            gradient: const LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment(-0.3, 1),
-              colors: [T.orange, T.terracotta],
-            ),
-            borderRadius: BorderRadius.circular(size * _corner),
-            boxShadow: [
-              BoxShadow(
-                color: T.orange.withValues(alpha: 0.35),
-                blurRadius: size * 0.18,
-                spreadRadius: size * 0.01,
-              ),
-            ],
-          ),
-          child: Center(
-            child: Ic.petPair(
-              size: size * _mark,
-              dog: _logoCream,
-              cat: T.terracotta,
-            ),
-          ),
-        ),
+        child: Ic.launcherIcon(size: size),
       ),
     );
   }

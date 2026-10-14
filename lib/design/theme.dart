@@ -173,8 +173,10 @@ CupertinoThemeData themeFor(AppPalette p) {
   );
 }
 
-/// Type ramp: Large Title 34 semibold, Title 28, Headline 17 semibold,
-/// Body 17, Footnote 13, Caption 12.
+/// Type ramp (Apple-HIG-Vet-Management-System.md §2.2): Large Title 34 Bold,
+/// Title 1 28 Bold, Title 2 22 Bold, Title 3 20 Semibold, Headline 17 Semibold,
+/// Body 17 Regular, Callout 16 Regular, Subheadline 15 Regular, Footnote 13
+/// Regular, Caption 1 12 Medium, Caption 2 11 Regular.
 class Type {
   const Type._();
   static TextStyle largeTitle(AppPalette p) =>
@@ -182,19 +184,25 @@ class Type {
   static TextStyle title1(AppPalette p) =>
       TextStyle(fontSize: 28, fontWeight: FontWeight.w700, color: p.title, letterSpacing: -0.4, height: 1.16);
   static TextStyle title2(AppPalette p) =>
-      TextStyle(fontSize: 22, fontWeight: FontWeight.w600, color: p.title, height: 1.2);
+      TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: p.title, height: 1.2);
+  static TextStyle title3(AppPalette p) =>
+      TextStyle(fontSize: 20, fontWeight: FontWeight.w600, color: p.title, height: 1.25);
   static TextStyle headline(AppPalette p) =>
       TextStyle(fontSize: 17, fontWeight: FontWeight.w600, color: p.text, height: 1.28);
   static TextStyle body(AppPalette p) =>
       TextStyle(fontSize: 17, fontWeight: FontWeight.w400, color: p.text, height: 1.42);
   static TextStyle callout(AppPalette p) =>
-      TextStyle(fontSize: 16, fontWeight: FontWeight.w500, color: p.text, height: 1.35);
+      TextStyle(fontSize: 16, fontWeight: FontWeight.w400, color: p.text, height: 1.35);
+  static TextStyle subheadline(AppPalette p) =>
+      TextStyle(fontSize: 15, fontWeight: FontWeight.w400, color: p.text, height: 1.35);
   static TextStyle footnote(AppPalette p) =>
       TextStyle(fontSize: 13, fontWeight: FontWeight.w400, color: p.textSecondary, height: 1.35);
   static TextStyle footnoteEmph(AppPalette p) =>
       TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: p.text, height: 1.35);
   static TextStyle caption(AppPalette p) =>
       TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: p.textSecondary, height: 1.3);
+  static TextStyle caption2(AppPalette p) =>
+      TextStyle(fontSize: 11, fontWeight: FontWeight.w400, color: p.textSecondary, height: 1.3);
   static TextStyle captionEmph(AppPalette p) =>
       TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: p.textSecondary, height: 1.3);
   static TextStyle button(AppPalette p) =>

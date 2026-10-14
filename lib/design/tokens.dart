@@ -13,9 +13,13 @@ class T {
   static const ink = Color(0xFF25221E); // wordmark ink, large titles
   static const cream = Color(0xFFFEF3E2); // app background
   static const card = Color(0xFFFFFFFF); // cards on cream
-  static const taupe = Color(0xFF9B8A76); // secondary icons, dividers
+  static const taupe = Color(0xFF7A6854); // secondary icons, dividers —
+  // darkened from #9B8A76 so 10pt tab-bar labels pass 4.5:1 on cream (4.85:1)
+  // while staying >= 3:1 as icons on dark surfaces (3.17:1 on #241B17).
   static const sand = Color(0xFFC7AB83); // decorative tint only
-  static const destructive = Color(0xFFDC2626);
+  // Darkened from #DC2626: destructive text on cream was 4.40:1, now 5.12:1.
+  // White badge text on it stays 5.62:1.
+  static const destructive = Color(0xFFC62828);
 
   // ---- derived semantic tokens (contrast-verified) --------------------------
   /// #2A1A0E — 15.27:1 on cream, 16.77:1 on card.
@@ -36,7 +40,7 @@ class T {
   static const double s24 = 24;
   static const double s32 = 32;
 
-  static const double rCard = 20;
+  static const double rCard = 22; // HIG radius family: standard cards are 22pt
   static const double rControl = 14;
   static const double rPill = 999;
 

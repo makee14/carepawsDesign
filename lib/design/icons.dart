@@ -280,32 +280,43 @@ class Ic {
       'M10.3 6.8a1.9 1.9 0 1 0 0-3.8 1.9 1.9 0 0 0 0 3.8Z'
       'M13.7 6.8a1.9 1.9 0 1 0 0-3.8 1.9 1.9 0 0 0 0 3.8Z';
 
-  /// The CarePaws mark v2 (2026-10-14): a sitting dog in side profile with a
-  /// cat nested in its chest, redrawn from the clinic's PetCare logo — no
-  /// text, no heart. Replaces [pawHeart] as the brand mark. Authored on a
-  /// 120x120 grid; two fills because the animals are different colours.
-  static Widget petPair({
-    required double size,
-    required Color dog,
-    required Color cat,
-  }) => SvgPicture.string(
-    '<svg viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">'
-    '<g fill="${hex(dog)}">'
-    '<path d="M16 62L40 56C44 54 46 50 48 44L54 40L60 18L68 40C72 44 74 48 74 54C74 66 75 76 74 86C77 90 82 94 86 98L86 108L54 108C53 100 52 94 52 88C50 84 47 81 44 78C40 76 36 75 32 74C26 72 20 68 16 62Z"/>'
-    '<path d="M74 88C84 84 92 74 92 62C92 58 88 58 87 62C86 72 80 80 72 84Z"/>'
-    '</g>'
-    '<g fill="${hex(cat)}">'
-    '<ellipse cx="54" cy="95" rx="9" ry="13"/>'
-    '<circle cx="54" cy="76" r="8"/>'
-    '<path d="M47 70L44 60L52 66Z"/>'
-    '<path d="M56 66L62 58L63 69Z"/>'
-    '<path d="M62 106C69 104 72 98 70 92C69 88 65 88 65 92C65 96 62 99 59 100Z"/>'
-    '</g>'
-    '</svg>',
-    width: size,
-    height: size,
-    semanticsLabel: null,
-  );
+  /// The CarePaws mark v3 (2026-10-14): the "embrace paw" — four toes over
+  /// a pad split into a cat head (pointed ears, left) and a dog head (floppy
+  /// ear, right). Authored on a 120x120 grid. Single source of truth shared
+  /// with tool/icon/*.svg: [launcherArtwork] must stay byte-identical to
+  /// tool/icon/app_icon.svg.
+  static const embracePaths =
+      '<ellipse cx="36" cy="44" rx="8.5" ry="11.5"/>'
+      '<ellipse cx="51" cy="34" rx="8.5" ry="11.5"/>'
+      '<ellipse cx="69" cy="34" rx="8.5" ry="11.5"/>'
+      '<ellipse cx="84" cy="44" rx="8.5" ry="11.5"/>'
+      '<path d="M32 62 L41 70 L52 62 L54 78 A14.8 14.8 0 1 1 28 78 Z"/>'
+      '<circle cx="79" cy="87" r="13"/>'
+      '<ellipse cx="88" cy="75" rx="7.5" ry="13" transform="rotate(20 88 75)"/>';
+
+  /// The complete 1024x1024 launcher artwork. The in-app [LogoMark] renders
+  /// this exact string, so the logo and the app icon are one and the same
+  /// mark — gradient, squircle and artwork included.
+  static const launcherArtwork =
+      '<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">'
+      '<defs><linearGradient id="bg" x1="0" y1="0" x2="0.35" y2="1"><stop offset="0" stop-color="#E4843E"/><stop offset="1" stop-color="#D4621A"/></linearGradient></defs>'
+      '<rect width="1024" height="1024" rx="228" ry="228" fill="url(#bg)"/>'
+      '<g transform="translate(2 22) scale(8)"><g fill="#FEFBF4">$embracePaths</g></g></svg>';
+
+  /// Adaptive-icon foreground layer (mark only, no squircle — the background
+  /// colour layer supplies it). Byte-identical to
+  /// tool/icon/app_icon_foreground.svg.
+  static const launcherForegroundArtwork =
+      '<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">'
+      '<g transform="translate(512 512) scale(0.60) translate(-512 -512)">'
+      '<g transform="translate(2 22) scale(8)"><g fill="#FEFBF4">$embracePaths</g></g></g></svg>';
+
+  /// Renders [launcherArtwork] — the exact launcher icon SVG — at [size].
+  static Widget launcherIcon({required double size}) => SvgPicture.string(
+        launcherArtwork,
+        width: size,
+        height: size,
+      );
   static const qr =
       'M4 4h6v6H4ZM14 4h6v6h-6ZM4 14h6v6H4ZM14 14h2.8v2.8H14ZM17.2 17.2H20V20h-2.8Z';
   static const wallet =
