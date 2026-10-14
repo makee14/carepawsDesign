@@ -53,6 +53,16 @@ void main() {
       expect(store.messages, isEmpty);
     });
 
+    test('fresh registered account has no seed reminders/notifications/prescriptions', () async {
+      final store = _store();
+      await _registerAndSignIn(store);
+
+      expect(store.signedIn, isTrue);
+      expect(store.reminders, isEmpty);
+      expect(store.notifications, isEmpty);
+      expect(store.prescriptions, isEmpty);
+    });
+
     test('demo sign-in still loads the seed dataset', () async {
       final store = _store();
       expect(

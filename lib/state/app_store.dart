@@ -541,10 +541,14 @@ class AppStore extends ChangeNotifier {
       accountEmail = sessionEmail;
       accountName = await AuthStore.displayName(sessionEmail);
       if (accountName != null) {
+        // Registered session restored: it owns no seed data (B15).
         pets = const [];
         appointments = const [];
         orders = const [];
         messages = const [];
+        reminders = const [];
+        notifications = const [];
+        prescriptions = const [];
       }
       await _loadOwnerProfile();
     }
@@ -629,17 +633,28 @@ class AppStore extends ChangeNotifier {
       if (registeredName != null) {
         // Registered accounts start with a clean slate: the seed pets,
         // appointments, orders and messages belong to the demo account only.
+        // Reminders/notifications/prescriptions name seed pets (Biscuit,
+        // Mochi), so they clear too — otherwise a zero-pet account would
+        // show someone else's pets in its reminders. Products are the
+        // clinic's shared catalog and stay for everyone.
         pets = const [];
         appointments = const [];
         orders = const [];
         messages = const [];
+        reminders = const [];
+        notifications = const [];
+        prescriptions = const [];
       } else {
         // Demo account: (re)load the demo dataset, e.g. when a registered
-        // session signed out first.
+        // session signed out first. Reminders/notifications/prescriptions
+        // were cleared for the registered account, so they restore here too.
         pets = Seed.pets;
         appointments = Seed.appointments;
         orders = Seed.orders;
         messages = Seed.messages;
+        reminders = Seed.reminders;
+        notifications = Seed.notifications;
+        prescriptions = Seed.prescriptions;
       }
       await SettingsStore.writeSessionEmail(accountEmail!);
       await _loadOwnerProfile();
