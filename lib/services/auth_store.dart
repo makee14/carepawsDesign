@@ -92,6 +92,16 @@ class AuthStore {
     return entry['name'];
   }
 
+  /// Display name for a registered email, without checking the password.
+  /// Used to restore a saved session on boot — the session was already
+  /// authenticated when it was persisted, so this must NOT re-authenticate.
+  /// Returns null for unknown emails (and for the demo account, which is
+  /// never stored here).
+  static Future<String?> displayName(String email) async {
+    final users = await _readUsers();
+    return users[_norm(email)]?['name'];
+  }
+
   /// Password rule, shared by the create-account form and [register]:
   /// at least 8 characters with at least one letter and one number.
   /// Returns null when the password is acceptable, otherwise the

@@ -14,6 +14,7 @@ class SettingsStore {
   static const _kReduceMotion = 'carepaws.settings.reduceMotion';
   static const _kLanguage = 'carepaws.settings.language';
   static const _kOnboarded = 'carepaws.settings.onboarded';
+  static const _kSessionEmail = 'carepaws.settings.sessionEmail';
 
   /// SharedPreferences throws in unit tests and on desktop without the plugin.
   /// A failure here must never stop the app from launching, so every call is
@@ -37,6 +38,7 @@ class SettingsStore {
     final p = await _prefs();
     await p?.setString(_kThemeMode, mode.name);
   }
+
   static Future<bool?> readReduceMotion() async {
     final p = await _prefs();
     return p?.getBool(_kReduceMotion);
@@ -67,5 +69,22 @@ class SettingsStore {
   static Future<void> writeOnboarded(bool value) async {
     final p = await _prefs();
     await p?.setBool(_kOnboarded, value);
+  }
+
+  /// Email of the last successfully signed-in account, so the session
+  /// survives the OS killing the app in the background. Cleared on sign-out.
+  static Future<String?> readSessionEmail() async {
+    final p = await _prefs();
+    return p?.getString(_kSessionEmail);
+  }
+
+  static Future<void> writeSessionEmail(String email) async {
+    final p = await _prefs();
+    await p?.setString(_kSessionEmail, email);
+  }
+
+  static Future<void> clearSessionEmail() async {
+    final p = await _prefs();
+    await p?.remove(_kSessionEmail);
   }
 }

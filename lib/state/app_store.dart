@@ -518,6 +518,12 @@ class AppStore extends ChangeNotifier {
 
   /// Restores the persisted preferences. Safe to call in tests and on desktop:
   /// [SettingsStore] swallows plugin failures and the defaults stand.
+  ///
+  /// Also restores the auth session: a saved session email means the user was
+  /// signed in when the process died, so the app comes back signed in instead
+  /// of dropping to login. The demo account reloads its seed dataset; a
+  /// registered account starts from its own (empty-at-first) dataset — the
+  /// seeds are demo-only.
   Future<void> loadSettings() async {
     final mode = await SettingsStore.readThemeMode();
     final reduce = await SettingsStore.readReduceMotion();
@@ -528,6 +534,20 @@ class AppStore extends ChangeNotifier {
     reduceMotionOverride = reduce ?? false;
     language = lang ?? language;
     onboardingSeen = onboarded;
+
+    final sessionEmail = await SettingsStore.readSessionEmail();
+    if (sessionEmail != null && sessionEmail.isNotEmpty) {
+      signedIn = true;
+      accountEmail = sessionEmail;
+      accountName = await AuthStore.displayName(sessionEmail);
+      if (accountName != null) {
+        pets = const [];
+        appointments = const [];
+        orders = const [];
+        messages = const [];
+      }
+      await _loadOwnerProfile();
+    }
     notifyListeners();
   }
 
@@ -606,6 +626,22 @@ class AppStore extends ChangeNotifier {
       accountName = registeredName; // null for the demo account
       accountEmail = email.trim().toLowerCase();
       signInError = null;
+      if (registeredName != null) {
+        // Registered accounts start with a clean slate: the seed pets,
+        // appointments, orders and messages belong to the demo account only.
+        pets = const [];
+        appointments = const [];
+        orders = const [];
+        messages = const [];
+      } else {
+        // Demo account: (re)load the demo dataset, e.g. when a registered
+        // session signed out first.
+        pets = Seed.pets;
+        appointments = Seed.appointments;
+        orders = Seed.orders;
+        messages = Seed.messages;
+      }
+      await SettingsStore.writeSessionEmail(accountEmail!);
       await _loadOwnerProfile();
     } else {
       accountName = null;
@@ -621,7 +657,8 @@ class AppStore extends ChangeNotifier {
   }
 
   /// Clears the session and any error, so the splash → login flow can be shown
-  /// again from Settings.
+  /// again from Settings. Also clears the persisted session email so a
+  /// relaunch after sign-out boots to login, not back into the account.
   void signOut() {
     signedIn = false;
     signInError = null;
@@ -630,6 +667,7 @@ class AppStore extends ChangeNotifier {
     accountEmail = null;
     _profileName = null;
     _profilePhone = '';
+    unawaited(SettingsStore.clearSessionEmail());
     notifyListeners();
   }
 
@@ -692,13 +730,18 @@ class AppStore extends ChangeNotifier {
   }
 
   // ------------------------------------------------------------ lifecycle
+  /// Demo reset path: restores the seed dataset, but ONLY for the demo
+  /// account. A registered account keeps its own data — the seeds are
+  /// demo-only and must never resurrect under a real account.
   void reset() {
-    pets = Seed.pets;
-    appointments = Seed.appointments;
-    orders = Seed.orders;
     cart = const [];
-    messages = Seed.messages;
-    reminders = Seed.reminders;
+    if (signedIn && accountName == null) {
+      pets = Seed.pets;
+      appointments = Seed.appointments;
+      orders = Seed.orders;
+      messages = Seed.messages;
+      reminders = Seed.reminders;
+    }
     notifyListeners();
   }
 }

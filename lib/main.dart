@@ -110,7 +110,8 @@ class _CarePawsAppState extends State<CarePawsApp> with WidgetsBindingObserver {
       ThemeMode.dark => AppPalette.dark,
       ThemeMode.light => AppPalette.light,
       ThemeMode.system =>
-        WidgetsBinding.instance.platformDispatcher.platformBrightness == Brightness.dark
+        WidgetsBinding.instance.platformDispatcher.platformBrightness ==
+                Brightness.dark
             ? AppPalette.dark
             : AppPalette.light,
     };
@@ -122,7 +123,9 @@ class _CarePawsAppState extends State<CarePawsApp> with WidgetsBindingObserver {
       setState(() {});
       return;
     }
-    await nav.pushReplacement(appRoute(const RootShell()));
+    // Remove the whole auth stack (splash/onboarding/login): Back from the
+    // tab shell must never land back on it.
+    await nav.pushAndRemoveUntil(appRoute(const RootShell()), (_) => false);
   }
 
   @override
@@ -140,7 +143,10 @@ class _CarePawsAppState extends State<CarePawsApp> with WidgetsBindingObserver {
             // Honour the system text scale, but keep the app usable when the
             // platform reports an extreme value.
             data: mq.copyWith(
-              textScaler: mq.textScaler.clamp(minScaleFactor: 0.9, maxScaleFactor: 3.2),
+              textScaler: mq.textScaler.clamp(
+                minScaleFactor: 0.9,
+                maxScaleFactor: 3.2,
+              ),
             ),
             child: child ?? const SizedBox.shrink(),
           );
@@ -157,6 +163,7 @@ class _CarePawsAppState extends State<CarePawsApp> with WidgetsBindingObserver {
 
 /// Test helper: a store with a deterministic clock.
 AppStore demoStore({DateTime? now}) => AppStore(now: now);
+
 /// Routes to a single screen for visual review / screenshots.
 class _ShotHost extends StatefulWidget {
   const _ShotHost();

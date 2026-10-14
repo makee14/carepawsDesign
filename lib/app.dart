@@ -64,6 +64,20 @@ class _SplashScreenState extends State<SplashScreen>
     // holds up the first frame.
     unawaited(store.loadPhotos());
     if (!mounted) return;
+    // A restored session skips onboarding/login entirely: the splash is the
+    // launch screen, then straight into the tab shell.
+    if (store.signedIn) {
+      final done = widget.onDone;
+      if (done != null) {
+        done();
+      } else {
+        unawaited(
+          Navigator.of(context)
+              .pushAndRemoveUntil(appRoute(const RootShell()), (_) => false),
+        );
+      }
+      return;
+    }
     // Deliberately does NOT advance on its own any more. The previous version
     // pushed the app after 420ms, which made the "Get started" button
     // impossible to actually press.
@@ -77,7 +91,8 @@ class _SplashScreenState extends State<SplashScreen>
   }
 
   /// Splash → onboarding (first launch) → sign-in. The app itself is only
-  /// reachable once the credentials have been accepted.
+  /// reachable once the credentials have been accepted. Post-login the whole
+  /// auth stack is removed, so Back can never land on splash/onboarding/login.
   Future<void> _goToLogin() async {
     final done = widget.onDone;
     final navigator = Navigator.of(context);
@@ -97,7 +112,10 @@ class _SplashScreenState extends State<SplashScreen>
                       if (done != null) {
                         done();
                       } else {
-                        navigator.pushReplacement(appRoute(const RootShell()));
+                        navigator.pushAndRemoveUntil(
+                          appRoute(const RootShell()),
+                          (_) => false,
+                        );
                       }
                     },
                   ),
@@ -116,7 +134,10 @@ class _SplashScreenState extends State<SplashScreen>
             if (done != null) {
               done();
             } else {
-              navigator.pushReplacement(appRoute(const RootShell()));
+              navigator.pushAndRemoveUntil(
+                appRoute(const RootShell()),
+                (_) => false,
+              );
             }
           },
         ),
@@ -571,6 +592,10 @@ class _LargeTitleDelegate extends SliverPersistentHeaderDelegate {
 /// card), hardening to a pure fade under Reduce Motion. The iOS back-swipe
 /// gesture still works via [CupertinoRouteTransitionMixin].
 Route<void> appRoute(Widget page) => _FadeScaleRoute<void>(page: page);
+
+/// Typed variant of [appRoute] for pushes that return a result — e.g. the
+/// photo crop screen returning the cropped bytes.
+Route<R> appRouteT<R>(Widget page) => _FadeScaleRoute<R>(page: page);
 
 class _FadeScaleRoute<R> extends PageRoute<R>
     with CupertinoRouteTransitionMixin<R> {
