@@ -1306,33 +1306,40 @@ class PrimaryButton extends StatelessWidget {
     final fg = p.isDark ? T.espresso : T.card;
     final h = compact ? 46.0 : 54.0;
 
-    final child = Container(
-      height: h,
-      padding: EdgeInsets.symmetric(horizontal: compact ? T.s16 : T.s20),
-      decoration: BoxDecoration(
-        color: enabled ? fill : fill.withValues(alpha: 0.4),
-        borderRadius: BorderRadius.circular(T.rControl + 2),
-      ),
-      child: Row(
-        mainAxisSize: expand ? MainAxisSize.max : MainAxisSize.min,
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          if (busy)
-            CupertinoActivityIndicator(color: fg)
-          else if (icon != null) ...[
-            Ic.svg(icon!, color: fg, size: 19, stroke: 2.2),
-            const SizedBox(width: 9),
-          ],
-          Flexible(
-            child: Text(
-              label,
-              style: Type.button(p).copyWith(color: fg),
-              maxLines: 2,
-              textAlign: TextAlign.center,
-              overflow: TextOverflow.ellipsis,
+    // Disabled: ghost the whole button rather than fading only the fill — a
+    // faded fill under a full-strength label script-measured 2.0:1 in light
+    // mode and read as broken. Ghosting keeps the verified label/fill ratio
+    // while still reading unmistakably disabled.
+    final child = Opacity(
+      opacity: enabled ? 1 : 0.45,
+      child: Container(
+        height: h,
+        padding: EdgeInsets.symmetric(horizontal: compact ? T.s16 : T.s20),
+        decoration: BoxDecoration(
+          color: fill,
+          borderRadius: BorderRadius.circular(T.rControl + 2),
+        ),
+        child: Row(
+          mainAxisSize: expand ? MainAxisSize.max : MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            if (busy)
+              CupertinoActivityIndicator(color: fg)
+            else if (icon != null) ...[
+              Ic.svg(icon!, color: fg, size: 19, stroke: 2.2),
+              const SizedBox(width: 9),
+            ],
+            Flexible(
+              child: Text(
+                label,
+                style: Type.button(p).copyWith(color: fg),
+                maxLines: 2,
+                textAlign: TextAlign.center,
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
 

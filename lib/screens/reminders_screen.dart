@@ -39,7 +39,7 @@ class RemindersScreen extends StatelessWidget {
                         Expanded(
                           child: Text(
                             store.notificationsAsked
-                                ? 'Notifications are allowed for CarePaws. Toggle anything below on or off.'
+                                ? 'Notifications are allowed for CarePaws.'
                                 : 'Notifications are not enabled yet. Turning on your first reminder '
                                       'will ask permission right here.',
                             style: Type.footnote(p),
