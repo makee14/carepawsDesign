@@ -10,6 +10,7 @@ import '../data/clinic.dart';
 import '../design/theme.dart' show ThemeMode;
 import '../services/ai_service.dart';
 import '../services/auth_store.dart';
+import '../services/dataset_store.dart';
 import '../services/photo_store.dart';
 import '../services/settings_store.dart';
 import 'profile_store.dart';
@@ -247,6 +248,7 @@ class AppStore extends ChangeNotifier {
   void addPet(Pet p) {
     pets = [p, ...pets];
     if (p.hasPhoto) PhotoStore.save(PhotoStore.petKey(p.id), p.photo!);
+    _savePets();
     notifyListeners();
   }
 
@@ -259,6 +261,7 @@ class AppStore extends ChangeNotifier {
     } else {
       PhotoStore.remove(PhotoStore.petKey(updated.id));
     }
+    _savePets();
     notifyListeners();
   }
 
@@ -321,18 +324,21 @@ class AppStore extends ChangeNotifier {
   void removePet(String id) {
     pets = pets.where((p) => p.id != id).toList();
     PhotoStore.remove(PhotoStore.petKey(id));
+    _savePets();
     notifyListeners();
   }
 
   /// Used by the zero-pet empty state / demo reset.
   void clearPets() {
     pets = const [];
+    _savePets();
     notifyListeners();
   }
 
   // --------------------------------------------------------- notifications
   void markNotificationsRead() {
     notifications = notifications.map((n) => n.copyWith(read: true)).toList();
+    _saveNotifications();
     notifyListeners();
   }
 
@@ -346,6 +352,7 @@ class AppStore extends ChangeNotifier {
       if (value && !r.on && !_notificationsAsked) firstOn = true;
       return r.copyWith(on: value);
     }).toList();
+    _saveReminders();
     notifyListeners();
     return firstOn;
   }
@@ -361,11 +368,13 @@ class AppStore extends ChangeNotifier {
   // ---------------------------------------------------------- appointments
   void addAppointment(Appointment a) {
     appointments = [a, ...appointments];
+    _saveAppointments();
     notifyListeners();
   }
 
   void updateAppointment(String id, Appointment Function(Appointment) f) {
     appointments = appointments.map((a) => a.id == id ? f(a) : a).toList();
+    _saveAppointments();
     notifyListeners();
   }
 
@@ -416,6 +425,7 @@ class AppStore extends ChangeNotifier {
         if (c.productId == productId) c.copyWith(qty: clamped) else c,
       if (!exists) CartLine(productId, clamped),
     ];
+    _saveCart();
     notifyListeners();
   }
 
@@ -424,11 +434,13 @@ class AppStore extends ChangeNotifier {
 
   void removeFromCart(String productId) {
     cart = cart.where((c) => c.productId != productId).toList();
+    _saveCart();
     notifyListeners();
   }
 
   void clearCart() {
     cart = const [];
+    _saveCart();
     notifyListeners();
   }
 
@@ -453,17 +465,20 @@ class AppStore extends ChangeNotifier {
   // ---------------------------------------------------------------- orders
   void addOrder(Order o) {
     orders = [o, ...orders];
+    _saveOrders();
     notifyListeners();
   }
 
   void updateOrder(String id, Order Function(Order) f) {
     orders = orders.map((o) => o.id == id ? f(o) : o).toList();
+    _saveOrders();
     notifyListeners();
   }
 
   // ------------------------------------------------------------------ chat
   void pushMessage(ChatMessage m) {
     messages = [...messages, m];
+    _saveMessages();
     notifyListeners();
   }
 
@@ -521,9 +536,10 @@ class AppStore extends ChangeNotifier {
   ///
   /// Also restores the auth session: a saved session email means the user was
   /// signed in when the process died, so the app comes back signed in instead
-  /// of dropping to login. The demo account reloads its seed dataset; a
-  /// registered account starts from its own (empty-at-first) dataset — the
-  /// seeds are demo-only.
+  /// of dropping to login. The session's persisted datasets (pets,
+  /// appointments, cart, …) are rehydrated; only on a first launch with no
+  /// stored data does the demo account fall back to its seed dataset and a
+  /// registered account to an empty one (B15).
   Future<void> loadSettings() async {
     final mode = await SettingsStore.readThemeMode();
     final reduce = await SettingsStore.readReduceMotion();
@@ -540,16 +556,9 @@ class AppStore extends ChangeNotifier {
       signedIn = true;
       accountEmail = sessionEmail;
       accountName = await AuthStore.displayName(sessionEmail);
-      if (accountName != null) {
-        // Registered session restored: it owns no seed data (B15).
-        pets = const [];
-        appointments = const [];
-        orders = const [];
-        messages = const [];
-        reminders = const [];
-        notifications = const [];
-        prescriptions = const [];
-      }
+      // A restored session rehydrates its own persisted datasets — the seeds
+      // are only the first-launch fallback, never an overwrite.
+      await _rehydrate(accountEmail!, registered: accountName != null);
       await _loadOwnerProfile();
     }
     notifyListeners();
@@ -630,32 +639,10 @@ class AppStore extends ChangeNotifier {
       accountName = registeredName; // null for the demo account
       accountEmail = email.trim().toLowerCase();
       signInError = null;
-      if (registeredName != null) {
-        // Registered accounts start with a clean slate: the seed pets,
-        // appointments, orders and messages belong to the demo account only.
-        // Reminders/notifications/prescriptions name seed pets (Biscuit,
-        // Mochi), so they clear too — otherwise a zero-pet account would
-        // show someone else's pets in its reminders. Products are the
-        // clinic's shared catalog and stay for everyone.
-        pets = const [];
-        appointments = const [];
-        orders = const [];
-        messages = const [];
-        reminders = const [];
-        notifications = const [];
-        prescriptions = const [];
-      } else {
-        // Demo account: (re)load the demo dataset, e.g. when a registered
-        // session signed out first. Reminders/notifications/prescriptions
-        // were cleared for the registered account, so they restore here too.
-        pets = Seed.pets;
-        appointments = Seed.appointments;
-        orders = Seed.orders;
-        messages = Seed.messages;
-        reminders = Seed.reminders;
-        notifications = Seed.notifications;
-        prescriptions = Seed.prescriptions;
-      }
+      // Rehydrate this account's persisted datasets. The fallback keeps the
+      // old semantics: a registered account starts with a clean slate (B15),
+      // the demo account with its seed dataset.
+      await _rehydrate(accountEmail!, registered: registeredName != null);
       await SettingsStore.writeSessionEmail(accountEmail!);
       await _loadOwnerProfile();
     } else {
@@ -741,10 +728,111 @@ class AppStore extends ChangeNotifier {
       petId: pet.id,
     );
     messages = [...messages, reply];
+    _saveMessages();
     notifyListeners();
   }
 
   // ------------------------------------------------------------ lifecycle
+  /// Datasets are keyed per account, so two accounts on one device never
+  /// share pets, carts or chats. Null while signed out — nothing is saved.
+  String? get _dataAccount => accountEmail;
+
+  /// In-flight dataset writes. Production saves are fire-and-forget (the
+  /// documents are small and written at commit points, never per keystroke);
+  /// tests flush them with [flushPersistence].
+  final List<Future<void>> _pendingWrites = [];
+
+  void _queueWrite(Future<void> f) => _pendingWrites.add(f);
+
+  /// Test seam: awaits every fire-and-forget dataset write issued so far, so
+  /// tests can assert on-device state deterministically.
+  Future<void> flushPersistence() async {
+    final pending = List.of(_pendingWrites);
+    _pendingWrites.clear();
+    await Future.wait(pending);
+  }
+
+  /// Each save serializes the list as it stands at the call site — the async
+  /// write may run after a later mutation, so handing the live field to the
+  /// writer would let rapid successive edits race.
+  void _savePets() {
+    final acct = _dataAccount;
+    if (acct == null) return;
+    final snapshot = pets;
+    _queueWrite(DatasetStore.writePets(acct, snapshot));
+  }
+
+  void _saveAppointments() {
+    final acct = _dataAccount;
+    if (acct == null) return;
+    final snapshot = appointments;
+    _queueWrite(DatasetStore.writeAppointments(acct, snapshot));
+  }
+
+  void _saveReminders() {
+    final acct = _dataAccount;
+    if (acct == null) return;
+    final snapshot = reminders;
+    _queueWrite(DatasetStore.writeReminders(acct, snapshot));
+  }
+
+  void _saveOrders() {
+    final acct = _dataAccount;
+    if (acct == null) return;
+    final snapshot = orders;
+    _queueWrite(DatasetStore.writeOrders(acct, snapshot));
+  }
+
+  void _saveMessages() {
+    final acct = _dataAccount;
+    if (acct == null) return;
+    final snapshot = messages;
+    _queueWrite(DatasetStore.writeMessages(acct, snapshot));
+  }
+
+  void _saveNotifications() {
+    final acct = _dataAccount;
+    if (acct == null) return;
+    final snapshot = notifications;
+    _queueWrite(DatasetStore.writeNotifications(acct, snapshot));
+  }
+
+  void _saveCart() {
+    final acct = _dataAccount;
+    if (acct == null) return;
+    final snapshot = cart;
+    _queueWrite(DatasetStore.writeCart(acct, snapshot));
+  }
+
+  /// Rehydrates every persisted dataset for [account]. Stored data always
+  /// wins; the fallback preserves the old boot semantics — the demo account
+  /// starts from its seed dataset, a registered account from an empty one
+  /// (B15) — so first launches are unchanged.
+  Future<void> _rehydrate(String account, {required bool registered}) async {
+    pets =
+        await DatasetStore.readPets(account) ??
+        (registered ? const <Pet>[] : Seed.pets);
+    appointments =
+        await DatasetStore.readAppointments(account) ??
+        (registered ? const <Appointment>[] : Seed.appointments);
+    orders =
+        await DatasetStore.readOrders(account) ??
+        (registered ? const <Order>[] : Seed.orders);
+    messages =
+        await DatasetStore.readMessages(account) ??
+        (registered ? const <ChatMessage>[] : Seed.messages);
+    reminders =
+        await DatasetStore.readReminders(account) ??
+        (registered ? const <Reminder>[] : Seed.reminders);
+    notifications =
+        await DatasetStore.readNotifications(account) ??
+        (registered ? const <AppNotification>[] : Seed.notifications);
+    prescriptions =
+        await DatasetStore.readPrescriptions(account) ??
+        (registered ? const <Prescription>[] : Seed.prescriptions);
+    cart = await DatasetStore.readCart(account) ?? const <CartLine>[];
+  }
+
   /// Demo reset path: restores the seed dataset, but ONLY for the demo
   /// account. A registered account keeps its own data — the seeds are
   /// demo-only and must never resurrect under a real account.
@@ -756,7 +844,15 @@ class AppStore extends ChangeNotifier {
       orders = Seed.orders;
       messages = Seed.messages;
       reminders = Seed.reminders;
+      // Persist the reset state too: without this a cold start after a demo
+      // reset would resurrect the pre-reset data from disk.
+      _savePets();
+      _saveAppointments();
+      _saveOrders();
+      _saveMessages();
+      _saveReminders();
     }
+    _saveCart();
     notifyListeners();
   }
 }
