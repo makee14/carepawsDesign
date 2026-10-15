@@ -988,7 +988,7 @@ class _NoPetsCard extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           Text(
-            'Once Biscuit is here you can track visits, vaccines and documents in one place.',
+            'Once your pet is here, you can track visits, vaccines and documents in one place.',
             style: Type.footnote(p).copyWith(color: p.textSecondary),
             textAlign: TextAlign.center,
           ),
