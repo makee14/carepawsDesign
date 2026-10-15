@@ -277,7 +277,7 @@ class ProfileScreen extends StatelessWidget {
                   label: 'Log out',
                   icon: Ic.logout,
                   destructive: true,
-                  onPressed: () => _logout(context),
+                  onPressed: () => signOutAndExit(context),
                 ),
                 const SizedBox(height: T.s16),
                 Center(
@@ -405,55 +405,6 @@ class ProfileScreen extends StatelessWidget {
             const SizedBox(height: 8),
             SecondaryButton(
               label: 'Close',
-              onPressed: () => dismissSheet(context),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Future<void> _logout(BuildContext context) async {
-    final ok = await confirmDestructive(
-      context,
-      title: 'Log out of CarePaws?',
-      message: 'Your pets, appointments and orders stay on your account. You can log back in any time.',
-      confirmLabel: 'Log out',
-    );
-    if (!ok || !context.mounted) return;
-    if (!context.mounted) return;
-    dismissSheet(context);
-    if (!context.mounted) return;
-    await showAppSheet(
-      context,
-      scrollable: false,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Ic.svg(
-              Ic.checkCircle,
-              color: context.p.success,
-              size: 40,
-              stroke: 1.9,
-            ),
-            const SizedBox(height: 12),
-            Text(
-              'Signed out',
-              style: Type.title2(context.p),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'This is a prototype build, so the session stays open. Log back in to continue.',
-              style: Type.body(context.p)
-                  .copyWith(color: context.p.textSecondary),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: T.s20),
-            PrimaryButton(
-              label: 'Log back in',
               onPressed: () => dismissSheet(context),
             ),
           ],

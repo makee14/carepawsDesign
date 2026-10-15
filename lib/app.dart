@@ -754,9 +754,11 @@ Future<bool> confirmDestructive(
   required String message,
   required String confirmLabel,
   String cancelLabel = 'Cancel',
+  bool barrierDismissible = true,
 }) async {
   final result = await showPopup<bool>(
     context,
+    barrierDismissible: barrierDismissible,
     builder: (ctx) => CupertinoActionSheet(
       title: Text(title),
       message: Text(message),
@@ -774,6 +776,26 @@ Future<bool> confirmDestructive(
     ),
   );
   return result ?? false;
+}
+
+/// The one real sign-out path for the whole app: a non-dismissible confirm,
+/// then the session is cleared and the entire stack unwinds to the splash.
+/// Profile and Settings both route here so the two "log out" buttons can
+/// never drift apart again.
+Future<void> signOutAndExit(BuildContext context) async {
+  final ok = await confirmDestructive(
+    context,
+    title: 'Log out of CarePaws?',
+    message: 'Your pets, appointments and orders stay on your account. You can log back in any time.',
+    confirmLabel: 'Log out',
+    barrierDismissible: false,
+  );
+  if (!ok || !context.mounted) return;
+  AppScope.read(context).signOut();
+  // Unwind everything: the splash is the first route, and every route above
+  // it is account-scoped.
+  Navigator.of(context)
+      .pushAndRemoveUntil(appRoute(const SplashScreen()), (_) => false);
 }
 
 /// Shared date-picker sheet: the same 22pt rounded-top chrome as every other

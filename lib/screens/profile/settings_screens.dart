@@ -128,7 +128,7 @@ class SettingsScreen extends StatelessWidget {
                         ? 'Signed in as ${store.accountEmail ?? AppStore.demoEmail}'
                         : 'Not signed in',
                     leadingPath: Ic.close,
-                    onTap: () => _confirmSignOut(context, store),
+                    onTap: () => signOutAndExit(context),
                   ),
                 ],
               ),
@@ -515,38 +515,6 @@ class _ProviderCardState extends State<_ProviderCard> {
       ),
     );
   }
-}
-
-/// Clears the session and returns to the splash, so the sign-in flow can be
-/// demonstrated again without relaunching the app.
-Future<void> _confirmSignOut(BuildContext context, AppStore store) async {
-  final ok = await showPopup<bool>(
-    context,
-    centered: true,
-    barrierDismissible: false,
-    builder: (ctx) => CupertinoAlertDialog(
-      title: const Text('Sign out?'),
-      content: const Padding(
-        padding: EdgeInsets.only(top: 6),
-        child: Text('You will be returned to the welcome screen.'),
-      ),
-      actions: [
-        CupertinoDialogAction(
-          onPressed: () => Navigator.of(ctx).pop(false),
-          child: const Text('Cancel'),
-        ),
-        CupertinoDialogAction(
-          isDestructiveAction: true,
-          onPressed: () => Navigator.of(ctx).pop(true),
-          child: const Text('Sign out'),
-        ),
-      ],
-    ),
-  );
-  if (ok != true || !context.mounted) return;
-  store.signOut();
-  // Unwind to the splash, which is the first route in the stack.
-  Navigator.of(context).popUntil((route) => route.isFirst);
 }
 
 class EditProfileScreen extends StatefulWidget {

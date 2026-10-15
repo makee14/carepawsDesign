@@ -9,6 +9,7 @@ import '../../data/seed.dart';
 import '../../design/icons.dart';
 import '../../design/theme.dart';
 import '../../design/tokens.dart';
+import '../../services/auth_store.dart';
 import '../../state/app_store.dart';
 import '../../widgets/common.dart';
 
@@ -132,48 +133,20 @@ class PrivacyScreen extends StatelessWidget {
       ),
     );
     if (ok != true || !context.mounted) return;
-    // Prototype behaviour: clear local data and confirm in-app.
+    // Real deletion: credentials go first so nothing can re-authenticate,
+    // then the account's local data, then the session — and the whole stack
+    // unwinds to the splash, never back into the account.
+    final email = store.accountEmail;
+    if (email != null) {
+      await AuthStore.deleteCredentials(email);
+    }
     store.clearPets();
     store.orders = [];
-    store.appointments = store.appointments
-        .where((a) => a.status.isActive)
-        .toList();
+    store.appointments = [];
+    store.signOut();
     if (!context.mounted) return;
-    dismissSheet(context);
-    if (!context.mounted) return;
-    await showAppSheet(
-      context,
-      scrollable: false,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Ic.svg(
-              Ic.checkCircle,
-              color: context.p.success,
-              size: 40,
-              stroke: 1.9,
-            ),
-            const SizedBox(height: 12),
-            Text(
-              'Account deleted',
-              style: Type.headline(context.p),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Your pets, appointments and orders have been removed from this device.',
-              style: Type.body(context.p)
-                  .copyWith(color: context.p.textSecondary),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: T.s20),
-            PrimaryButton(label: 'OK', onPressed: () => dismissSheet(context)),
-          ],
-        ),
-      ),
-    );
+    Navigator.of(context)
+        .pushAndRemoveUntil(appRoute(const SplashScreen()), (_) => false);
   }
 }
 
@@ -356,6 +329,37 @@ class LegalScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final p = context.p;
+    return CupertinoPageScaffold(
+      backgroundColor: p.background,
+      navigationBar: DetailNavBar(
+        title: kind == LegalKind.terms ? 'Terms of service' : 'Privacy policy',
+      ),
+      child: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 40),
+          children: [
+            Text(
+              'Last updated 1 October 2026 · Applies to CarePaws ${Seed.appVersion}',
+              style: Type.footnote(p),
+            ),
+            const SizedBox(height: T.s16),
+            LegalContent(kind: kind),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// The section cards shared by the full [LegalScreen] page and the
+/// registration consent sheet — the copy lives here once.
+class LegalContent extends StatelessWidget {
+  const LegalContent({super.key, required this.kind});
+  final LegalKind kind;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.p;
     final sections = kind == LegalKind.terms
         ? const [
             (
@@ -404,39 +408,24 @@ class LegalScreen extends StatelessWidget {
             ),
           ];
 
-    return CupertinoPageScaffold(
-      backgroundColor: p.background,
-      navigationBar: DetailNavBar(
-        title: kind == LegalKind.terms ? 'Terms of service' : 'Privacy policy',
-      ),
-      child: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 40),
-          children: [
-            Text(
-              kind == LegalKind.terms
-                  ? 'Last updated 1 October 2026 · Applies to CarePaws ${Seed.appVersion}'
-                  : 'Last updated 1 October 2026 · Applies to CarePaws ${Seed.appVersion}',
-              style: Type.footnote(p),
-            ),
-            const SizedBox(height: T.s16),
-            for (final s in sections)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 14),
-                child: SoftCard(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(s.$1, style: Type.headline(p)),
-                      const SizedBox(height: 6),
-                      Text(s.$2, style: Type.body(p)),
-                    ],
-                  ),
-                ),
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (final s in sections)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 14),
+            child: SoftCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(s.$1, style: Type.headline(p)),
+                  const SizedBox(height: 6),
+                  Text(s.$2, style: Type.body(p)),
+                ],
               ),
-          ],
-        ),
-      ),
+            ),
+          ),
+      ],
     );
   }
 }

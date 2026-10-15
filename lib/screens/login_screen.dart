@@ -1,4 +1,5 @@
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
 
 import '../app.dart';
@@ -8,6 +9,7 @@ import '../design/theme.dart';
 import '../design/tokens.dart';
 import '../state/app_store.dart';
 import '../widgets/common.dart';
+import 'profile/privacy_screen.dart';
 
 /// Sign-in gate between the splash and the app.
 ///
@@ -33,6 +35,16 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _hidden = true;
   bool _registerMode = false;
 
+  /// Whether the user ticked the Terms/Privacy consent box. Required before
+  /// an account can be created.
+  bool _consent = false;
+
+  /// Link recognizers for the consent row; disposed with the state.
+  late final _termsTap = TapGestureRecognizer()
+    ..onTap = () => _openLegal(LegalKind.terms);
+  late final _privacyTap = TapGestureRecognizer()
+    ..onTap = () => _openLegal(LegalKind.privacy);
+
   /// Raw message from the last failed submit. Rendered as an inline
   /// field-level error (red border + message under the field) instead of a
   /// banner card; cleared the moment the user edits any field.
@@ -48,6 +60,8 @@ class _LoginScreenState extends State<LoginScreen> {
     _email.dispose();
     _password.dispose();
     _passwordFocus.dispose();
+    _termsTap.dispose();
+    _privacyTap.dispose();
     super.dispose();
   }
 
@@ -55,7 +69,12 @@ class _LoginScreenState extends State<LoginScreen> {
     final store = AppScope.read(context);
     HapticFeedback.lightImpact();
     if (_registerMode) {
-      final ok = await store.register(_name.text, _email.text, _password.text);
+      final ok = await store.register(
+        _name.text,
+        _email.text,
+        _password.text,
+        agreedToTermsAt: DateTime.now(),
+      );
       if (!mounted) return;
       if (ok) {
         // Registration does not sign in. Drop back to the sign-in form with
@@ -63,6 +82,7 @@ class _LoginScreenState extends State<LoginScreen> {
         successHaptic();
         setState(() {
           _registerMode = false;
+          _consent = false;
           _password.clear();
           _formError = null;
           _errorField = null;
@@ -115,11 +135,60 @@ class _LoginScreenState extends State<LoginScreen> {
     if (_registerMode == register) return;
     setState(() {
       _registerMode = register;
+      _consent = false;
       _formError = null;
       _errorField = null;
       // Clear any stale error when switching modes.
       AppScope.read(context).signInError = null;
     });
+  }
+
+  /// Opens the terms/privacy copy in a bottom sheet. The form keeps its
+  /// controllers, so the input is untouched when the sheet dismisses.
+  void _openLegal(LegalKind kind) {
+    showAppSheet(
+      context,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 4, 20, 0),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    kind == LegalKind.terms
+                        ? 'Terms of service'
+                        : 'Privacy policy',
+                    style: Type.title2(context.p),
+                    maxLines: 2,
+                  ),
+                ),
+                CupertinoButton(
+                  padding: EdgeInsets.zero,
+                  onPressed: () => dismissSheet(context),
+                  child: const Text('Done'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            LegalContent(kind: kind),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Why the Create account button is disabled right now — shown live under
+  /// the button in register mode so the blocker is discoverable.
+  String _disabledHint() {
+    if (_name.text.trim().isEmpty ||
+        _email.text.trim().isEmpty ||
+        _password.text.isEmpty) {
+      return 'Enter your name, email and password to continue.';
+    }
+    return 'Tick the box to agree to the Terms of Service and Privacy Policy.';
   }
 
   @override
@@ -131,7 +200,7 @@ class _LoginScreenState extends State<LoginScreen> {
         !busy &&
         _email.text.trim().isNotEmpty &&
         _password.text.isNotEmpty &&
-        (!_registerMode || _name.text.trim().isNotEmpty);
+        (!_registerMode || (_name.text.trim().isNotEmpty && _consent));
 
     // Split the last failure onto its field: in sign-in mode the neutral
     // message implicates the pair (red border on both, text under password).
@@ -260,6 +329,15 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ),
                   if (_registerMode) _PasswordRule(password: _password.text),
+                  if (_registerMode) ...[
+                    const SizedBox(height: T.s16),
+                    _ConsentRow(
+                      checked: _consent,
+                      onChanged: (v) => setState(() => _consent = v),
+                      termsTap: _termsTap,
+                      privacyTap: _privacyTap,
+                    ),
+                  ],
                   const SizedBox(height: T.s20),
                   PrimaryButton(
                     label: _registerMode ? 'Create account' : 'Sign in',
@@ -267,6 +345,16 @@ class _LoginScreenState extends State<LoginScreen> {
                     busy: busy,
                     onPressed: canSubmit ? _submit : null,
                   ),
+                  // Live hint naming the blocker while Create account is
+                  // disabled — a disabled button can't explain itself.
+                  if (_registerMode && !busy && !canSubmit) ...[
+                    const SizedBox(height: 10),
+                    Text(
+                      _disabledHint(),
+                      style: Type.caption(p).copyWith(color: p.textSecondary),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -448,6 +536,93 @@ class _PasswordRule extends StatelessWidget {
             ),
         ],
       ),
+    );
+  }
+}
+
+/// Terms/Privacy consent row on the create-account form: a tappable
+/// checkbox (44pt target) plus inline links that open the legal copy in a
+/// sheet. The text wraps freely, so AX5 sizes never clip the row or the links.
+class _ConsentRow extends StatelessWidget {
+  const _ConsentRow({
+    required this.checked,
+    required this.onChanged,
+    required this.termsTap,
+    required this.privacyTap,
+  });
+
+  final bool checked;
+  final ValueChanged<bool> onChanged;
+  final GestureRecognizer termsTap;
+  final GestureRecognizer privacyTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.p;
+    final link = Type.footnote(p).copyWith(
+      color: p.accentText,
+      fontWeight: FontWeight.w600,
+      decoration: TextDecoration.underline,
+    );
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Semantics(
+          key: const Key('consent-checkbox'),
+          label: 'Agree to the Terms of Service and Privacy Policy',
+          button: true,
+          checked: checked,
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () => onChanged(!checked),
+            child: Padding(
+              // 22pt glyph + 22pt padding = the 44pt HIG target.
+              padding: const EdgeInsets.all(11),
+              child: checked
+                  ? Ic.svg(
+                      Ic.checkCircle,
+                      color: p.primaryFill,
+                      size: 22,
+                      stroke: 2.2,
+                    )
+                  : Container(
+                      width: 22,
+                      height: 22,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(color: p.textSecondary, width: 1.8),
+                      ),
+                    ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 2),
+        Expanded(
+          child: Padding(
+            padding: const EdgeInsets.only(top: 11, bottom: 11),
+            child: Text.rich(
+              TextSpan(
+                style: Type.footnote(p).copyWith(color: p.textSecondary),
+                children: [
+                  const TextSpan(text: 'I agree to the '),
+                  TextSpan(
+                    text: 'Terms of Service',
+                    style: link,
+                    recognizer: termsTap,
+                  ),
+                  const TextSpan(text: ' and '),
+                  TextSpan(
+                    text: 'Privacy Policy',
+                    style: link,
+                    recognizer: privacyTap,
+                  ),
+                  const TextSpan(text: '.'),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

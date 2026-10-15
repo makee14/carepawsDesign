@@ -53,10 +53,15 @@ class AuthStore {
 
   /// Validates and stores a new account. Returns null on success, or a
   /// user-facing error message.
+  ///
+  /// [agreedToTermsAt] records when the user accepted the Terms of Service
+  /// and Privacy Policy; it is persisted as `agreedToTermsAt` (ISO 8601) in
+  /// the account JSON so consent is auditable later.
   static Future<String?> register({
     required String name,
     required String email,
     required String password,
+    DateTime? agreedToTermsAt,
   }) async {
     final cleanName = name.trim();
     final cleanEmail = _norm(email);
@@ -77,9 +82,20 @@ class AuthStore {
       'name': cleanName,
       'password': password,
       'createdAt': DateTime.now().toIso8601String(),
+      if (agreedToTermsAt != null)
+        'agreedToTermsAt': agreedToTermsAt.toIso8601String(),
     };
     await _writeUsers(users);
     return null;
+  }
+
+  /// Removes the stored credentials for [email], e.g. on account deletion.
+  /// Keeps every other account. A no-op for unknown emails.
+  static Future<void> deleteCredentials(String email) async {
+    final users = await _readUsers();
+    if (users.remove(_norm(email)) != null) {
+      await _writeUsers(users);
+    }
   }
 
   /// Returns the registered display name when the email + password match,
