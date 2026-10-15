@@ -1,9 +1,8 @@
-import 'dart:async';
-import 'dart:math' as math;
-
 import 'package:flutter/cupertino.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../app.dart';
+import '../data/clinic.dart';
 import '../data/models.dart';
 import '../data/seed.dart';
 import '../design/icons.dart';
@@ -12,7 +11,8 @@ import '../design/theme.dart';
 import '../design/tokens.dart';
 import '../state/app_store.dart';
 import '../widgets/common.dart';
-import '../widgets/nav_actions.dart';
+import '../widgets/hero_card.dart';
+import '../widgets/promo_carousel.dart';
 import 'add_pet_screen.dart';
 import 'appointments/appointment_detail_screen.dart';
 import 'notifications_screen.dart';
@@ -24,14 +24,6 @@ import 'triage_screen.dart';
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
 
-  /// "Good morning, Mark!" — the name drops out when the profile has none,
-  /// so it never reads "Good morning, !".
-  static String _greetingTitle(AppStore store) {
-    final g = greetingFor(store.now);
-    final first = store.ownerFirstName;
-    return first.isEmpty ? g : '$g, $first!';
-  }
-
   @override
   Widget build(BuildContext context) {
     final store = AppScope.of(context);
@@ -41,116 +33,121 @@ class HomeScreen extends StatelessWidget {
 
     return CupertinoPageScaffold(
       backgroundColor: p.background,
-      child: CustomScrollView(
-        slivers: [
-          LargeTitleBar(title: _greetingTitle(store)),
-          SliverPadding(
-            // 8pt grid: 16pt phone margins (32pt on wide), 8pt top.
-            padding: EdgeInsets.fromLTRB(
-              wide ? 32 : 16,
-              8,
-              wide ? 32 : 16,
-              40 + TabBarClearance.of(context),
-            ),
-            sliver: SliverList.list(
-              children: [
-                // Subtle warm radial glow behind the greeting — static, no
-                // animation on Home (same pattern as the splash _Glow).
-                Stack(
-                  clipBehavior: Clip.none,
-                  children: [
-                    Positioned(
-                      right: -70,
-                      top: -95,
-                      child: _Glow(
-                        size: 210,
-                        color: T.amber.withValues(
-                          alpha: p.isDark ? 0.12 : 0.08,
-                        ),
-                      ),
-                    ),
-                    // Title line and its actions share one row — the actions used to
-                    // sit on a row of their own, which cost ~52pt above the fold.
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            greetingSub(store.now),
-                            style: Type.body(p)
-                                .copyWith(color: p.textSecondary),
-                          ),
-                        ),
-                        NavActions(
-                          actions: [
-                            IconTap(
-                              path: Ic.search,
-                              label: 'Search pets, services and products',
-                              onPressed: () =>
-                                  Navigator.of(context)
-                                      .push(appRoute(const SearchScreen())),
-                            ),
-                            IconTap(
-                              path: Ic.bell,
-                              label:
-                                  'Notifications, ${store.unreadNotifications} unread',
-                              badge: store.unreadNotifications,
-                              color: p.primaryFill,
-                              onPressed: () => Navigator.of(context)
-                                  .push(appRoute(const NotificationsScreen())),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-                const SizedBox(height: T.s16),
-                // The cream "Next appointment" pill on the card itself carries
-                // the label (exactly like old.pdf), so there is no
-                // SectionHeader here — header + pill would duplicate it.
-                FadeIn(index: 0, child: _NextAppointmentHero(store: store)),
-                const SizedBox(height: T.s16),
-                FadeIn(index: 1, child: _QuickActions(store: store)),
-                const SizedBox(height: T.s8),
-                SectionHeader(
-                  title: 'My Pets',
-                  icon: Ic.paw,
-                  actionLabel: store.petCount == 0 ? null : 'Add pet',
-                  onAction: store.petCount == 0
-                      ? null
-                      : () =>
-                            Navigator.of(context)
-                                .push(appRoute(const AddPetScreen())),
-                ),
-                if (store.petCount == 0)
-                  _NoPetsCard(
-                    onAdd: () =>
+      child: SafeArea(
+        top: true,
+        bottom: false,
+        child: CustomScrollView(
+          slivers: [
+            SliverPadding(
+              // 8pt grid: 16pt phone margins (32pt on wide), 8pt top.
+              padding: EdgeInsets.fromLTRB(
+                wide ? 32 : 16,
+                8,
+                wide ? 32 : 16,
+                40 + TabBarClearance.of(context),
+              ),
+              sliver: SliverList.list(
+                children: [
+                  _GreetingRow(store: store),
+                  const SizedBox(height: T.s16),
+                  PromoCarousel(
+                    promos: Seed.promos,
+                    onCta: (promo) => _onPromoCta(context, promo),
+                  ),
+                  const SizedBox(height: T.s24),
+                  _NextAppointmentSection(store: store),
+                  const SizedBox(height: T.s16),
+                  FadeIn(index: 1, child: _QuickActions(store: store)),
+                  const SizedBox(height: T.s8),
+                  SectionHeader(
+                    title: 'My Pets',
+                    icon: Ic.paw,
+                    actionLabel: store.petCount == 0 ? null : 'Add pet',
+                    onAction: store.petCount == 0
+                        ? null
+                        : () =>
+                              Navigator.of(context)
+                                  .push(appRoute(const AddPetScreen())),
+                  ),
+                  if (store.petCount == 0)
+                    EmptyState(
+                      icon: Ic.byName('paw'),
+                      title: 'Add your first pet',
+                      body: 'Once your pet is here, you can track visits, vaccines and documents in one place.',
+                      actionLabel: 'Add pet',
+                      onAction: () =>
+                          Navigator.of(context)
+                              .push(appRoute(const AddPetScreen())),
+                    )
+                  else
+                    _PetRow(pets: store.pets),
+                  const SizedBox(height: T.s8),
+                  SectionHeader(
+                    title: 'Care reminders',
+                    icon: Ic.bell,
+                    actionLabel: 'Manage',
+                    onAction: () =>
                         Navigator.of(context)
-                            .push(appRoute(const AddPetScreen())),
-                  )
-                else
-                  _PetRow(pets: store.pets),
-                const SizedBox(height: T.s8),
-                SectionHeader(
-                  title: 'Care reminders',
-                  icon: Ic.bell,
-                  actionLabel: 'Manage',
-                  onAction: () =>
-                      Navigator.of(context)
-                          .push(appRoute(const RemindersScreen())),
-                ),
-                _RemindersPreview(store: store),
-                SectionHeader(
-                  title: 'Clinic info',
-                  icon: Ic.pin,
-                  actionLabel: 'Details',
-                  onAction: () =>
-                      Navigator.of(context)
-                          .push(appRoute(const ClinicInfoScreen())),
-                ),
-                _ClinicCard(now: store.now),
-              ],
+                            .push(appRoute(const RemindersScreen())),
+                  ),
+                  _RemindersPreview(store: store),
+                  const SizedBox(height: T.s8),
+                  _ClinicInfoCard(now: store.now),
+                ],
+              ),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// "Good morning, Mark" — the name drops out when the profile has none,
+/// so it never reads "Good morning, !".
+String _greetingTitle(AppStore store) {
+  final g = greetingFor(store.now);
+  final first = store.ownerFirstName;
+  return first.isEmpty ? g : '$g, $first';
+}
+
+/// Greeting row: greeting left, notification + search icons right — one
+/// vertically-centered 48pt row. The "Biscuit's visit…" subtitle is gone.
+class _GreetingRow extends StatelessWidget {
+  const _GreetingRow({required this.store});
+  final AppStore store;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.p;
+    return SizedBox(
+      height: T.tap,
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              _greetingTitle(store),
+              style: Type.title2(p),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          const SizedBox(width: T.s8),
+          IconTap(
+            path: Ic.bell,
+            label: 'Notifications, ${store.unreadNotifications} unread',
+            badge: store.unreadNotifications,
+            color: p.primaryFill,
+            onPressed: () =>
+                Navigator.of(context)
+                    .push(appRoute(const NotificationsScreen())),
+          ),
+          const SizedBox(width: T.s8),
+          IconTap(
+            path: Ic.search,
+            label: 'Search pets, services and products',
+            onPressed: () =>
+                Navigator.of(context).push(appRoute(const SearchScreen())),
           ),
         ],
       ),
@@ -158,565 +155,546 @@ class HomeScreen extends StatelessWidget {
   }
 }
 
-/// Compact hero carousel: one page per upcoming appointment (the next five),
-/// full-bleed pet photo with the glass info panel floating over its lower
-/// portion — the old hero composition at ~55% of the old height (~280pt
-/// total). Zero appointments keeps the empty state; a single appointment
-/// renders with no paging chrome and no timer.
-class _NextAppointmentHero extends StatefulWidget {
-  const _NextAppointmentHero({required this.store});
-  final AppStore store;
-
-  @override
-  State<_NextAppointmentHero> createState() => _NextAppointmentHeroState();
+/// Promo CTA destinations. The carousel stays navigation-agnostic; Home owns
+/// this map.
+void _onPromoCta(BuildContext context, Promo promo) {
+  switch (promo.route) {
+    case 'shop':
+      switchTab(context, 3);
+    case 'triage':
+      Navigator.of(context)
+          .push(appRoute(TriageScreen(entry: TriageEntry.home)));
+    case 'book':
+    default:
+      Navigator.of(context).push(appRoute(const BookLandingScreen()));
+  }
 }
 
-/// Photo band visible above the glass panel (pinned by the design plan): with
-/// the panel bottom-anchored at 14pt, the card keeps its ~280pt total height
-/// and the composition stays identical to the previous art-strip layout.
-const _artH = 104.0;
-
-class _NextAppointmentHeroState extends State<_NextAppointmentHero> {
-  /// Paging beyond five turns the hero into a slideshow; the seed ships two.
-  static const _maxPages = 5;
-
-  /// Auto-advance cadence. Long enough to read the card, short enough to feel
-  /// alive.
-  static const _autoAdvance = Duration(seconds: 5);
-
-  /// Idle time after the user's finger leaves before auto-advance resumes.
-  static const _resumeDelay = Duration(milliseconds: 2500);
-
-  late final PageController _pages = PageController();
-  Timer? _auto;
-  Timer? _resume;
-  bool _holding = false;
-  int _page = 0;
-  int _count = -1;
-
-  List<Appointment> get _visible =>
-      widget.store.upcomingAppointments.take(_maxPages).toList();
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    _reconcile();
-  }
-
-  @override
-  void didUpdateWidget(covariant _NextAppointmentHero oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    _reconcile();
-  }
-
-  /// Keeps the controller, the dot state and the timer consistent when the
-  /// appointment list changes under the carousel — a booking, a cancellation,
-  /// or the clock tick dropping a finished visit.
-  void _reconcile() {
-    final count = _visible.length;
-    if (count != _count) {
-      _count = count;
-      if (_page >= count) {
-        _page = count <= 0 ? 0 : count - 1;
-        if (_pages.hasClients) _pages.jumpToPage(_page);
-      }
-    }
-    _syncTimer();
-  }
-
-  /// (Re)starts the auto-advance timer exactly when it should run: more than
-  /// one page, motion allowed, the home route on top and tickers enabled, and
-  /// no finger down. With Reduce Motion there is no timer at all — pages still
-  /// change on swipe, instantly, with no animation.
-  void _syncTimer() {
-    _auto?.cancel();
-    _auto = null;
-    if (!mounted || _holding || _visible.length < 2) return;
-    if (reduceMotionOf(context)) return;
-    if (!TickerMode.valuesOf(context).enabled) return;
-    if (ModalRoute.of(context)?.isCurrent == false) return;
-    _auto = Timer.periodic(_autoAdvance, (_) => _advance());
-  }
-
-  void _advance() {
-    if (!mounted || !_pages.hasClients) return;
-    final count = _visible.length;
-    if (count < 2) return;
-    final current = (_pages.page ?? _page.toDouble()).round() % count;
-    _pages.animateToPage(
-      (current + 1) % count,
-      duration: Motion.base,
-      curve: Motion.enter,
-    );
-  }
-
-  void _pause() {
-    _holding = true;
-    _auto?.cancel();
-    _auto = null;
-    _resume?.cancel();
-    _resume = null;
-  }
-
-  void _scheduleResume() {
-    _holding = false;
-    _resume?.cancel();
-    _resume = Timer(_resumeDelay, () {
-      if (mounted) _syncTimer();
-    });
-  }
-
-  @override
-  void dispose() {
-    _auto?.cancel();
-    _resume?.cancel();
-    _pages.dispose();
-    super.dispose();
-  }
-
-  /// Fixed panel height, derived from the type ramp at the current text
-  /// scaler: the headline always reserves two lines, so paging never moves
-  /// the content below the carousel. At AX5 the card grows instead of
-  /// clipping; a few points of slack absorb sub-pixel line-height drift.
-  double _panelHeight(AppPalette p) {
-    final scaler = MediaQuery.textScalerOf(context).scale(1);
-    double line(TextStyle s) => s.fontSize! * (s.height ?? 1.0) * scaler;
-    final row = math.max(
-      44.0,
-      line(Type.headline(p)) * 2 + 4 + line(Type.footnote(p)),
-    );
-    final chips = math.max(line(Type.caption(p)), 11.0) + 8;
-    return 14 * 2 + row + 12 + chips + 6;
-  }
+/// Next appointment as a single HeroCard (G1) — deliberately shorter (16/10)
+/// than the 4/3 default so it reads subordinate to the 140pt promo carousel:
+/// hierarchy is carousel (color/anchor) → appointment (content) → clinic card
+/// (utility). Zero appointments keeps an in-slot EmptyState with a CTA (G3) —
+/// no hole in the layout; the section header stays.
+class _NextAppointmentSection extends StatelessWidget {
+  const _NextAppointmentSection({required this.store});
+  final AppStore store;
 
   @override
   Widget build(BuildContext context) {
     final p = context.p;
-    final pages = _visible;
-    final panelH = _panelHeight(p);
-    final pageH = _artH + 16 + panelH + 14;
-
-    Widget page(Appointment? a, int index) => _HeroPage(
-      store: widget.store,
-      a: a,
-      index: index,
-      count: pages.length,
-      pageHeight: pageH,
-      panelHeight: panelH,
-    );
-
-    if (pages.length < 2) {
-      // Zero keeps the empty state; one renders with no paging chrome.
-      return page(pages.isEmpty ? null : pages.single, 0);
-    }
+    final next = store.nextAppointment;
 
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        SizedBox(
-          height: pageH,
-          child: Listener(
-            onPointerDown: (_) => _pause(),
-            onPointerUp: (_) => _scheduleResume(),
-            onPointerCancel: (_) => _scheduleResume(),
-            child: PageView.builder(
-              controller: _pages,
-              itemCount: pages.length,
-              onPageChanged: (i) => setState(() => _page = i),
-              itemBuilder: (context, i) => page(pages[i], i),
-            ),
+        LayoutBuilder(
+          // At large Dynamic Type the "View all" label's intrinsic width
+          // would push this Row past the screen edge — cap it at 45% so
+          // the label reflows instead of overflowing.
+          builder: (context, c) => Row(
+            children: [
+              Expanded(child: Text('Next appointment', style: Type.title3(p))),
+              ConstrainedBox(
+                constraints: BoxConstraints(maxWidth: c.maxWidth * 0.45),
+                child: _ViewAll(onTap: () => switchTab(context, 2)),
+              ),
+            ],
           ),
         ),
-        _Dots(count: pages.length, active: _page),
+        const SizedBox(height: T.s8),
+        if (next == null)
+          EmptyState(
+            icon: Ic.byName('calendar'),
+            title: 'Nothing booked yet',
+            body: 'Book a visit and we will handle the reminders.',
+            actionLabel: 'Book an appointment',
+            onAction: () =>
+                Navigator.of(context).push(appRoute(const BookLandingScreen())),
+          )
+        else
+          _AppointmentCard(store: store, appointment: next),
       ],
     );
   }
 }
 
-/// One carousel page: full-bleed pet photo filling the whole card, with the
-/// glass info panel floating over the photo's lower portion (0.78 of the
-/// card's width, 14pt above the card's bottom edge) so the frosted effect
-/// reads against the image — the old hero composition at the compact height.
-/// A top scrim keeps the cream label pill readable on bright photos; a bottom
-/// scrim melts the photo into darkness behind the glass panel so text stays
-/// ≥4.5:1 on any photo, either theme. No photo → seeded art full-bleed
-/// (never an empty box).
-///
-/// Structural, never overflow: the Stack layers in normal paint order and the
-/// page box is sized from the same numbers as the panel, so the panel is
-/// always fully inside the page box and no ancestor can clip it.
-class _HeroPage extends StatelessWidget {
-  const _HeroPage({
-    required this.store,
-    required this.a,
-    required this.index,
-    required this.count,
-    required this.pageHeight,
-    required this.panelHeight,
-  });
+/// "View all": 15pt terracottaText on a 44pt target.
+class _ViewAll extends StatelessWidget {
+  const _ViewAll({required this.onTap});
+  final VoidCallback onTap;
 
-  final AppStore store;
-  final Appointment? a;
-  final int index;
-  final int count;
-  final double pageHeight;
-  final double panelHeight;
-
-  void _open(BuildContext context) {
-    if (a == null) {
-      Navigator.of(context).push(appRoute(const BookLandingScreen()));
-    } else {
-      Navigator.of(context)
-          .push(appRoute(AppointmentDetailScreen(appointmentId: a!.id)));
-    }
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      label: 'View all appointments',
+      child: ExcludeSemantics(
+        child: PressScale(
+          onTap: onTap,
+          child: Container(
+            constraints: const BoxConstraints(minHeight: 44),
+            alignment: Alignment.centerRight,
+            padding: const EdgeInsets.only(left: 12),
+            child: Text(
+              'View all',
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+                color: T.terracottaText,
+              ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.right,
+            ),
+          ),
+        ),
+      ),
+    );
   }
+}
+
+class _AppointmentCard extends StatelessWidget {
+  const _AppointmentCard({required this.store, required this.appointment});
+  final AppStore store;
+  final Appointment appointment;
+
+  @override
+  Widget build(BuildContext context) {
+    final a = appointment;
+    final pet = store.pet(a.petId);
+    final service = store.serviceOf(a.serviceId);
+    final staff = store.staffOf(a.staffId);
+    return Stack(
+      children: [
+        HeroCard(
+          aspectRatio: 16 / 10,
+          image: pet == null
+              ? PetArt(seed: 1, radius: 0, iconSize: 52)
+              : PetAvatar(
+                  pet: pet,
+                  iconSize: 52,
+                  label: '${pet.name} portrait',
+                ),
+          title: '${service.name} — ${pet?.name ?? 'your pet'}',
+          details: [
+            _DetailRow(
+              icon: Ic.calendar,
+              label: '${shortDate(a.start)} · ${clockLabel(a.start)}',
+            ),
+            _DetailRow(icon: Ic.person, label: staff.name),
+          ],
+          onTap: () =>
+              Navigator.of(context)
+                  .push(appRoute(AppointmentDetailScreen(appointmentId: a.id))),
+        ),
+        // Countdown chip overlaid top-right of the image (s12 inset) —
+        // inside the image area, never competing with the panel.
+        Positioned(
+          top: 12,
+          right: 12,
+          child: StatusChip(
+            label: countdownLabel(store.now, a.start),
+            icon: Ic.clock,
+            compact: true,
+            // Solid amber with espresso text (8.80:1, photo-independent):
+            // over an arbitrary photo a translucent tint can't guarantee
+            // 4.5:1 — the one sanctioned text-on-amber use.
+            fg: T.espresso,
+            bg: T.amber,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Key-detail row for HeroCard panels: 12pt icon + footnote label, wrapping
+/// to 2 lines max.
+class _DetailRow extends StatelessWidget {
+  const _DetailRow({required this.icon, required this.label});
+  final String icon;
+  final String label;
 
   @override
   Widget build(BuildContext context) {
     final p = context.p;
-    final appt = a;
-    final service = appt == null ? null : store.serviceOf(appt.serviceId);
-    final pet = appt == null ? null : store.pet(appt.petId);
-    final staff = appt == null ? null : store.staffOf(appt.staffId);
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(top: 2),
+          child: Ic.svg(icon, size: 12, color: p.textSecondary, stroke: 2),
+        ),
+        const SizedBox(width: 6),
+        Expanded(
+          child: Text(
+            label,
+            style: Type.footnote(p).copyWith(color: p.textSecondary),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ],
+    );
+  }
+}
 
-    final label = (appt == null || pet == null)
-        ? 'No upcoming appointment. Book an appointment'
-        : count > 1
-        ? 'Upcoming appointment ${index + 1} of $count. ${pet.name}, ${service!.name}, '
-              '${mediumDate(appt.start)}, with ${staff!.name}. ${appt.status.label}'
-        : 'Next appointment. ${pet.name}, ${service!.name}, '
-              '${mediumDate(appt.start)}, with ${staff!.name}. ${appt.status.label}';
+/// Clinic info card (G2): collapsed to the essentials — clinic name,
+/// open/closed status with today's hours — tap expands the full info
+/// (address, phone, full schedule). Replaces the old always-expanded card;
+/// nothing here duplicates ClinicInfoScreen.
+class _ClinicInfoCard extends StatefulWidget {
+  const _ClinicInfoCard({required this.now});
+  final DateTime now;
 
-    // ponytail: scrims are plain black with theme-picked alpha — the photo
-    // underneath is arbitrary user content, so a neutral scrim is the only
-    // honest contrast guarantee; no theme token can promise that.
-    final card = ClipRRect(
-      borderRadius: BorderRadius.circular(24),
-      child: SizedBox(
-        height: pageHeight,
-        child: Stack(
-          children: [
-            // Full-bleed pet photo: the whole card is the portrait. No
-            // photo → seeded art, medallion parked in the visible band
-            // above the panel (never an empty box, never a sliver peeking
-            // from behind the glass). PetAvatar ignores the alignment when
-            // a real photo exists — the photo always fills.
-            Positioned.fill(
-              child: pet == null
-                  ? PetArt(
-                      seed: 1,
-                      iconSize: 52,
-                      alignment: const Alignment(0.0, -0.7),
-                    )
-                  : PetAvatar(
-                      pet: pet,
-                      iconSize: 52,
-                      alignment: const Alignment(0.0, -0.7),
-                      label: '${pet.name} portrait',
-                    ),
-            ),
-            // Top scrim: keeps the cream pill readable on bright photos.
-            Positioned(
-              left: 0,
-              right: 0,
-              top: 0,
-              height: 72,
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      const Color(0xFF000000)
-                          .withValues(alpha: p.isDark ? 0.30 : 0.20),
-                      const Color(0xFF000000).withValues(alpha: 0),
-                    ],
+  @override
+  State<_ClinicInfoCard> createState() => _ClinicInfoCardState();
+}
+
+class _ClinicInfoCardState extends State<_ClinicInfoCard> {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.p;
+    final reduce = reduceMotionOf(context);
+    final open = clinicOpenAt(widget.now);
+    // AX5: the 76pt toggle cannot fit 3.2x name + status text — grow it with
+    // Dynamic Type instead of clipping, like the promo cards.
+    final scale = MediaQuery.textScalerOf(context).scale(1);
+    final toggleH = 76.0 * scale.clamp(1.0, 1.6);
+
+    // Expanded details body, shared by the animated and reduced-motion paths.
+    final Widget details = _expanded
+        ? Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const SizedBox(height: T.s12),
+                _ClinicRow(
+                  icon: Ic.pin,
+                  label: Seed.clinicAddress,
+                  onTap: () => _openMaps(context),
+                ),
+                _ClinicRow(
+                  icon: Ic.phone,
+                  label: Seed.clinicPhone,
+                  accent: true,
+                  onTap: () => callPhoneNumber(
+                    context,
+                    number: Seed.clinicPhone,
+                    name: Seed.clinicName,
                   ),
                 ),
-              ),
-            ),
-            // Bottom scrim: melts the photo into darkness behind the glass
-            // panel so the panel — and its text — reads on any photo.
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: 0,
-              height: panelHeight + 14 + 64,
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      const Color(0xFF000000).withValues(alpha: 0),
-                      const Color(0xFF000000)
-                          .withValues(alpha: p.isDark ? 0.45 : 0.32),
-                    ],
+                const SizedBox(height: T.s8),
+                Divider(height: 1, color: p.divider),
+                const SizedBox(height: T.s8),
+                Text(
+                  'Hours',
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: p.text,
                   ),
                 ),
-              ),
+                const SizedBox(height: T.s4),
+                for (var i = 0; i < 7; i++)
+                  _HoursRow(
+                    weekday: i + 1,
+                    isToday: widget.now.weekday == i + 1,
+                  ),
+                // After-hours fallback: kept from the previous card — urgent
+                // concerns outside clinic hours need a visible answer.
+                const SizedBox(height: 12),
+                _AfterHoursNote(onCall: () => _callAfterHours(context)),
+              ],
             ),
-            // Cream label pill top-left (solid cream, not glass).
-            Positioned(
-              left: 14,
-              top: 12,
-              child: StatusChip(
-                label: appt == null ? 'No bookings yet' : 'Next appointment',
-                icon: Ic.calendar,
-                fg: T.espresso,
-                bg: T.cream.withValues(alpha: 0.92),
-              ),
-            ),
-            // Floating glass panel over the photo's lower portion: 0.78 of
-            // the card's width, 14pt above the card's bottom edge. One fixed
-            // panel height across pages so paging never jumps; the empty
-            // body bounds its text (maxLines) so it fits at any Dynamic Type.
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: 14,
-              child: Center(
-                child: FractionallySizedBox(
-                  widthFactor: 0.78,
-                  child: appt == null || pet == null
-                      ? SizedBox(
-                          height: panelHeight,
-                          child: Center(
-                            child: GlassCard(
-                              border: p.isDark
-                                  ? const Color(0x33FFFFFF)
-                                  : const Color(0x8CFFFFFF),
-                              padding: const EdgeInsets.all(14),
-                              child: _EmptyHeroBody(pet: pet),
-                            ),
-                          ),
-                        )
-                      : GlassCard(
-                          border: p.isDark
-                              ? const Color(0x33FFFFFF)
-                              : const Color(0x8CFFFFFF),
-                          padding: const EdgeInsets.all(14),
-                          height: panelHeight,
-                          child: _HeroBody(
-                            store: store,
-                            a: appt,
-                            pet: pet,
-                            service: service!,
-                            staffName: staff!.name,
+          )
+        : const SizedBox.shrink();
+
+    return Container(
+      decoration: BoxDecoration(
+        color: p.surface,
+        borderRadius: BorderRadius.circular(T.rCard),
+        boxShadow: p.isDark
+            ? null
+            : const [
+                BoxShadow(
+                  color: T.shadowLight,
+                  blurRadius: T.shadowBlur,
+                  offset: Offset(0, T.shadowDy),
+                ),
+              ],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Toggle row: the 76pt header is one tap target.
+          Semantics(
+            button: true,
+            label:
+                'Clinic information, ${_expanded ? 'expanded' : 'collapsed'}. '
+                '${clinicStatusLine(widget.now)}',
+            child: ExcludeSemantics(
+              child: PressScale(
+                onTap: () => setState(() => _expanded = !_expanded),
+                child: SizedBox(
+                  height: toggleH,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                Seed.clinicName,
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                  color: p.text,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(height: 4),
+                              Row(
+                                children: [
+                                  Container(
+                                    width: 10,
+                                    height: 10,
+                                    decoration: BoxDecoration(
+                                      color: open ? p.success : T.destructive,
+                                      shape: BoxShape.circle,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Expanded(
+                                    child: Text(
+                                      clinicStatusLine(widget.now),
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        color: p.textSecondary,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
                           ),
                         ),
+                        AnimatedRotation(
+                          turns: _expanded ? 0.5 : 0,
+                          duration: reduce
+                              ? Duration.zero
+                              : const Duration(milliseconds: 200),
+                          child: Ic.svg(
+                            Ic.chevronDown,
+                            size: 20,
+                            color: T.taupe,
+                            stroke: 2,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
               ),
             ),
-          ],
-        ),
+          ),
+          // Expanded details animate open over the house spring. Under
+          // reduced motion the AnimatedSize is skipped entirely — a
+          // zero-duration AnimatedSize completes its controller inside
+          // performLayout and throws ("mutated in its own performLayout").
+          reduce
+              ? details
+              : AnimatedSize(
+                  duration: const Duration(milliseconds: T.springMs),
+                  curve: Curves.easeInOut,
+                  alignment: Alignment.topCenter,
+                  child: details,
+                ),
+        ],
       ),
     );
+  }
+}
 
+/// Tappable clinic row (address, phone): 15pt label, ≥44pt target.
+class _ClinicRow extends StatelessWidget {
+  const _ClinicRow({
+    required this.icon,
+    required this.label,
+    this.accent = false,
+    this.onTap,
+  });
+  final String icon;
+  final String label;
+  final bool accent;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.p;
     return Semantics(
       button: true,
       label: label,
       child: ExcludeSemantics(
         child: PressScale(
-          scale: 0.99,
-          onTap: () => _open(context),
-          child: card,
-        ),
-      ),
-    );
-  }
-}
-
-/// Page indicators. Decorative — the position is also announced in each page's
-/// semantics label — so they stay out of the accessibility tree.
-class _Dots extends StatelessWidget {
-  const _Dots({required this.count, required this.active});
-
-  final int count;
-  final int active;
-
-  @override
-  Widget build(BuildContext context) {
-    final reduce = reduceMotionOf(context);
-    return Padding(
-      padding: const EdgeInsets.only(top: 10),
-      child: ExcludeSemantics(
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            for (var i = 0; i < count; i++) ...[
-              if (i > 0) const SizedBox(width: 6),
-              AnimatedContainer(
-                duration: reduce ? Duration.zero : Motion.fast,
-                curve: Motion.enter,
-                width: i == active ? 18 : 6,
-                height: 6,
-                decoration: BoxDecoration(
-                  color: i == active
-                      ? T.terracotta
-                      : T.taupe.withValues(alpha: 0.45),
-                  borderRadius: BorderRadius.circular(T.rPill),
+          onTap: onTap,
+          child: Container(
+            constraints: const BoxConstraints(minHeight: 44),
+            alignment: Alignment.centerLeft,
+            child: Row(
+              children: [
+                Ic.svg(
+                  icon,
+                  size: 18,
+                  color: accent ? T.terracottaText : p.textSecondary,
+                  stroke: 1.9,
                 ),
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _HeroBody extends StatelessWidget {
-  const _HeroBody({
-    required this.store,
-    required this.a,
-    required this.pet,
-    required this.service,
-    required this.staffName,
-  });
-
-  final AppStore store;
-  final Appointment a;
-  final Pet pet;
-  final Service service;
-  final String staffName;
-
-  @override
-  Widget build(BuildContext context) {
-    final p = context.p;
-    // Natural height inside the compact card: one-line headlines get even
-    // breathing room instead of a taller-looking card than their two-line
-    // siblings, and large Dynamic Type grows the card instead of clipping.
-    return Column(
-      mainAxisSize: MainAxisSize.max,
-      mainAxisAlignment: MainAxisAlignment.center,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Container(
-              width: 44,
-              height: 44,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: pet.color.withValues(alpha: 0.22),
-                shape: BoxShape.circle,
-              ),
-              child: Ic.svg(
-                pet.species == Species.dog ? Ic.dog : Ic.cat,
-                color: p.primaryFill,
-                size: 24,
-                stroke: 2,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    '${pet.name} · ${service.name}',
-                    style: Type.headline(p),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    label,
+                    style: TextStyle(
+                      fontSize: 15,
+                      color: accent ? T.terracottaText : p.text,
+                    ),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
-                  const SizedBox(height: 4),
-                  // Single line, always: at AX5 this used to wrap and push
-                  // the card — and the page — taller than its siblings.
-                  // Full-strength text here (not textSecondary): the panel
-                  // floats over an arbitrary photo, and secondary only
-                  // reaches 4.3:1 on near-black photos — primary holds
-                  // ≥10:1 at both extremes.
-                  Text(
-                    '${mediumDate(a.start)} · $staffName',
-                    style: Type.footnote(p).copyWith(color: p.text),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
-            const SizedBox(width: 8),
-            Ic.svg(
-              Ic.chevronRight,
-              color: p.primaryFill,
-              size: 20,
-              stroke: 2.4,
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        // One horizontal row, never a Wrap: the chip set is fixed, so a scroll
-        // row keeps the card height identical across states instead of jumping
-        // when the chips reflow to two rows on narrow screens. Only the two
-        // glanceable chips live here — the price is one tap away in the
-        // detail, and a third chip clipped the 75%-width panel.
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(
-            children: [
-              StatusChip(
-                label: countdownLabel(store.now, a.start),
-                icon: Ic.clock,
-                compact: true,
-                // Solid amber with espresso text (8.80:1, photo-independent):
-                // over an arbitrary photo a translucent tint can't guarantee
-                // 4.5:1 — the one sanctioned text-on-amber use. Same language
-                // as the primary CTA.
-                fg: T.espresso,
-                bg: T.amber,
-              ),
-              const SizedBox(width: 8),
-              StatusChip(
-                label: a.status.short,
-                icon: a.status == ApptStatus.confirmed
-                    ? Ic.checkCircle
-                    : Ic.clock,
-                compact: true,
-              ),
-            ],
           ),
         ),
-      ],
+      ),
     );
   }
 }
 
-class _EmptyHeroBody extends StatelessWidget {
-  const _EmptyHeroBody({required this.pet});
-  final Pet? pet;
+/// One schedule row: day left, hours right, today highlighted.
+class _HoursRow extends StatelessWidget {
+  const _HoursRow({required this.weekday, required this.isToday});
+  final int weekday; // 1 = Monday … 7 = Sunday
+  final bool isToday;
 
   @override
   Widget build(BuildContext context) {
     final p = context.p;
-    // Bounded line counts: the golden block font (and large Dynamic Type)
-    // wraps aggressively, so unbounded text would push the card around.
-    return Row(
-      children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                'Nothing booked yet',
-                style: Type.headline(p),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-              const SizedBox(height: 2),
-              Text(
-                'Book a visit and we will handle the reminders.',
-                style: Type.footnote(p),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ],
+    final style = TextStyle(
+      fontSize: 13,
+      fontWeight: isToday ? FontWeight.w600 : FontWeight.w400,
+      color: isToday ? T.terracottaDeep : p.textSecondary,
+    );
+    return Container(
+      constraints: const BoxConstraints(minHeight: 32),
+      alignment: Alignment.centerLeft,
+      child: Row(
+        children: [
+          Expanded(child: Text(Clinic.weekdayName(weekday), style: style)),
+          Text(
+            weekday == DateTime.sunday ? 'Closed' : '9:00 AM – 6:00 PM',
+            style: style,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// After-hours emergency callout: amber banner with the 24-hour hospital.
+// Tapping calls it — urgent concerns outside clinic hours get an answer,
+// never a dead end.
+class _AfterHoursNote extends StatelessWidget {
+  const _AfterHoursNote({required this.onCall});
+  final VoidCallback onCall;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.p;
+    return Semantics(
+      button: true,
+      label:
+          'After hours emergency: call ${Seed.afterHoursName}, ${Seed.afterHoursPhone}',
+      child: ExcludeSemantics(
+        child: PressScale(
+          onTap: onCall,
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: T.amber.withValues(alpha: 0.16),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Ic.svg(Ic.alert, color: p.warning, size: 17),
+                const SizedBox(width: 9),
+                Expanded(
+                  child: Text(
+                    'After hours, the nearest 24-hour animal hospital is ${Seed.afterHoursName} · ${Seed.afterHoursPhone}',
+                    style: Type.footnote(p).copyWith(color: p.warning),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
-        StatusChip(label: 'Book', icon: Ic.arrowRight, compact: true),
-      ],
+      ),
+    );
+  }
+}
+
+/// Dials the after-hours emergency hospital.
+void _callAfterHours(BuildContext context) => callPhoneNumber(
+  context,
+  number: Seed.afterHoursPhone,
+  name: Seed.afterHoursName,
+);
+
+/// Opens the clinic address in Maps; falls back to showing the address
+/// itself when no maps app is available — never a dead end.
+Future<void> _openMaps(BuildContext context) async {
+  final uri = Uri.parse(
+    'https://maps.google.com/?q=${Uri.encodeComponent(Clinic.address)}',
+  );
+  var ok = false;
+  try {
+    ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+  } catch (_) {
+    ok = false;
+  }
+  if (!context.mounted) return;
+  if (!ok) {
+    await showPopup<void>(
+      context,
+      centered: true,
+      barrierDismissible: true,
+      builder: (ctx) => CupertinoAlertDialog(
+        title: const Text('CarePaws Veterinary Clinic'),
+        content: Padding(
+          padding: const EdgeInsets.only(top: 8),
+          child: Text(Clinic.address),
+        ),
+        actions: [
+          CupertinoDialogAction(
+            isDefaultAction: true,
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Done'),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -958,48 +936,6 @@ class _PetRow extends StatelessWidget {
   }
 }
 
-/// Zero-pet empty state with a single clear next action.
-class _NoPetsCard extends StatelessWidget {
-  const _NoPetsCard({required this.onAdd});
-  final VoidCallback onAdd;
-
-  @override
-  Widget build(BuildContext context) {
-    final p = context.p;
-    return SoftCard(
-      child: Column(
-        children: [
-          Container(
-            width: 62,
-            height: 62,
-            decoration: BoxDecoration(
-              color: T.amber.withValues(alpha: 0.22),
-              shape: BoxShape.circle,
-            ),
-            child: Center(
-              child: Ic.svg(Ic.paw, color: p.accent, size: 30, stroke: 1.8),
-            ),
-          ),
-          const SizedBox(height: T.s12),
-          Text(
-            'Add your first pet',
-            style: Type.headline(p),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 6),
-          Text(
-            'Once your pet is here, you can track visits, vaccines and documents in one place.',
-            style: Type.footnote(p).copyWith(color: p.textSecondary),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: T.s16),
-          PrimaryButton(label: 'Add pet', icon: Ic.plus, onPressed: onAdd),
-        ],
-      ),
-    );
-  }
-}
-
 /// First three reminders inline, each with a Terracotta switch. The first
 /// toggle-on raises the in-context notification permission sheet.
 class _RemindersPreview extends StatelessWidget {
@@ -1010,6 +946,18 @@ class _RemindersPreview extends StatelessWidget {
   Widget build(BuildContext context) {
     final p = context.p;
     final shown = store.reminders.take(3).toList();
+    // G3: an empty list shows a call to action, never blank space.
+    if (shown.isEmpty) {
+      return EmptyState(
+        compact: true,
+        icon: Ic.byName('bell'),
+        title: 'No reminders yet',
+        body: 'We will nudge you about medications, vaccines and visits.',
+        actionLabel: 'Add a reminder',
+        onAction: () =>
+            Navigator.of(context).push(appRoute(const RemindersScreen())),
+      );
+    }
     return SoftCard(
       padding: EdgeInsets.zero,
       child: Column(
@@ -1102,145 +1050,6 @@ Future<bool> showNotificationPermissionSheet(BuildContext context) async {
     ),
   );
   return result ?? false;
-}
-
-class _ClinicCard extends StatelessWidget {
-  const _ClinicCard({required this.now});
-  final DateTime now;
-
-  @override
-  Widget build(BuildContext context) {
-    final p = context.p;
-    final open = clinicOpenAt(now);
-    return SoftCard(
-      onTap: () =>
-          Navigator.of(context).push(appRoute(const ClinicInfoScreen())),
-      semanticLabel:
-          'Clinic information. ${clinicStatusLine(now)}. ${Seed.clinicAddress}',
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: p.accent.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(11),
-                ),
-                child: Center(
-                  child: Ic.svg(
-                    Ic.pin,
-                    color: p.primaryFill,
-                    size: 21,
-                    stroke: 1.9,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(Seed.clinicName, style: Type.headline(p)),
-                    const SizedBox(height: 3),
-                    // Text status, never colour-only.
-                    StatusChip(
-                      label: open ? 'Open now' : 'Closed now',
-                      icon: open ? Ic.checkCircle : Ic.clock,
-                      compact: true,
-                      fg: open ? p.success : p.warning,
-                      bg: open
-                          ? p.success.withValues(alpha: 0.14)
-                          : T.amber.withValues(alpha: 0.28),
-                    ),
-                  ],
-                ),
-              ),
-              Ic.svg(
-                Ic.chevronRight,
-                color: p.textSecondary,
-                size: 16,
-                stroke: 2.2,
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Divider(height: 1, color: p.divider),
-          const SizedBox(height: 10),
-          _InfoLine(icon: Ic.clock, text: clinicStatusLine(now)),
-          const SizedBox(height: 7),
-          _InfoLine(icon: Ic.pin, text: Seed.clinicAddress),
-          const SizedBox(height: 7),
-          _InfoLine(icon: Ic.phone, text: Seed.clinicPhone),
-          const SizedBox(height: 10),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(11),
-            decoration: BoxDecoration(
-              color: T.amber.withValues(alpha: 0.16),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Ic.svg(Ic.alert, color: p.warning, size: 17),
-                const SizedBox(width: 9),
-                Expanded(
-                  child: Text(
-                    'After hours, the nearest 24-hour animal hospital is ${Seed.afterHoursName} · ${Seed.afterHoursPhone}',
-                    style: Type.footnote(p).copyWith(color: p.warning),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _InfoLine extends StatelessWidget {
-  const _InfoLine({required this.icon, required this.text});
-  final String icon;
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    final p = context.p;
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Ic.svg(icon, color: p.textSecondary, size: 16),
-        const SizedBox(width: 9),
-        Expanded(child: Text(text, style: Type.footnote(p))),
-      ],
-    );
-  }
-}
-
-/// Subtle warm radial glow — the splash `_Glow` pattern, static (no animation
-/// on Home). Sits behind the greeting so the top of the screen never reads
-/// as a plain flat field.
-class _Glow extends StatelessWidget {
-  const _Glow({required this.size, required this.color});
-  final double size;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) => IgnorePointer(
-    child: Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        gradient: RadialGradient(colors: [color, color.withValues(alpha: 0)]),
-      ),
-    ),
-  );
 }
 
 /// Switches to another tab and pops this tab's route stack back to its root.

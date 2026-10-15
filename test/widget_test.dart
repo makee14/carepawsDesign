@@ -18,6 +18,7 @@ import 'package:carepaws/screens/triage_screen.dart';
 import 'package:carepaws/services/ai_service.dart';
 import 'package:carepaws/state/app_store.dart';
 import 'package:carepaws/widgets/common.dart';
+import 'package:carepaws/widgets/hero_card.dart';
 
 DateTime fixedNow() => DateTime(2026, 10, 13, 9, 40);
 
@@ -335,8 +336,8 @@ void main() {
       // below the initial build window — reveal it like a user would.
       await scrollTo(tester, 'Care reminders');
       expect(find.text('Care reminders'), findsOneWidget);
-      await scrollTo(tester, 'Clinic info');
-      expect(find.text('Clinic info'), findsOneWidget);
+      await scrollTo(tester, 'CarePaws Veterinary Clinic');
+      expect(find.text('CarePaws Veterinary Clinic'), findsOneWidget);
     });
 
     testWidgets('all five tabs render', (tester) async {
@@ -437,6 +438,10 @@ void main() {
       tester,
     ) async {
       await pumpShell(tester);
+      // The after-hours note lives in the expanded card — expand it first.
+      await scrollTo(tester, 'CarePaws Veterinary Clinic');
+      await tester.tap(find.text('CarePaws Veterinary Clinic'));
+      await tester.pumpAndSettle();
       await scrollToText(tester, 'Animal Emergency Center');
       expect(find.textContaining('Open now'), findsWidgets);
       expect(find.textContaining('Animal Emergency Center'), findsWidgets);
@@ -449,9 +454,11 @@ void main() {
     ) async {
       final s = AppStore(now: fixedNow())..cancelAppointment('a2');
       await pumpShell(tester, store: s);
-      expect(find.byType(PageView), findsNothing);
+      // The promo carousel legitimately pages — the appointment slot itself
+      // is one HeroCard with no paging chrome.
+      expect(find.byType(HeroCard), findsOneWidget);
       expect(find.text('Next appointment'), findsOneWidget);
-      expect(find.text('Biscuit \u00b7 Vet Consultation'), findsOneWidget);
+      expect(find.text('Vet Consultation — Biscuit'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
 
@@ -462,14 +469,16 @@ void main() {
       await pumpShell(tester, store: s);
       expect(find.text('Nothing booked yet'), findsOneWidget);
 
-      await tester.tap(find.text('Book').first);
+      // The in-slot empty state's CTA opens booking.
+      await scrollTo(tester, 'Book an appointment');
+      await tester.tap(find.text('Book an appointment'));
       await tester.pumpAndSettle();
       expect(find.text('Choose a service to get started'), findsOneWidget);
     });
 
     testWidgets('tapping the card opens that appointment', (tester) async {
       await pumpShell(tester);
-      await tester.tap(find.text('Biscuit \u00b7 Vet Consultation'));
+      await tester.tap(find.text('Vet Consultation — Biscuit'));
       await tester.pumpAndSettle();
       // Appointment detail for a1 (Biscuit's consultation) is on top.
       expect(find.text('Vet Consultation'), findsWidgets);

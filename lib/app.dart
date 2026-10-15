@@ -18,6 +18,7 @@ import 'screens/onboarding_screen.dart';
 import 'screens/profile_screen.dart';
 import 'screens/shops_screen.dart';
 import 'state/app_store.dart';
+import 'widgets/back_guard.dart';
 import 'widgets/common.dart';
 import 'widgets/splash_ambient.dart';
 
@@ -353,57 +354,62 @@ class _RootShellState extends State<RootShell> {
     // get their full height back and StickyCta drops back to the edge.
     final clearance = visible ? FloatingTabBar.clearanceFor(context) : 0.0;
 
-    return CupertinoPageScaffold(
-      backgroundColor: context.p.background,
-      child: Stack(
-        children: [
-          Positioned.fill(
-            // Lists reserve room for the floating bar via [TabBarClearance].
-            // MediaQuery padding is left alone so SafeArea — and therefore
-            // StickyCta — keeps behaving as it does on a non-floating bar.
-            child: TabBarClearance(
-              height: clearance,
-              child: IndexedStack(
-                index: _index,
-                children: [
-                  for (var i = 0; i < _bodies.length; i++)
-                    CupertinoTabView(
-                      navigatorObservers: _observersFor(i),
-                      builder: (_) => _bodies[i],
-                    ),
-                ],
-              ),
-            ),
-          ),
-          // Fades rather than sliding. The bar is a large element sitting at the
-          // edge of the field of view, and HIG ▸ Motion asks that movement there
-          // be avoided: travelling a whole bar-width downward communicates
-          // nothing the fade does not already say. Same object leaving, no
-          // second motion competing with the page push behind it.
-          //
-          // IgnorePointer matters as much as the fade: an AnimatedOpacity at
-          // zero is still hit-testable, so an invisible bar kept swallowing
-          // taps meant for the pushed screen underneath it — chat composer,
-          // sticky CTAs, Done/Cancel buttons. Hidden means untouchable.
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: 0,
-            child: IgnorePointer(
-              ignoring: !visible,
-              child: AnimatedOpacity(
-                opacity: visible ? 1 : 0,
-                duration: Motion.fast,
-                curve: Motion.enter,
-                child: FloatingTabBar(
+    // RootBackGuard: the system back button at the tab roots (nothing left to
+    // pop) asks "Exit CarePaws?" instead of closing the app silently.
+    // Pushed screens are unaffected — their tab's own Navigator pops first.
+    return RootBackGuard(
+      child: CupertinoPageScaffold(
+        backgroundColor: context.p.background,
+        child: Stack(
+          children: [
+            Positioned.fill(
+              // Lists reserve room for the floating bar via [TabBarClearance].
+              // MediaQuery padding is left alone so SafeArea — and therefore
+              // StickyCta — keeps behaving as it does on a non-floating bar.
+              child: TabBarClearance(
+                height: clearance,
+                child: IndexedStack(
                   index: _index,
-                  onSelect: _select,
-                  tabs: RootShell.tabs,
+                  children: [
+                    for (var i = 0; i < _bodies.length; i++)
+                      CupertinoTabView(
+                        navigatorObservers: _observersFor(i),
+                        builder: (_) => _bodies[i],
+                      ),
+                  ],
                 ),
               ),
             ),
-          ),
-        ],
+            // Fades rather than sliding. The bar is a large element sitting at the
+            // edge of the field of view, and HIG ▸ Motion asks that movement there
+            // be avoided: travelling a whole bar-width downward communicates
+            // nothing the fade does not already say. Same object leaving, no
+            // second motion competing with the page push behind it.
+            //
+            // IgnorePointer matters as much as the fade: an AnimatedOpacity at
+            // zero is still hit-testable, so an invisible bar kept swallowing
+            // taps meant for the pushed screen underneath it — chat composer,
+            // sticky CTAs, Done/Cancel buttons. Hidden means untouchable.
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: IgnorePointer(
+                ignoring: !visible,
+                child: AnimatedOpacity(
+                  opacity: visible ? 1 : 0,
+                  duration: Motion.fast,
+                  curve: Motion.enter,
+                  child: FloatingTabBar(
+                    index: _index,
+                    onSelect: _select,
+                    tabs: RootShell.tabs,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

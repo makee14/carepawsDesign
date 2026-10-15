@@ -541,6 +541,37 @@ class Seed {
     ),
   ];
 
+  // ----------------------------------------------------------------- promos
+  // Bundled only — no ad backend exists (orchestrator ruling). The Home
+  // carousel renders these via PromoCarousel; `route` ids are resolved by
+  // the Home screen.
+  static const promos = [
+    Promo(
+      id: 'promo-groom',
+      title: 'Fresh cut season',
+      subtitle: 'Full grooms from ₱850 · baths, cuts, nails & ears',
+      art: 4,
+      ctaLabel: 'Book grooming',
+      route: 'book',
+    ),
+    Promo(
+      id: 'promo-vax',
+      title: 'Vaccination drive',
+      subtitle: 'Walk-in boosters every Saturday, 9 AM – 12 PM',
+      art: 5,
+      ctaLabel: 'Learn more',
+      route: 'book',
+    ),
+    Promo(
+      id: 'promo-shop',
+      title: 'New in the shop',
+      subtitle: 'Treats, toys & essentials — pickup at the clinic',
+      art: 6,
+      ctaLabel: 'Browse shop',
+      route: 'shop',
+    ),
+  ];
+
   // ----------------------------------------------------------------- clinic
   // Single source of truth lives in [Clinic] (lib/data/clinic.dart); these
   // aliases keep existing call sites compiling without duplicating values.

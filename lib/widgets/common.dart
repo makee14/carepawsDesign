@@ -829,49 +829,63 @@ class SectionHeader extends StatelessWidget {
     final p = context.p;
     return Padding(
       padding: padding,
-      child: Row(
-        children: [
-          if (icon != null) ...[
-            Ic.svg(icon!, color: p.accent, size: 18),
-            const SizedBox(width: 8),
-          ],
-          Expanded(child: Text(title, style: Type.title2(p))),
-          if (actionLabel != null)
-            Semantics(
-              button: true,
-              label: actionLabel,
-              child: ExcludeSemantics(
-                child: PressScale(
-                  onTap: onAction,
-                  child: Container(
-                    constraints: const BoxConstraints(
-                      minWidth: 48,
-                      minHeight: 44,
-                    ),
-                    alignment: Alignment.centerRight,
-                    padding: const EdgeInsets.symmetric(horizontal: 6),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          actionLabel!,
-                          style: Type.footnoteEmph(p)
-                              .copyWith(color: p.accentText),
+      // LayoutBuilder: at large Dynamic Type the action label's intrinsic
+      // width would push this Row past the screen edge — cap it at 45% so
+      // the label reflows instead of overflowing. Below the cap the action
+      // still hugs its content, so normal sizes are pixel-identical.
+      child: LayoutBuilder(
+        builder: (context, c) => Row(
+          children: [
+            if (icon != null) ...[
+              Ic.svg(icon!, color: p.accent, size: 18),
+              const SizedBox(width: 8),
+            ],
+            Expanded(child: Text(title, style: Type.title2(p))),
+            if (actionLabel != null)
+              ConstrainedBox(
+                constraints: BoxConstraints(maxWidth: c.maxWidth * 0.45),
+                child: Semantics(
+                  button: true,
+                  label: actionLabel,
+                  child: ExcludeSemantics(
+                    child: PressScale(
+                      onTap: onAction,
+                      child: Container(
+                        constraints: const BoxConstraints(
+                          minWidth: 48,
+                          minHeight: 44,
                         ),
-                        const SizedBox(width: 3),
-                        Ic.svg(
-                          Ic.chevronRight,
-                          color: p.accentText,
-                          size: 14,
-                          stroke: 2.2,
+                        alignment: Alignment.centerRight,
+                        padding: const EdgeInsets.symmetric(horizontal: 6),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Flexible(
+                              child: Text(
+                                actionLabel!,
+                                style: Type.footnoteEmph(p)
+                                    .copyWith(color: p.accentText),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                textAlign: TextAlign.right,
+                              ),
+                            ),
+                            const SizedBox(width: 3),
+                            Ic.svg(
+                              Ic.chevronRight,
+                              color: p.accentText,
+                              size: 14,
+                              stroke: 2.2,
+                            ),
+                          ],
                         ),
-                      ],
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
-        ],
+          ],
+        ),
       ),
     );
   }

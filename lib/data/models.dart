@@ -547,3 +547,26 @@ class AppNotification {
     read: read ?? this.read,
   );
 }
+
+/// Promo/announcement for the Home carousel. Stream A.
+///
+/// Bundled seed data only — there is no ad backend (orchestrator ruling).
+/// `route` is a destination id resolved by the Home screen ('book', 'shop',
+/// 'triage', ...); `art` indexes the generated-art pattern (cf. Product.art).
+@immutable
+class Promo {
+  const Promo({
+    required this.id,
+    required this.title,
+    required this.subtitle,
+    required this.art,
+    required this.ctaLabel,
+    required this.route,
+  });
+  final String id;
+  final String title;
+  final String subtitle;
+  final int art;
+  final String ctaLabel;
+  final String route;
+}
