@@ -13,6 +13,7 @@ import '../../state/app_store.dart';
 import '../../widgets/ai_unavailable.dart';
 import '../../widgets/common.dart';
 import '../../widgets/time_of_day.dart';
+import '../add_pet_screen.dart';
 import '../triage_screen.dart';
 import '../profile/settings_screens.dart';
 
@@ -436,7 +437,9 @@ class _BookFlowState extends State<BookFlow> {
         Text('Who is this visit for?', style: Type.title1(p)),
         const SizedBox(height: 6),
         Text(
-          'Pre-selected from your last booking — change it if you like.',
+          store.pets.isEmpty
+              ? 'Pick which pet this visit is for — add one to get started.'
+              : 'Pre-selected from your last booking — change it if you like.',
           style: Type.footnote(p),
         ),
         const SizedBox(height: T.s20),
@@ -446,8 +449,13 @@ class _BookFlowState extends State<BookFlow> {
             title: 'No pets yet',
             body: 'Add a pet before booking so we can attach the visit to their record.',
             actionLabel: 'Add pet',
-            onAction: () =>
-                Navigator.of(context).push(appRoute(const _NoPetYet())),
+            // Straight to the Add Pet screen — no dead-end message. The new
+            // pet is preselected when we return.
+            onAction: () => Navigator.of(context).push(
+              appRoute(
+                AddPetScreen(onAdded: (pet) => setState(() => _petId = pet.id)),
+              ),
+            ),
           )
         else
           for (final pet in store.pets)
@@ -1592,38 +1600,4 @@ class _TriageSummaryCard extends StatelessWidget {
     TriageRoute.homeCare => 'home care',
     TriageRoute.emergency => 'emergency call',
   };
-}
-
-class _NoPetYet extends StatelessWidget {
-  const _NoPetYet();
-
-  @override
-  Widget build(BuildContext context) => CupertinoPageScaffold(
-    backgroundColor: context.p.background,
-    navigationBar: const DetailNavBar(title: 'Add pet'),
-    child: Center(
-      child: Padding(
-        padding: const EdgeInsets.all(T.s24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Ic.svg(Ic.paw, color: context.p.accent, size: 44),
-            const SizedBox(height: T.s16),
-            Text(
-              'Add a pet from the Home tab first',
-              style: Type.title2(context.p),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Once a pet is on file, visits, vaccines and documents attach to their record automatically.',
-              style: Type.body(context.p)
-                  .copyWith(color: context.p.textSecondary),
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
-      ),
-    ),
-  );
 }
