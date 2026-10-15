@@ -441,9 +441,9 @@ void main() {
     ) async {
       await pumpShell(tester);
       // The after-hours note lives in the expanded card — expand it first.
-      await scrollTo(tester, 'CarePaws Veterinary Clinic');
-      await tester.tap(find.text('CarePaws Veterinary Clinic'));
-      await tester.pumpAndSettle();
+      // tapInView, not scrollTo+tap: the card sits at the list's tail and a
+      // minimal reveal can leave it under the floating tab bar's tap band.
+      await tapInView(tester, find.text('CarePaws Veterinary Clinic'));
       await scrollToText(tester, 'Animal Emergency Center');
       expect(find.textContaining('Open now'), findsWidgets);
       expect(find.textContaining('Animal Emergency Center'), findsWidgets);

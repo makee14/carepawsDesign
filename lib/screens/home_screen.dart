@@ -54,7 +54,7 @@ class HomeScreen extends StatelessWidget {
                     promos: Seed.promos,
                     onCta: (promo) => _onPromoCta(context, promo),
                   ),
-                  const SizedBox(height: T.s24),
+                  const SizedBox(height: T.s16),
                   _NextAppointmentSection(store: store),
                   const SizedBox(height: T.s16),
                   FadeIn(index: 1, child: _QuickActions(store: store)),
@@ -181,28 +181,18 @@ class _NextAppointmentSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final p = context.p;
     final next = store.nextAppointment;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        LayoutBuilder(
-          // At large Dynamic Type the "View all" label's intrinsic width
-          // would push this Row past the screen edge — cap it at 45% so
-          // the label reflows instead of overflowing.
-          builder: (context, c) => Row(
-            children: [
-              Expanded(child: Text('Next appointment', style: Type.title3(p))),
-              ConstrainedBox(
-                constraints: BoxConstraints(maxWidth: c.maxWidth * 0.45),
-                child: _ViewAll(onTap: () => switchTab(context, 2)),
-              ),
-            ],
-          ),
+        // Canonical section header: same rhythm as every other section.
+        SectionHeader(
+          title: 'Next appointment',
+          actionLabel: 'View all',
+          onAction: () => switchTab(context, 2),
         ),
-        const SizedBox(height: T.s8),
         if (next == null)
           EmptyState(
             icon: Ic.byName('calendar'),
@@ -215,41 +205,6 @@ class _NextAppointmentSection extends StatelessWidget {
         else
           _AppointmentCard(store: store, appointment: next),
       ],
-    );
-  }
-}
-
-/// "View all": 15pt terracottaText on a 44pt target.
-class _ViewAll extends StatelessWidget {
-  const _ViewAll({required this.onTap});
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Semantics(
-      button: true,
-      label: 'View all appointments',
-      child: ExcludeSemantics(
-        child: PressScale(
-          onTap: onTap,
-          child: Container(
-            constraints: const BoxConstraints(minHeight: 44),
-            alignment: Alignment.centerRight,
-            padding: const EdgeInsets.only(left: 12),
-            child: Text(
-              'View all',
-              style: TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w600,
-                color: T.terracottaText,
-              ),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              textAlign: TextAlign.right,
-            ),
-          ),
-        ),
-      ),
     );
   }
 }

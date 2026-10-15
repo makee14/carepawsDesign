@@ -484,8 +484,8 @@ class _LargeTitleDelegate extends SliverPersistentHeaderDelegate {
       child: Stack(
         children: [
           Positioned(
-            left: 20,
-            right: 20,
+            left: 16,
+            right: 16,
             top: y,
             child: Text(
               title,

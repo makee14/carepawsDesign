@@ -51,7 +51,7 @@ class _ShopsScreenState extends State<ShopsScreen> {
           const LargeTitleBar(title: 'Shop'),
           SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 4, 20, 0),
+              padding: const EdgeInsets.fromLTRB(T.s16, 4, T.s16, 0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [

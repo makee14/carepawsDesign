@@ -37,7 +37,7 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
               const LargeTitleBar(title: 'Appointments'),
               SliverToBoxAdapter(
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
+                  padding: const EdgeInsets.fromLTRB(T.s16, 4, T.s16, 8),
                   child: _Segmented(
                     index: _seg,
                     labels: const ['Upcoming', 'Past'],
@@ -50,9 +50,9 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
               ),
               SliverPadding(
                 padding: EdgeInsets.fromLTRB(
-                  20,
+                  T.s16,
                   8,
-                  20,
+                  T.s16,
                   // FAB clearance: the 56pt button sits tab-bar height + s16
                   // above the bottom, so the list needs 56 + s32 below the
                   // tab bar to never slide under it.

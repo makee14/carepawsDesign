@@ -310,7 +310,7 @@ class FloatingTabBar extends StatelessWidget {
   }
 }
 
-class _Slot extends StatelessWidget {
+class _Slot extends StatefulWidget {
   const _Slot({
     required this.label,
     required this.icon,
@@ -324,34 +324,78 @@ class _Slot extends StatelessWidget {
   final VoidCallback onTap;
 
   @override
+  State<_Slot> createState() => _SlotState();
+}
+
+class _SlotState extends State<_Slot> with SingleTickerProviderStateMixin {
+  late final AnimationController _pop;
+  late final Animation<double> _scale;
+
+  @override
+  void initState() {
+    super.initState();
+    _pop = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 220),
+    );
+    _scale = Tween(
+      begin: 0.8,
+      end: 1.0,
+    ).animate(CurvedAnimation(parent: _pop, curve: Curves.easeOutBack));
+  }
+
+  @override
+  void didUpdateWidget(_Slot oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // A little icon pop when this tab becomes selected. The slot itself
+    // never moves — only the icon animates.
+    if (widget.selected && !oldWidget.selected) {
+      if (MediaQuery.disableAnimationsOf(context)) {
+        _pop.value = 1.0;
+      } else {
+        _pop.forward(from: 0.0);
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _pop.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final p = context.p;
-    final fg = selected ? p.primaryFill : (p.isDark ? T.sand : T.taupe);
+    final fg = widget.selected ? p.primaryFill : (p.isDark ? T.sand : T.taupe);
     return Expanded(
       child: Semantics(
         button: true,
-        selected: selected,
-        label: label,
+        selected: widget.selected,
+        label: widget.label,
         child: ExcludeSemantics(
           child: PressScale(
             onTap: () {
               HapticFeedback.selectionClick();
-              onTap();
+              widget.onTap();
             },
             child: SizedBox(
               height: FloatingTabBar.height,
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Ic.svg(
-                    icon,
-                    color: fg,
-                    size: 21,
-                    stroke: selected ? 2.2 : 1.9,
+                  ScaleTransition(
+                    scale: _scale,
+                    child: Ic.svg(
+                      widget.icon,
+                      color: fg,
+                      size: 21,
+                      stroke: widget.selected ? 2.2 : 1.9,
+                    ),
                   ),
                   const SizedBox(height: 3),
                   Text(
-                    label,
+                    widget.label,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     // Tab labels are fixed chrome in a 64pt slot: cap the
@@ -361,7 +405,9 @@ class _Slot extends StatelessWidget {
                         .clamp(maxScaleFactor: 2.5),
                     style: Type.caption(p).copyWith(
                       color: fg,
-                      fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
+                      fontWeight: widget.selected
+                          ? FontWeight.w700
+                          : FontWeight.w600,
                       fontSize: 10,
                     ),
                   ),
@@ -816,7 +862,10 @@ class SectionHeader extends StatelessWidget {
     this.actionLabel,
     this.onAction,
     this.icon,
-    this.padding = const EdgeInsets.fromLTRB(0, T.s24, 0, T.s12),
+    // HIG rhythm: 16pt separates sections, 8pt separates a header from its
+    // content. Taller defaults pushed every section apart and read as
+    // empty whitespace.
+    this.padding = const EdgeInsets.fromLTRB(0, T.s16, 0, T.s8),
   });
 
   final String title;

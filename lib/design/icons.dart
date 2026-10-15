@@ -517,39 +517,29 @@ class _PressScaleState extends State<PressScale> {
       child: widget.child,
     );
 
+    // Hover/focus overlays paint as *foreground* decorations: they change
+    // zero layout. (A Stack wrapper here used to collapse the child to its
+    // intrinsic width and pin it top-left — the tab bar visibly jumped left
+    // on hover. Never wrap press content in a Stack for an overlay.)
     if (_hover && interactive) {
-      content = Stack(
-        children: [
-          content,
-          Positioned.fill(
-            child: IgnorePointer(
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFFFFFF).withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-              ),
-            ),
-          ),
-        ],
+      content = DecoratedBox(
+        position: DecorationPosition.foreground,
+        decoration: BoxDecoration(
+          color: const Color(0xFFFFFFFF).withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: content,
       );
     }
 
     if (_focused && interactive) {
-      content = Stack(
-        children: [
-          content,
-          Positioned.fill(
-            child: IgnorePointer(
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  border: Border.all(color: T.terracottaDeep, width: 2),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-              ),
-            ),
-          ),
-        ],
+      content = DecoratedBox(
+        position: DecorationPosition.foreground,
+        decoration: BoxDecoration(
+          border: Border.all(color: T.terracottaDeep, width: 2),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: content,
       );
     }
 

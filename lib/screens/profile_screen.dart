@@ -29,9 +29,9 @@ class ProfileScreen extends StatelessWidget {
           const LargeTitleBar(title: 'Profile'),
           SliverPadding(
             padding: EdgeInsets.fromLTRB(
-              20,
+              T.s16,
               12,
-              20,
+              T.s16,
               40 + TabBarClearance.of(context),
             ),
             sliver: SliverList.list(
@@ -298,7 +298,7 @@ class ProfileScreen extends StatelessWidget {
     showAppSheet(
       context,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
+        padding: const EdgeInsets.fromLTRB(T.s16, 8, T.s16, 0),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -370,7 +370,7 @@ class ProfileScreen extends StatelessWidget {
       context,
       scrollable: false,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
+        padding: const EdgeInsets.fromLTRB(T.s16, 8, T.s16, 0),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [

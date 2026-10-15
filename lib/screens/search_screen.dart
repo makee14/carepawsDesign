@@ -104,7 +104,7 @@ class _SearchScreenState extends State<SearchScreen> {
                     SectionHeader(
                       title: 'Pets',
                       icon: Ic.paw,
-                      padding: const EdgeInsets.fromLTRB(0, T.s20, 0, T.s12),
+                      padding: const EdgeInsets.fromLTRB(0, T.s16, 0, T.s8),
                     ),
                     SoftCard(
                       padding: EdgeInsets.zero,
@@ -136,7 +136,7 @@ class _SearchScreenState extends State<SearchScreen> {
                     SectionHeader(
                       title: 'Services',
                       icon: Ic.calendar,
-                      padding: const EdgeInsets.fromLTRB(0, T.s20, 0, T.s12),
+                      padding: const EdgeInsets.fromLTRB(0, T.s16, 0, T.s8),
                     ),
                     SoftCard(
                       padding: EdgeInsets.zero,
@@ -169,7 +169,7 @@ class _SearchScreenState extends State<SearchScreen> {
                     SectionHeader(
                       title: 'Products',
                       icon: Ic.bag,
-                      padding: const EdgeInsets.fromLTRB(0, T.s20, 0, T.s12),
+                      padding: const EdgeInsets.fromLTRB(0, T.s16, 0, T.s8),
                     ),
                     SoftCard(
                       padding: EdgeInsets.zero,

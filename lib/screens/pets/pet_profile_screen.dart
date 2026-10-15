@@ -86,7 +86,7 @@ class _PetProfileScreenState extends State<PetProfileScreen> {
           children: [
             Expanded(
               child: ListView(
-                padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
+                padding: const EdgeInsets.fromLTRB(T.s16, 12, T.s16, 28),
                 children: [
                   // Banner: full-bleed photo (~210pt, the appointment card's
                   // language at a smaller size) with the glass name panel
@@ -386,7 +386,7 @@ class _PetProfileScreenState extends State<PetProfileScreen> {
       context,
       scrollable: false,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
+        padding: const EdgeInsets.fromLTRB(T.s16, 8, T.s16, 0),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -477,7 +477,7 @@ class _PetProfileScreenState extends State<PetProfileScreen> {
     showAppSheet(
       context,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
+        padding: const EdgeInsets.fromLTRB(T.s16, 8, T.s16, 0),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -794,7 +794,7 @@ class _VitalsGrid extends StatelessWidget {
       context,
       scrollable: false,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
+        padding: const EdgeInsets.fromLTRB(T.s16, 8, T.s16, 0),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -927,7 +927,7 @@ class _TimelineCard extends StatelessWidget {
     showAppSheet(
       context,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
+        padding: const EdgeInsets.fromLTRB(T.s16, 8, T.s16, 0),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -964,7 +964,7 @@ class ScaffoldlessNotice {
       context,
       scrollable: false,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
+        padding: const EdgeInsets.fromLTRB(T.s16, 8, T.s16, 0),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [

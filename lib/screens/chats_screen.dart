@@ -37,9 +37,9 @@ class _ChatsScreenState extends State<ChatsScreen> {
           const LargeTitleBar(title: 'Chats'),
           SliverPadding(
             padding: EdgeInsets.fromLTRB(
-              20,
+              T.s16,
               12,
-              20,
+              T.s16,
               40 + TabBarClearance.of(context),
             ),
             sliver: SliverList.list(
