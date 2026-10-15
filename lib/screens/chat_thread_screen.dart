@@ -62,6 +62,24 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
     super.dispose();
   }
 
+  /// A typed-but-unsent message is a draft worth protecting. Photos send
+  /// through a preview sheet the moment they are picked, so they never sit
+  /// here as a draft.
+  bool get _isDraft => _input.text.trim().isNotEmpty;
+
+  /// Nav-bar back / system back with a draft: leave only on confirm. The nav
+  /// bar keeps its default maybePop, which honours the PopScope below.
+  Future<void> _exit() async {
+    if (await confirmDiscardIfDirty(
+      context,
+      isDirty: _isDraft,
+      title: 'Discard message?',
+      message: 'Your unsent message will be lost.',
+    )) {
+      if (mounted) Navigator.of(context).pop();
+    }
+  }
+
   void _maybeAutoScroll() {
     if (_scroll.hasClients &&
         _scroll.position.pixels >= _scroll.position.maxScrollExtent - 120) {
@@ -299,95 +317,103 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
     final thread = Seed.threads.firstWhere((t) => t.id == widget.threadId);
     final messages = store.thread(thread.id);
 
-    return CupertinoPageScaffold(
-      backgroundColor: p.background,
-      navigationBar: DetailNavBar(
-        title: thread.title,
-        actions: [
-          if (!_isAi)
-            IconTap(
-              path: Ic.person,
-              label: 'Clinic team',
-              color: p.primaryFill,
-              onPressed: () => setState(() => _showStaff = !_showStaff),
-            ),
-        ],
-      ),
-      child: SafeArea(
-        child: Column(
-          children: [
-            _ThreadIdentity(isAi: _isAi, store: store),
-            if (_isAi && store.ai.status == AiStatus.unavailable)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                child: AiUnavailableCard(
-                  failure: store.ai.failure ?? AiFailure.noKey,
-                  onOpenSettings: () =>
-                      Navigator.of(context)
-                          .push(appRoute(const AiSettingsScreen())),
-                  onBook: () =>
-                      Navigator.of(context).push(appRoute(const BookFlow())),
-                  onCall: () => callPhoneNumber(
-                    context,
-                    number: Clinic.phone,
-                    name: Clinic.name,
+    // Android system back honours the same draft guard as the nav-bar back.
+    return PopScope(
+      canPop: !_isDraft,
+      onPopInvokedWithResult: (didPop, _) async {
+        if (didPop) return;
+        await _exit();
+      },
+      child: CupertinoPageScaffold(
+        backgroundColor: p.background,
+        navigationBar: DetailNavBar(
+          title: thread.title,
+          actions: [
+            if (!_isAi)
+              IconTap(
+                path: Ic.person,
+                label: 'Clinic team',
+                color: p.primaryFill,
+                onPressed: () => setState(() => _showStaff = !_showStaff),
+              ),
+          ],
+        ),
+        child: SafeArea(
+          child: Column(
+            children: [
+              _ThreadIdentity(isAi: _isAi, store: store),
+              if (_isAi && store.ai.status == AiStatus.unavailable)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                  child: AiUnavailableCard(
+                    failure: store.ai.failure ?? AiFailure.noKey,
+                    onOpenSettings: () =>
+                        Navigator.of(context)
+                            .push(appRoute(const AiSettingsScreen())),
+                    onBook: () =>
+                        Navigator.of(context).push(appRoute(const BookFlow())),
+                    onCall: () => callPhoneNumber(
+                      context,
+                      number: Clinic.phone,
+                      name: Clinic.name,
+                    ),
                   ),
                 ),
+              if (!_isAi && store.offlineNote != null)
+                _OfflineBanner(text: store.offlineNote!),
+              if (_showStaff && !_isAi) const StaffDirectory(),
+              Expanded(
+                child: messages.isEmpty
+                    ? _EmptyThread(
+                        isAi: _isAi,
+                        onAction: _isAi ? _startCheck : null,
+                      )
+                    : ListView.builder(
+                        controller: _scroll,
+                        padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+                        itemCount: messages.length,
+                        itemBuilder: (context, i) {
+                          final m = messages[i];
+                          return _Bubble(
+                            message: m,
+                            isAi: _isAi,
+                            petName: store.pet(m.petId ?? '')?.name,
+                          );
+                        },
+                      ),
               ),
-            if (!_isAi && store.offlineNote != null)
-              _OfflineBanner(text: store.offlineNote!),
-            if (_showStaff && !_isAi) const StaffDirectory(),
-            Expanded(
-              child: messages.isEmpty
-                  ? _EmptyThread(
-                      isAi: _isAi,
-                      onAction: _isAi ? _startCheck : null,
-                    )
-                  : ListView.builder(
-                      controller: _scroll,
-                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
-                      itemCount: messages.length,
-                      itemBuilder: (context, i) {
-                        final m = messages[i];
-                        return _Bubble(
-                          message: m,
-                          isAi: _isAi,
-                          petName: store.pet(m.petId ?? '')?.name,
-                        );
-                      },
-                    ),
-            ),
-            if (_sending)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    CupertinoActivityIndicator(color: p.textSecondary),
-                    const SizedBox(width: 10),
-                    Text(
-                      _isAi
-                          ? 'CarePaws AI is typing…'
-                          : 'Clinic team is typing…',
-                      style: Type.caption(p),
-                    ),
-                  ],
+              if (_sending)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      CupertinoActivityIndicator(color: p.textSecondary),
+                      const SizedBox(width: 10),
+                      Text(
+                        _isAi
+                            ? 'CarePaws AI is typing…'
+                            : 'Clinic team is typing…',
+                        style: Type.caption(p),
+                      ),
+                    ],
+                  ),
                 ),
+              _SuggestionChips(
+                isAi: _isAi,
+                onHealthCheck: _startCheck,
+                onSend: _sendText,
               ),
-            _SuggestionChips(
-              isAi: _isAi,
-              onHealthCheck: _startCheck,
-              onSend: _sendText,
-            ),
-            _Composer(
-              controller: _input,
-              onSend: _send,
-              onPickPhoto: _isAi ? null : _pickPhoto,
-              hint: _isAi
-                  ? 'Ask about feeding, grooming or vaccines'
-                  : 'Message the clinic team',
-            ),
-          ],
+              _Composer(
+                controller: _input,
+                onSend: _send,
+                onPickPhoto: _isAi ? null : _pickPhoto,
+                hint: _isAi
+                    ? 'Ask about feeding, grooming or vaccines'
+                    : 'Message the clinic team',
+              ),
+            ],
+          ),
         ),
       ),
     );

@@ -719,122 +719,151 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     super.dispose();
   }
 
+  /// True when name/phone differ from the saved profile. The email field is
+  /// disabled and photo picks save immediately, so neither can be dirty.
+  bool _dirty(AppStore store) =>
+      _name.text != store.ownerName || _phone.text != store.ownerPhone;
+
+  /// Nav-bar back / system back with unsaved edits: leave only on confirm.
+  /// Saving pops directly (a direct pop bypasses PopScope), so this is only
+  /// the abandon path.
+  Future<void> _exit() async {
+    final store = AppScope.read(context);
+    if (await confirmDiscardIfDirty(context, isDirty: _dirty(store))) {
+      if (mounted) Navigator.of(context).pop();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final p = context.p;
     final store = AppScope.of(context);
-    return CupertinoPageScaffold(
-      backgroundColor: p.background,
-      navigationBar: DetailNavBar(title: 'Edit profile'),
-      child: SafeArea(
-        child: Column(
-          children: [
-            Expanded(
-              child: ListView(
-                padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
-                children: [
-                  Center(
-                    child: Column(
-                      children: [
-                        Stack(
-                          clipBehavior: Clip.none,
-                          children: [
-                            OwnerAvatar(
-                              initials: initialsOf(store.ownerName),
-                              size: 96,
-                              photo: store.ownerPhoto,
-                            ),
-                            Positioned(
-                              right: -4,
-                              bottom: -4,
-                              child: _PhotoBadge(
-                                icon: Ic.camera,
-                                label: _picking ? 'Opening…' : 'Change photo',
-                                busy: _picking,
-                                onTap: _picking ? null : () => _pickPhoto(),
+    // Android system back honours the same dirty guard as the nav-bar back.
+    return PopScope(
+      canPop: !_dirty(store),
+      onPopInvokedWithResult: (didPop, _) async {
+        if (didPop) return;
+        await _exit();
+      },
+      child: CupertinoPageScaffold(
+        backgroundColor: p.background,
+        navigationBar: DetailNavBar(
+          title: 'Edit profile',
+          onBack: () => _exit(),
+        ),
+        child: SafeArea(
+          child: Column(
+            children: [
+              Expanded(
+                child: ListView(
+                  padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
+                  children: [
+                    Center(
+                      child: Column(
+                        children: [
+                          Stack(
+                            clipBehavior: Clip.none,
+                            children: [
+                              OwnerAvatar(
+                                initials: initialsOf(store.ownerName),
+                                size: 96,
+                                photo: store.ownerPhoto,
                               ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 14),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            _PhotoTextAction(
-                              label: 'Choose from library',
-                              onTap: _picking ? null : () => _pickPhoto(),
-                            ),
-                            if (store.hasOwnerPhoto) ...[
-                              const SizedBox(width: 14),
-                              _PhotoTextAction(
-                                label: 'Remove',
-                                onTap: _picking
-                                    ? null
-                                    : () {
-                                        store.setOwnerPhoto(null);
-                                        successHaptic();
-                                      },
+                              Positioned(
+                                right: -4,
+                                bottom: -4,
+                                child: _PhotoBadge(
+                                  icon: Ic.camera,
+                                  label: _picking ? 'Opening…' : 'Change photo',
+                                  busy: _picking,
+                                  onTap: _picking ? null : () => _pickPhoto(),
+                                ),
                               ),
                             ],
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: T.s24),
-                  _Field(
-                    label: 'Full name',
-                    controller: _name,
-                    icon: Ic.person,
-                    keyboardType: TextInputType.name,
-                    errorText: _errors?[ProfileField.name],
-                  ),
-                  const SizedBox(height: T.s16),
-                  _Field(
-                    label: 'Phone',
-                    controller: _phone,
-                    hint: '0917 000 0000',
-                    icon: Ic.phone,
-                    keyboardType: TextInputType.phone,
-                    errorText: _errors?[ProfileField.phone],
-                  ),
-                  const SizedBox(height: T.s16),
-                  _Field(
-                    label: 'Email',
-                    controller: _email,
-                    icon: Ic.person,
-                    keyboardType: TextInputType.emailAddress,
-                    enabled: false,
-                    caption:
-                        'Your sign-in email. To change it, contact the clinic.',
-                  ),
-                  const SizedBox(height: T.s16),
-                  SoftCard(
-                    child: Row(
-                      children: [
-                        Ic.svg(Ic.info, color: p.textSecondary, size: 17),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Text(
-                            'Your phone number is what the clinic uses for appointment confirmations and reminders.',
-                            style: Type.footnote(p),
                           ),
-                        ),
-                      ],
+                          const SizedBox(height: 14),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              _PhotoTextAction(
+                                label: 'Choose from library',
+                                onTap: _picking ? null : () => _pickPhoto(),
+                              ),
+                              if (store.hasOwnerPhoto) ...[
+                                const SizedBox(width: 14),
+                                _PhotoTextAction(
+                                  label: 'Remove',
+                                  onTap: _picking
+                                      ? null
+                                      : () {
+                                          store.setOwnerPhoto(null);
+                                          successHaptic();
+                                        },
+                                ),
+                              ],
+                            ],
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                ],
+                    const SizedBox(height: T.s24),
+                    _Field(
+                      label: 'Full name',
+                      controller: _name,
+                      icon: Ic.person,
+                      keyboardType: TextInputType.name,
+                      errorText: _errors?[ProfileField.name],
+                      // Rebuild on keystroke so the PopScope dirty guard
+                      // re-reads the controllers.
+                      onChanged: (_) => setState(() {}),
+                    ),
+                    const SizedBox(height: T.s16),
+                    _Field(
+                      label: 'Phone',
+                      controller: _phone,
+                      hint: '0917 000 0000',
+                      icon: Ic.phone,
+                      keyboardType: TextInputType.phone,
+                      errorText: _errors?[ProfileField.phone],
+                      onChanged: (_) => setState(() {}),
+                    ),
+                    const SizedBox(height: T.s16),
+                    _Field(
+                      label: 'Email',
+                      controller: _email,
+                      icon: Ic.person,
+                      keyboardType: TextInputType.emailAddress,
+                      enabled: false,
+                      caption: 'Your sign-in email. To change it, contact the clinic.',
+                    ),
+                    const SizedBox(height: T.s16),
+                    SoftCard(
+                      child: Row(
+                        children: [
+                          Ic.svg(Ic.info, color: p.textSecondary, size: 17),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              'Your phone number is what the clinic uses for appointment confirmations and reminders.',
+                              style: Type.footnote(p),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-            StickyCta(
-              child: PrimaryButton(
-                label: 'Save changes',
-                icon: Ic.check,
-                busy: _saving,
-                onPressed: _saving ? null : _save,
+              StickyCta(
+                child: PrimaryButton(
+                  label: 'Save changes',
+                  icon: Ic.check,
+                  busy: _saving,
+                  onPressed: _saving ? null : _save,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -913,6 +942,7 @@ class _Field extends StatelessWidget {
     this.keyboardType,
     this.enabled = true,
     this.errorText,
+    this.onChanged,
   });
   final String label;
   final TextEditingController controller;
@@ -924,6 +954,10 @@ class _Field extends StatelessWidget {
 
   /// Concise message rendered under the field, with a red border.
   final String? errorText;
+
+  /// Notifies the parent on every keystroke (e.g. so dirty guards re-read
+  /// the controller on the next build).
+  final ValueChanged<String>? onChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -943,6 +977,7 @@ class _Field extends StatelessWidget {
           controller: controller,
           enabled: enabled,
           keyboardType: keyboardType,
+          onChanged: onChanged,
           autocorrect: false,
           enableSuggestions: false,
           style: Type.body(p),

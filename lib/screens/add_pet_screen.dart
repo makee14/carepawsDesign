@@ -60,6 +60,31 @@ class _AddPetScreenState extends State<AddPetScreen> {
 
   bool get _valid => _name.text.trim().isNotEmpty;
 
+  /// Anything the user typed or picked that would be lost on exit. Breed
+  /// pills and the species cards always hold a value (they start on a
+  /// default), so only free text, a changed sex, or a picked birthdate count.
+  bool get _isDirty =>
+      _name.text.trim().isNotEmpty ||
+      _customBreed.text.trim().isNotEmpty ||
+      _sex != 'Male' ||
+      _weight.text.trim().isNotEmpty ||
+      _notes.text.trim().isNotEmpty ||
+      _allergy.text.trim().isNotEmpty ||
+      _birthDate != null;
+
+  /// Nav-bar back / Cancel / system back at step 0: leave only when the form
+  /// is clean or the user confirms the discard.
+  Future<void> _exit() async {
+    if (await confirmDiscardIfDirty(
+      context,
+      isDirty: _isDirty,
+      title: 'Discard this pet?',
+      message: 'The details you entered will be lost.',
+    )) {
+      if (mounted) dismissSheet(context);
+    }
+  }
+
   String get _breedValue {
     if (_customBreedMode) return _customBreed.text.trim();
     return _breed.text.trim();
@@ -165,252 +190,276 @@ class _AddPetScreenState extends State<AddPetScreen> {
     final p = context.p;
     final breeds = _species == Species.dog ? dogBreeds : catBreeds;
 
-    return CupertinoPageScaffold(
-      backgroundColor: p.background,
-      navigationBar: DetailNavBar(
-        title: _step == 0 ? 'Add pet' : 'Almost done',
-        // Step 1 back goes to step 0, not out of the flow — popping here
-        // would discard the whole form.
-        onBack: _step == 1 ? () => setState(() => _step = 0) : null,
-      ),
-      child: SafeArea(
-        child: Column(
-          children: [
-            Expanded(
-              child: ListView(
-                padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
-                children: [
-                  if (_step == 0) ...[
-                    Center(
-                      child: PetArt(
-                        seed: _species == Species.dog ? 1 : 0,
-                        radius: 60,
-                        iconSize: 84,
-                        label: 'Illustration of the pet you are adding',
+    // Android system back: step 1 → step 0 (not out of the flow); step 0 →
+    // the discard confirm when dirty. A direct dismissSheet pop bypasses
+    // PopScope, so the confirmed exit needs no flag dance.
+    return PopScope(
+      canPop: !_isDirty,
+      onPopInvokedWithResult: (didPop, _) async {
+        if (didPop) return;
+        if (_step > 0) {
+          setState(() => _step = 0);
+          return;
+        }
+        if (await confirmDiscardIfDirty(
+          context,
+          isDirty: true,
+          title: 'Discard this pet?',
+          message: 'The details you entered will be lost.',
+        )) {
+          if (context.mounted) dismissSheet(context);
+        }
+      },
+      child: CupertinoPageScaffold(
+        backgroundColor: p.background,
+        navigationBar: DetailNavBar(
+          title: _step == 0 ? 'Add pet' : 'Almost done',
+          // Step 1 back goes to step 0, not out of the flow — popping here
+          // would discard the whole form.
+          onBack: _step == 1 ? () => setState(() => _step = 0) : () => _exit(),
+        ),
+        child: SafeArea(
+          child: Column(
+            children: [
+              Expanded(
+                child: ListView(
+                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
+                  children: [
+                    if (_step == 0) ...[
+                      Center(
+                        child: PetArt(
+                          seed: _species == Species.dog ? 1 : 0,
+                          radius: 60,
+                          iconSize: 84,
+                          label: 'Illustration of the pet you are adding',
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: T.s24),
-                    Text('Pet type', style: Type.headline(p)),
-                    const SizedBox(height: 10),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _SpeciesCard(
-                            label: 'Dog',
-                            icon: Ic.dog,
-                            selected: _species == Species.dog,
-                            onTap: () => _pickSpecies(Species.dog),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: _SpeciesCard(
-                            label: 'Cat',
-                            icon: Ic.cat,
-                            selected: _species == Species.cat,
-                            onTap: () => _pickSpecies(Species.cat),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: T.s20),
-                    _LabeledField(
-                      label: 'Name',
-                      controller: _name,
-                      hint: 'e.g. Pepper',
-                      onChanged: () => setState(() {}),
-                    ),
-                    const SizedBox(height: T.s16),
-                    Text('Breed', style: Type.headline(p)),
-                    const SizedBox(height: 10),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        for (final b in breeds)
-                          FilterPill(
-                            label: b,
-                            selected: !_customBreedMode && _breed.text == b,
-                            onTap: () => setState(() {
-                              _customBreedMode = false;
-                              _breed.text = b;
-                            }),
-                          ),
-                        FilterPill(
-                          label: 'Other…',
-                          selected: _customBreedMode,
-                          onTap: () => setState(() => _customBreedMode = true),
-                        ),
-                      ],
-                    ),
-                    if (_customBreedMode) ...[
+                      const SizedBox(height: T.s24),
+                      Text('Pet type', style: Type.headline(p)),
                       const SizedBox(height: 10),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _SpeciesCard(
+                              label: 'Dog',
+                              icon: Ic.dog,
+                              selected: _species == Species.dog,
+                              onTap: () => _pickSpecies(Species.dog),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: _SpeciesCard(
+                              label: 'Cat',
+                              icon: Ic.cat,
+                              selected: _species == Species.cat,
+                              onTap: () => _pickSpecies(Species.cat),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: T.s20),
                       _LabeledField(
-                        label: 'Type the breed',
-                        controller: _customBreed,
-                        hint: _species == Species.dog
-                            ? 'e.g. Aspin'
-                            : 'e.g. Puspin',
+                        label: 'Name',
+                        controller: _name,
+                        hint: 'e.g. Pepper',
                         onChanged: () => setState(() {}),
                       ),
-                    ],
-                    const SizedBox(height: T.s20),
-                    Text('Sex', style: Type.headline(p)),
-                    const SizedBox(height: 10),
-                    Row(
-                      children: [
-                        for (final s in ['Male', 'Female']) ...[
-                          FilterPill(
-                            label: s,
-                            selected: _sex == s,
-                            onTap: () => setState(() => _sex = s),
-                          ),
-                          const SizedBox(width: 8),
-                        ],
-                      ],
-                    ),
-                  ] else ...[
-                    Ic.svg(Ic.paw, color: p.accent, size: 40, stroke: 1.8),
-                    const SizedBox(height: T.s12),
-                    Text(
-                      'One more detail',
-                      style: Type.title1(p),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Weight lets the clinic dose correctly. Everything else can be filled in at the visit.',
-                      style: Type.body(p).copyWith(color: p.textSecondary),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: T.s24),
-                    _LabeledField(
-                      label: 'Weight (kg)',
-                      controller: _weight,
-                      hint: _species == Species.dog ? 'e.g. 12.5' : 'e.g. 4.2',
-                      keyboard: const TextInputType.numberWithOptions(
-                        decimal: true,
-                      ),
-                      onChanged: () => setState(() {}),
-                    ),
-                    if (_weightError != null) ...[
-                      const SizedBox(height: 6),
-                      Text(
-                        _weightError!,
-                        style: Type.footnote(p).copyWith(color: p.destructive),
-                      ),
-                    ],
-                    const SizedBox(height: T.s16),
-                    Text('Birthdate', style: Type.headline(p)),
-                    const SizedBox(height: 10),
-                    PressScale(
-                      onTap: () async {
-                        final now = DateTime.now();
-                        final picked = await showDatePickerSheet(
-                          context,
-                          initial:
-                              _birthDate ??
-                              DateTime(now.year - 2, now.month, now.day),
-                          minimum: DateTime(now.year - 30),
-                          maximum: now,
-                        );
-                        if (picked != null) setState(() => _birthDate = picked);
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(
-                          color: p.surface,
-                          borderRadius: BorderRadius.circular(T.rCard),
-                          border: Border.all(color: p.divider),
-                        ),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                _birthDate == null
-                                    ? 'About 2 years old (tap to change)'
-                                    : '${_birthDate!.month}/${_birthDate!.day}/${_birthDate!.year} · ${_ageLabel(_birthDate!)}',
-                                style: Type.body(p),
-                              ),
+                      const SizedBox(height: T.s16),
+                      Text('Breed', style: Type.headline(p)),
+                      const SizedBox(height: 10),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          for (final b in breeds)
+                            FilterPill(
+                              label: b,
+                              selected: !_customBreedMode && _breed.text == b,
+                              onTap: () => setState(() {
+                                _customBreedMode = false;
+                                _breed.text = b;
+                              }),
                             ),
-                            Ic.svg(
-                              Ic.calendar,
-                              color: p.textSecondary,
-                              size: 18,
+                          FilterPill(
+                            label: 'Other…',
+                            selected: _customBreedMode,
+                            onTap: () =>
+                                setState(() => _customBreedMode = true),
+                          ),
+                        ],
+                      ),
+                      if (_customBreedMode) ...[
+                        const SizedBox(height: 10),
+                        _LabeledField(
+                          label: 'Type the breed',
+                          controller: _customBreed,
+                          hint: _species == Species.dog
+                              ? 'e.g. Aspin'
+                              : 'e.g. Puspin',
+                          onChanged: () => setState(() {}),
+                        ),
+                      ],
+                      const SizedBox(height: T.s20),
+                      Text('Sex', style: Type.headline(p)),
+                      const SizedBox(height: 10),
+                      Row(
+                        children: [
+                          for (final s in ['Male', 'Female']) ...[
+                            FilterPill(
+                              label: s,
+                              selected: _sex == s,
+                              onTap: () => setState(() => _sex = s),
+                            ),
+                            const SizedBox(width: 8),
+                          ],
+                        ],
+                      ),
+                    ] else ...[
+                      Ic.svg(Ic.paw, color: p.accent, size: 40, stroke: 1.8),
+                      const SizedBox(height: T.s12),
+                      Text(
+                        'One more detail',
+                        style: Type.title1(p),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Weight lets the clinic dose correctly. Everything else can be filled in at the visit.',
+                        style: Type.body(p).copyWith(color: p.textSecondary),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: T.s24),
+                      _LabeledField(
+                        label: 'Weight (kg)',
+                        controller: _weight,
+                        hint: _species == Species.dog
+                            ? 'e.g. 12.5'
+                            : 'e.g. 4.2',
+                        keyboard: const TextInputType.numberWithOptions(
+                          decimal: true,
+                        ),
+                        onChanged: () => setState(() {}),
+                      ),
+                      if (_weightError != null) ...[
+                        const SizedBox(height: 6),
+                        Text(
+                          _weightError!,
+                          style: Type.footnote(p)
+                              .copyWith(color: p.destructive),
+                        ),
+                      ],
+                      const SizedBox(height: T.s16),
+                      Text('Birthdate', style: Type.headline(p)),
+                      const SizedBox(height: 10),
+                      PressScale(
+                        onTap: () async {
+                          final now = DateTime.now();
+                          final picked = await showDatePickerSheet(
+                            context,
+                            initial:
+                                _birthDate ??
+                                DateTime(now.year - 2, now.month, now.day),
+                            minimum: DateTime(now.year - 30),
+                            maximum: now,
+                          );
+                          if (picked != null) {
+                            setState(() => _birthDate = picked);
+                          }
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: p.surface,
+                            borderRadius: BorderRadius.circular(T.rCard),
+                            border: Border.all(color: p.divider),
+                          ),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  _birthDate == null
+                                      ? 'About 2 years old (tap to change)'
+                                      : '${_birthDate!.month}/${_birthDate!.day}/${_birthDate!.year} · ${_ageLabel(_birthDate!)}',
+                                  style: Type.body(p),
+                                ),
+                              ),
+                              Ic.svg(
+                                Ic.calendar,
+                                color: p.textSecondary,
+                                size: 18,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: T.s16),
+                      _LabeledField(
+                        label: 'Allergies (optional)',
+                        controller: _allergy,
+                        hint: 'e.g. Chicken, Grass',
+                      ),
+                      const SizedBox(height: T.s16),
+                      _LabeledField(
+                        label: 'Notes for the vet (optional)',
+                        controller: _notes,
+                        hint: 'Anything we should know',
+                      ),
+                      const SizedBox(height: T.s16),
+                      SoftCard(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Summary', style: Type.headline(p)),
+                            const SizedBox(height: 8),
+                            AmountRow(
+                              label: 'Name',
+                              value: _name.text.trim().isEmpty
+                                  ? '—'
+                                  : _name.text.trim(),
+                            ),
+                            AmountRow(
+                              label: 'Type',
+                              value: _species == Species.dog ? 'Dog' : 'Cat',
+                            ),
+                            AmountRow(
+                              label: 'Breed',
+                              value: _breedValue.isEmpty ? '—' : _breedValue,
+                            ),
+                            AmountRow(label: 'Sex', value: _sex),
+                            AmountRow(
+                              label: 'Weight',
+                              value: _weight.text.trim().isEmpty
+                                  ? 'Add at the visit'
+                                  : '${_weight.text.trim()} kg',
                             ),
                           ],
                         ),
                       ),
-                    ),
-                    const SizedBox(height: T.s16),
-                    _LabeledField(
-                      label: 'Allergies (optional)',
-                      controller: _allergy,
-                      hint: 'e.g. Chicken, Grass',
-                    ),
-                    const SizedBox(height: T.s16),
-                    _LabeledField(
-                      label: 'Notes for the vet (optional)',
-                      controller: _notes,
-                      hint: 'Anything we should know',
-                    ),
-                    const SizedBox(height: T.s16),
-                    SoftCard(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('Summary', style: Type.headline(p)),
-                          const SizedBox(height: 8),
-                          AmountRow(
-                            label: 'Name',
-                            value: _name.text.trim().isEmpty
-                                ? '—'
-                                : _name.text.trim(),
-                          ),
-                          AmountRow(
-                            label: 'Type',
-                            value: _species == Species.dog ? 'Dog' : 'Cat',
-                          ),
-                          AmountRow(
-                            label: 'Breed',
-                            value: _breedValue.isEmpty ? '—' : _breedValue,
-                          ),
-                          AmountRow(label: 'Sex', value: _sex),
-                          AmountRow(
-                            label: 'Weight',
-                            value: _weight.text.trim().isEmpty
-                                ? 'Add at the visit'
-                                : '${_weight.text.trim()} kg',
-                          ),
-                        ],
-                      ),
-                    ),
+                    ],
                   ],
-                ],
+                ),
               ),
-            ),
-            StickyCta(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  PrimaryButton(
-                    label: _step == 0
-                        ? 'Continue'
-                        : 'Add ${_name.text.trim().isEmpty ? 'pet' : _name.text.trim()}',
-                    icon: _step == 0 ? Ic.arrowRight : Ic.check,
-                    onPressed: _step == 0
-                        ? (_valid ? () => setState(() => _step = 1) : null)
-                        : _save,
-                  ),
-                  const SizedBox(height: 8),
-                  SecondaryButton(
-                    label: 'Cancel',
-                    onPressed: () => dismissSheet(context),
-                  ),
-                ],
+              StickyCta(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    PrimaryButton(
+                      label: _step == 0
+                          ? 'Continue'
+                          : 'Add ${_name.text.trim().isEmpty ? 'pet' : _name.text.trim()}',
+                      icon: _step == 0 ? Ic.arrowRight : Ic.check,
+                      onPressed: _step == 0
+                          ? (_valid ? () => setState(() => _step = 1) : null)
+                          : _save,
+                    ),
+                    const SizedBox(height: 8),
+                    SecondaryButton(label: 'Cancel', onPressed: () => _exit()),
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
