@@ -179,10 +179,14 @@ class _PromoCard extends StatelessWidget {
             bottom: 12,
             child: LayoutBuilder(
               builder: (context, c) {
-                // The pill's intrinsic width at large Dynamic Type would push
+                // At large Dynamic Type the pill's intrinsic width would push
                 // the Row past the card edge — cap it so the text column
-                // always keeps the majority of the width.
-                final maxPillW = c.maxWidth * 0.42;
+                // always keeps the majority of the width. At normal sizes the
+                // pill hugs its content on one line.
+                final scale = MediaQuery.textScalerOf(context).scale(1);
+                final maxPillW = scale > 1.3
+                    ? c.maxWidth * 0.42
+                    : double.infinity;
                 return Row(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
