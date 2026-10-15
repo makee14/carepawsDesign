@@ -12,6 +12,7 @@ import 'package:carepaws/data/seed.dart';
 import 'package:carepaws/design/theme.dart';
 import 'package:carepaws/screens/add_pet_screen.dart';
 import 'package:carepaws/screens/appointments/book_flow.dart';
+import 'package:carepaws/screens/login_screen.dart';
 import 'package:carepaws/screens/pets/pet_profile_screen.dart';
 import 'package:carepaws/screens/profile/settings_screens.dart';
 import 'package:carepaws/screens/triage_screen.dart';
@@ -1381,12 +1382,11 @@ void main() {
         expect(find.text('Delete'), findsOneWidget);
 
         await tester.tap(find.text('Delete'));
-        // Real deletion now lands on the splash (ambient animation loops, so
-        // pumpAndSettle would time out — pump fixed frames instead).
-        await tester.pump();
-        await tester.pump(const Duration(seconds: 1));
-        await tester.pump(const Duration(seconds: 1));
-        expect(find.text('Get started'), findsOneWidget);
+        // Real deletion signs out and lands on the splash; the morph plays,
+        // then routes to login (first launch already completed).
+        store.completeFirstLaunch();
+        await tester.pumpAndSettle();
+        expect(find.byType(LoginScreen), findsOneWidget);
         expect(store.petCount, 0);
       },
     );

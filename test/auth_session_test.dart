@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:carepaws/app.dart';
 import 'package:carepaws/design/theme.dart';
 import 'package:carepaws/screens/login_screen.dart';
+import 'package:carepaws/screens/onboarding_screen.dart';
 import 'package:carepaws/services/ai_service.dart';
 import 'package:carepaws/services/auth_store.dart';
 import 'package:carepaws/services/settings_store.dart';
@@ -236,10 +237,9 @@ void main() {
           ),
         ),
       );
-      // Bounded pumps, not pumpAndSettle: the signed-in splash keeps its
-      // (now unreachable) CTA in the busy state, whose activity indicator
-      // never settles. In production the route is removed by
-      // pushAndRemoveUntil the moment onDone fires.
+      // Bounded pumps, not pumpAndSettle: the morph is a finite 600ms
+      // timeline (reduced motion is on), and onDone fires the moment it
+      // completes — the splash is already off the stack by then.
       for (var i = 0; i < 50 && !advanced; i++) {
         await tester.pump(const Duration(milliseconds: 100));
       }
@@ -250,7 +250,9 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('no session still shows the Get started CTA', (tester) async {
+    testWidgets('no session routes to onboarding, not the shell', (
+      tester,
+    ) async {
       SharedPreferences.setMockInitialValues({});
       final store = _store();
       await store.loadSettings();
@@ -269,8 +271,10 @@ void main() {
       );
       await tester.pumpAndSettle();
 
+      // First launch: the morph hands off to the tour, never the shell.
       expect(advanced, isFalse);
-      expect(find.text('Get started'), findsOneWidget);
+      expect(find.byType(OnboardingScreen), findsOneWidget);
+      expect(find.byType(SplashScreen), findsNothing);
       expect(tester.takeException(), isNull);
     });
   });

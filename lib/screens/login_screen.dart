@@ -18,10 +18,19 @@ import 'profile/privacy_screen.dart';
 /// inline message and the form stays put — there is no way past this screen
 /// without the right pair.
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key, required this.onSignedIn});
+  const LoginScreen({
+    super.key,
+    required this.onSignedIn,
+    this.initialRegister = false,
+  });
 
-  /// Called once the credentials are accepted.
+  /// Called once the credentials have been accepted.
   final VoidCallback onSignedIn;
+
+  /// Opens the screen in create-account mode. The first-launch flow
+  /// (splash → onboarding → register) uses this; the toggle still lets
+  /// the user switch to sign-in instead.
+  final bool initialRegister;
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -33,7 +42,13 @@ class _LoginScreenState extends State<LoginScreen> {
   final _password = TextEditingController();
   final _passwordFocus = FocusNode();
   bool _hidden = true;
-  bool _registerMode = false;
+  late bool _registerMode;
+
+  @override
+  void initState() {
+    super.initState();
+    _registerMode = widget.initialRegister;
+  }
 
   /// Whether the user ticked the Terms/Privacy consent box. Required before
   /// an account can be created.

@@ -4,7 +4,6 @@ import 'dart:math' as math;
 import 'package:flutter/cupertino.dart';
 
 import 'data/models.dart';
-import 'data/seed.dart';
 import 'data/clinic.dart';
 import 'design/icons.dart';
 import 'design/motion.dart';
@@ -19,9 +18,12 @@ import 'screens/profile_screen.dart';
 import 'screens/shops_screen.dart';
 import 'state/app_store.dart';
 import 'widgets/common.dart';
-import 'widgets/splash_ambient.dart';
+import 'widgets/splash_morph.dart';
 
-/// Splash + auth. The CarePaws logo mark appears here (and only here).
+/// Splash + launch routing. The ~2s logo morph plays on every launch, then
+/// the app routes: first launch → onboarding → register → Home (the completed
+/// flag is written once Home is reached, so the flow never repeats); later
+/// launches → the main app directly (signed-in fast path, signed-out → login).
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key, this.onDone});
 
@@ -33,210 +35,139 @@ class SplashScreen extends StatefulWidget {
 
 class _SplashScreenState extends State<SplashScreen>
     with SingleTickerProviderStateMixin {
-  bool _ready = false;
+  /// One controller for the whole morph; its completion drives routing.
+  /// Zero timers — pumpAndSettle-safe and teardown-clean.
+  late final AnimationController _morph = AnimationController(vsync: this);
 
-  /// Looping logo animation: the mark itself rocks gently and breathes on a
-  /// continuous 2.6s loop. Reduced motion parks everything at rest.
-  late final AnimationController _loop = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 2600),
-  );
+  bool _started = false;
 
   @override
   void initState() {
     super.initState();
-    _boot();
+    _morph.addStatusListener(_onMorphStatus);
+    _bootstrap();
+  }
+
+  /// Pre-warms the AI + photos while the morph plays; never blocks routing.
+  Future<void> _bootstrap() async {
+    final store = AppScope.read(context);
+    await store.ai.bootstrap();
+    unawaited(store.loadPhotos());
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // MediaQuery (used by reduceMotionOf) is only safe to read here, not in
-    // initState. Guards the repeat so later dependency changes do not
-    // restart the loop.
-    if (!_loop.isAnimating && !reduceMotionOf(context)) _loop.repeat();
+    // MediaQuery is only safe to read here. Reduced motion shortens the
+    // timeline to a 600ms static hold of the final emblem.
+    if (_started) return;
+    _started = true;
+    final reduced = reduceMotionOf(context);
+    _morph.duration = Duration(milliseconds: reduced ? 600 : 2000);
+    _morph.forward();
   }
 
-  Future<void> _boot() async {
-    final store = AppScope.read(context);
-    await store.ai.bootstrap();
-    // Portraits are rehydrated after the AI probe so a slow disk read never
-    // holds up the first frame.
-    unawaited(store.loadPhotos());
+  void _onMorphStatus(AnimationStatus status) {
+    if (status == AnimationStatus.completed) _route();
+  }
+
+  /// Launch routing. The splash leaves the stack so Back from
+  /// onboarding/login exits instead of landing on a dead, non-interactive
+  /// splash.
+  void _route() {
     if (!mounted) return;
-    // A restored session skips onboarding/login entirely: the splash is the
-    // launch screen, then straight into the tab shell.
-    if (store.signedIn) {
-      final done = widget.onDone;
+    final done = widget.onDone;
+    final store = AppScope.read(context);
+    final navigator = Navigator.of(context);
+
+    void goHome() {
+      store.completeFirstLaunch();
       if (done != null) {
         done();
       } else {
         unawaited(
-          Navigator.of(context)
-              .pushAndRemoveUntil(appRoute(const RootShell()), (_) => false),
+          navigator.pushAndRemoveUntil(
+            appRoute(const RootShell()),
+            (_) => false,
+          ),
         );
       }
+    }
+
+    // A restored session skips everything: the splash is the launch screen,
+    // then straight into the tab shell.
+    if (store.signedIn) {
+      goHome();
       return;
     }
-    // Deliberately does NOT advance on its own any more. The previous version
-    // pushed the app after 420ms, which made the "Get started" button
-    // impossible to actually press.
-    setState(() => _ready = true);
-  }
-
-  @override
-  void dispose() {
-    _loop.dispose();
-    super.dispose();
-  }
-
-  /// Splash → onboarding (first launch) → sign-in. The app itself is only
-  /// reachable once the credentials have been accepted. Post-login the whole
-  /// auth stack is removed, so Back can never land on splash/onboarding/login.
-  Future<void> _goToLogin() async {
-    final done = widget.onDone;
-    final navigator = Navigator.of(context);
-    final store = AppScope.read(context);
-    if (!store.onboardingSeen) {
-      await navigator.push<void>(
-        appRoute(
-          OnboardingScreen(
-            onDone: () {
-              // Onboarding marks itself seen; continue to sign-in on the
-              // same stack so Back returns to the last onboarding page
-              // rather than the splash.
-              navigator.push<void>(
-                appRoute(
-                  LoginScreen(
-                    onSignedIn: () {
-                      if (done != null) {
-                        done();
-                      } else {
-                        navigator.pushAndRemoveUntil(
-                          appRoute(const RootShell()),
-                          (_) => false,
-                        );
-                      }
-                    },
+    if (!store.onboardingCompleted) {
+      // FIRST launch only: splash → onboarding → register → Home.
+      // Onboarding stays under register so Back re-reads the tour.
+      unawaited(
+        navigator.pushAndRemoveUntil(
+          appRoute(
+            OnboardingScreen(
+              onDone: () {
+                navigator.push<void>(
+                  appRoute(
+                    LoginScreen(initialRegister: true, onSignedIn: goHome),
                   ),
-                ),
-              );
-            },
+                );
+              },
+            ),
           ),
+          (_) => false,
         ),
       );
       return;
     }
-    await navigator.push<void>(
-      appRoute(
-        LoginScreen(
-          onSignedIn: () {
-            if (done != null) {
-              done();
-            } else {
-              navigator.pushAndRemoveUntil(
-                appRoute(const RootShell()),
-                (_) => false,
-              );
-            }
-          },
+    // Returning launch, signed out: splash → login.
+    unawaited(
+      navigator.pushAndRemoveUntil(
+        appRoute(
+          LoginScreen(
+            onSignedIn: () {
+              if (done != null) {
+                done();
+              } else {
+                navigator.pushAndRemoveUntil(
+                  appRoute(const RootShell()),
+                  (_) => false,
+                );
+              }
+            },
+          ),
         ),
+        (_) => false,
       ),
     );
   }
 
   @override
+  void dispose() {
+    _morph.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final p = context.p;
+    final reduced = reduceMotionOf(context);
     return CupertinoPageScaffold(
       backgroundColor: p.background,
-      child: Stack(
-        children: [
-          // Splash v2 ambient scene: the living backdrop. The badge itself is
-          // the animated subject; the aurora stays dim, drifts slowly, and
-          // keeps clear of the bottom CTA zone.
-          const Positioned.fill(child: SplashAmbient()),
-          SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(T.s24, T.s16, T.s24, T.s16),
-              child: Column(
-                children: [
-                  // The hero's optical centre sits just above true centre:
-                  // more air below it than above, so the CTA block reads as
-                  // anchored rather than the top reading as a dead zone.
-                  const Spacer(flex: 4),
-                  // The badge is the animated subject: cinematic settle
-                  // entrance, the approved rock + breathe loop, a slow sheen
-                  // sweep and soft motes emitted from the mark. The wordmark
-                  // and tagline keep their staggered fade + rise exactly as
-                  // before.
-                  Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      BadgeHero(
-                        loop: _loop,
-                        size: 152,
-                        child: const LogoMark(size: 152),
-                      ),
-                      const SizedBox(height: T.s20),
-                      FadeIn(
-                        index: 1,
-                        rise: 12,
-                        duration: Motion.slow,
-                        child: FittedBox(
-                          fit: BoxFit.scaleDown,
-                          child: Text(
-                            'CAREPAWS',
-                            textAlign: TextAlign.center,
-                            style: Type.largeTitle(p).copyWith(
-                              letterSpacing: 5,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      FadeIn(
-                        index: 2,
-                        rise: 12,
-                        duration: Motion.slow,
-                        child: FittedBox(
-                          fit: BoxFit.scaleDown,
-                          child: Text(
-                            'Veterinary Clinic',
-                            textAlign: TextAlign.center,
-                            style: Type.footnote(p).copyWith(
-                              fontSize: 15,
-                              letterSpacing: 1.6,
-                              color: p.accentText,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const Spacer(flex: 6),
-                  // Full-width CTA: a proper 54pt call to action, not a stub.
-                  FadeIn(
-                    index: 3,
-                    child: PrimaryButton(
-                      label: 'Get started',
-                      icon: Ic.arrowRight,
-                      onPressed: _ready ? _goToLogin : null,
-                      busy: !_ready,
-                    ),
-                  ),
-                  const SizedBox(height: T.s12),
-                  Text(
-                    Seed.appVersion,
-                    textAlign: TextAlign.center,
-                    style: Type.caption(p),
-                  ),
-                ],
-              ),
+      child: SafeArea(
+        // 160pt emblem, centered. No text on the splash — nothing to clip
+        // at AX5 or in landscape.
+        child: Center(
+          child: ExcludeSemantics(
+            child: SizedBox.square(
+              dimension: 160,
+              child: reduced
+                  ? const LogoMark(size: 160)
+                  : SplashMorph(progress: _morph, size: 160),
             ),
           ),
-        ],
+        ),
       ),
     );
   }

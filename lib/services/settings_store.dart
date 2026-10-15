@@ -14,6 +14,7 @@ class SettingsStore {
   static const _kReduceMotion = 'carepaws.settings.reduceMotion';
   static const _kLanguage = 'carepaws.settings.language';
   static const _kOnboarded = 'carepaws.settings.onboarded';
+  static const _kOnboardingCompleted = 'carepaws.onboarding.completed';
   static const _kSessionEmail = 'carepaws.settings.sessionEmail';
 
   /// SharedPreferences throws in unit tests and on desktop without the plugin.
@@ -61,14 +62,25 @@ class SettingsStore {
 
   /// HIG ▸ Onboarding: the flow is shown once. Skipping counts as having seen
   /// it, so it is recorded exactly the same way as finishing it.
+  ///
+  /// LEGACY — kept only for the one-time migration in [readOnboardingCompleted].
+  /// New code must use [readOnboardingCompleted]/[writeOnboardingCompleted].
   static Future<bool> readOnboarded() async {
     final p = await _prefs();
     return p?.getBool(_kOnboarded) ?? false;
   }
 
-  static Future<void> writeOnboarded(bool value) async {
+  /// Whether the first-launch flow (splash → onboarding → register → Home)
+  /// has completed. Null when never set. The single source of truth for
+  /// launch routing; a completed flow never repeats.
+  static Future<bool?> readOnboardingCompleted() async {
     final p = await _prefs();
-    await p?.setBool(_kOnboarded, value);
+    return p?.getBool(_kOnboardingCompleted);
+  }
+
+  static Future<void> writeOnboardingCompleted(bool value) async {
+    final p = await _prefs();
+    await p?.setBool(_kOnboardingCompleted, value);
   }
 
   /// Email of the last successfully signed-in account, so the session

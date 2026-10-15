@@ -4,37 +4,69 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:carepaws/app.dart';
 import 'package:carepaws/design/icons.dart';
 
-/// Guards the Variant-A logo swap (2026-10-14): the in-app mark is the
-/// badge alone — no tile, no wordmark, no leftover embrace-paw paths.
+/// Guards the Variant-A logo (mark v5, refined): the in-app mark is the
+/// badge alone — no tile, no wordmark. The four animation groups keep stable
+/// IDs so the splash morph can address them, and every color is a stamped
+/// named token (tool/sync_icons_dart.py owns the mapping).
 void main() {
-  group('CarePaws mark v4 artwork', () {
-    test('badgeArtwork is the badge alone', () {
-      expect(Ic.badgeArtwork, contains('clipPath'));
+  group('CarePaws mark v5 artwork', () {
+    test('badgeArtwork is the badge alone, with the four group IDs', () {
+      expect(Ic.badgeArtwork, contains('id="cp-circle"'));
+      expect(Ic.badgeArtwork, contains('id="cp-dog"'));
+      expect(Ic.badgeArtwork, contains('id="cp-cat"'));
+      expect(Ic.badgeArtwork, contains('id="cp-heart"'));
       expect(Ic.badgeArtwork, contains('#E4843E'));
       expect(Ic.badgeArtwork, contains('#FEFBF4'));
-      expect(Ic.badgeArtwork, isNot(contains('linearGradient')));
       expect(Ic.badgeArtwork, isNot(contains('<rect')));
+      expect(Ic.badgeArtwork, isNot(contains('linearGradient')));
+      expect(Ic.badgeArtwork, isNot(contains('var(')));
     });
 
     test('launcherArtwork is the cream tile + badge', () {
       expect(Ic.launcherArtwork, contains('<rect'));
       expect(Ic.launcherArtwork, contains('#FEFBF4'));
-      expect(Ic.launcherArtwork, contains('clipPath'));
+      expect(Ic.launcherArtwork, contains('id="cp-badge"'));
+      expect(Ic.launcherArtwork, isNot(contains('var(')));
     });
 
     test('launcherForegroundArtwork is transparent (no tile rect)', () {
       expect(Ic.launcherForegroundArtwork, isNot(contains('<rect')));
-      expect(Ic.launcherForegroundArtwork, contains('clipPath'));
+      expect(Ic.launcherForegroundArtwork, contains('id="cp-badge"'));
     });
 
-    test('no embrace-paw artwork remains', () {
+    test('badgeNoCircleArtwork has silhouettes only, heart merged', () {
+      expect(Ic.badgeNoCircleArtwork, contains('id="cp-dog"'));
+      expect(Ic.badgeNoCircleArtwork, contains('id="cp-cat"'));
+      expect(Ic.badgeNoCircleArtwork, contains('id="cp-heart"'));
+      expect(Ic.badgeNoCircleArtwork, contains('mask'));
+      expect(Ic.badgeNoCircleArtwork, isNot(contains('id="cp-circle"')));
+    });
+
+    test('splash layers compose the badge and carry the same groups', () {
+      expect(Ic.splashLayerCircle, contains('id="cp-circle"'));
+      expect(Ic.splashLayerDog, contains('id="cp-dog"'));
+      expect(Ic.splashLayerCat, contains('id="cp-cat"'));
+      expect(Ic.splashLayerHeart, contains('id="cp-heart"'));
+      for (final layer in [
+        Ic.splashLayerCircle,
+        Ic.splashLayerDog,
+        Ic.splashLayerCat,
+        Ic.splashLayerHeart,
+      ]) {
+        expect(layer, contains('viewBox="0 0 1024 1024"'));
+        expect(layer, isNot(contains('var(')));
+      }
+    });
+
+    test('no vtracer-era artwork remains', () {
       for (final art in [
         Ic.badgeArtwork,
         Ic.launcherArtwork,
         Ic.launcherForegroundArtwork,
+        Ic.badgeNoCircleArtwork,
       ]) {
+        expect(art, isNot(contains('clipPath')));
         expect(art, isNot(contains('embrace')));
-        expect(art, isNot(contains('M32 62 L41 70')));
       }
     });
   });

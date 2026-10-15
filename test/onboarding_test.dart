@@ -8,7 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 /// Onboarding flow tests.
 ///
-/// `completeOnboarding()` writes to SharedPreferences, whose async getter
+/// `completeFirstLaunch()` writes to SharedPreferences, whose async getter
 /// never resolves under the fake test clock — mock values are mandatory.
 Future<void> pumpOnboarding(
   WidgetTester t, {
@@ -47,24 +47,27 @@ Future<void> pumpIllustration(
 }
 
 void main() {
-  testWidgets('completing the tour calls onDone and marks onboarding seen', (
-    t,
-  ) async {
-    var done = false;
-    final store = AppStore();
-    await pumpOnboarding(t, store: store, onDone: () => done = true);
+  testWidgets(
+    'completing the tour calls onDone (flag is set at Home, not here)',
+    (t) async {
+      var done = false;
+      final store = AppStore();
+      await pumpOnboarding(t, store: store, onDone: () => done = true);
 
-    for (var i = 0; i < 4; i++) {
-      await t.tap(find.text('Continue'));
+      for (var i = 0; i < 4; i++) {
+        await t.tap(find.text('Continue'));
+        await t.pumpAndSettle();
+      }
+      expect(find.text('Get started'), findsOneWidget);
+      await t.tap(find.text('Get started'));
       await t.pumpAndSettle();
-    }
-    expect(find.text('Get started'), findsOneWidget);
-    await t.tap(find.text('Get started'));
-    await t.pumpAndSettle();
 
-    expect(done, isTrue);
-    expect(store.onboardingSeen, isTrue);
-  });
+      expect(done, isTrue);
+      // Finishing the tour does not complete the first-launch flow —
+      // registration is still pending, so the flag stays unset.
+      expect(store.onboardingCompleted, isFalse);
+    },
+  );
 
   testWidgets('Skip ends the tour immediately', (t) async {
     var done = false;
@@ -75,7 +78,7 @@ void main() {
     await t.pumpAndSettle();
 
     expect(done, isTrue);
-    expect(store.onboardingSeen, isTrue);
+    expect(store.onboardingCompleted, isFalse);
   });
 
   testWidgets('swiping re-triggers the entering page entrance', (t) async {
