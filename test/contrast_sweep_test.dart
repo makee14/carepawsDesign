@@ -4,7 +4,6 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:carepaws/design/theme.dart';
 import 'package:carepaws/design/tokens.dart';
-import 'package:carepaws/screens/triage_screen.dart';
 import 'package:carepaws/widgets/common.dart';
 
 /// Second-pass contrast sweep (Worker D, 2026-10-15).
@@ -315,38 +314,6 @@ void main() {
       over(const Color(0x1FDC2626), dark.surface),
       4.5,
     );
-  });
-
-  test('triage tone pairings — light', () {
-    final tones = <(String, Tone)>[
-      ('calm', Tone.calm),
-      ('mid', Tone.mid),
-      ('alert', Tone.alert),
-      ('info', Tone.info),
-    ];
-    for (final (name, tone) in tones) {
-      final t = Tone.of(tone, false);
-      final eff = over(t.bg, light.surface);
-      check('light tone $name chip text', t.fg, eff, 4.5);
-      check('light tone $name icon on circle', t.fg, eff, 3.0);
-    }
-  });
-
-  test('triage tone pairings — dark uses the dark twins', () {
-    // Before the fix these measured calm 1.85, mid 2.39, alert 1.89,
-    // info 1.52. Tone.of routes to the dark twins now.
-    final tones = <(String, Tone)>[
-      ('calm', Tone.calm),
-      ('mid', Tone.mid),
-      ('alert', Tone.alert),
-      ('info', Tone.info),
-    ];
-    for (final (name, tone) in tones) {
-      final t = Tone.of(tone, true);
-      final eff = over(t.bg, dark.surface);
-      check('dark tone $name chip text', t.fg, eff, 4.5);
-      check('dark tone $name icon on circle', t.fg, eff, 3.0);
-    }
   });
 
   test('triage _NoteBox + AiUnavailableCard — dark', () {

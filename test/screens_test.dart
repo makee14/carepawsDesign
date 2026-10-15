@@ -1,10 +1,13 @@
 @Tags(['screenshots'])
 library;
 
+import 'dart:typed_data';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:carepaws/app.dart';
 import 'package:carepaws/data/models.dart';
+import 'package:carepaws/design/icons.dart';
 import 'package:carepaws/design/theme.dart';
 import 'package:carepaws/screens/appointments/book_flow.dart';
 import 'package:carepaws/screens/chat_thread_screen.dart';
@@ -19,7 +22,9 @@ import 'package:carepaws/screens/shop/order_success_screen.dart';
 import 'package:carepaws/screens/shop/orders_screen.dart';
 import 'package:carepaws/screens/shop/product_detail_screen.dart';
 import 'package:carepaws/screens/triage_screen.dart';
+import 'package:carepaws/services/ai_service.dart';
 import 'package:carepaws/state/app_store.dart';
+import 'package:carepaws/widgets/common.dart';
 
 /// Visual regression pass. Run with:
 ///
@@ -59,6 +64,87 @@ Future<void> shot(
 }
 
 AppStore seeded() => AppStore(now: DateTime(2026, 10, 13, 15, 6));
+
+/// Fake AI backend for the health-check goldens — screenshots never depend
+/// on the network or an API key.
+class _ShotAi extends AiService {
+  _ShotAi(this.canned) {
+    status = AiStatus.live;
+  }
+  final TriageResult canned;
+
+  @override
+  Future<TriageResult> triage({
+    required String petName,
+    required String species,
+    required String text,
+    Uint8List? photo,
+    String? photoMime,
+    String ownerFirstName = '',
+  }) async => canned;
+}
+
+/// Number of question steps in the health-check flow (mirrors the private
+/// `_questions` list in triage_screen.dart).
+const _healthQuestionCount = 4;
+
+TriageResult _shotTriage() => const TriageResult(
+  route: TriageRoute.homeCare,
+  title: 'Mild stomach upset',
+  summary: 'This looks like a mild, short-lived stomach upset.',
+  urgency: 0,
+  bullets: ['Ate something unusual'],
+  redFlags: ['Repeated vomiting'],
+  homeCare: ['Offer small sips of water'],
+);
+
+TriageResult _shotTriageUrgent() => const TriageResult(
+  route: TriageRoute.emergency,
+  title: 'Possible emergency — see Biscuit now',
+  summary: 'What you described can be life-threatening within hours.',
+  urgency: 2,
+  bullets: ['Difficulty breathing needs hands-on assessment'],
+  redFlags: ['Laboured breathing or blue/pale gums'],
+);
+
+/// Walks the stepped health-check flow: picks Biscuit at step 0, answers
+/// [answerSteps] questions with the first option each, and optionally runs
+/// the check to land on the results screen.
+Future<void> _pumpHealthFlow(
+  WidgetTester t,
+  TriageResult canned, {
+  int answerSteps = 0,
+  bool run = false,
+  bool dark = false,
+}) async {
+  await t.binding.setSurfaceSize(const Size(390, 844));
+  final s = AppStore(ai: _ShotAi(canned), now: DateTime(2026, 10, 13, 15, 6));
+  await t.pumpWidget(
+    AppScope(
+      store: s,
+      child: CupertinoApp(
+        theme: themeFor(dark ? AppPalette.dark : AppPalette.light),
+        home: const TriageScreen(),
+      ),
+    ),
+  );
+  await t.pumpAndSettle();
+  await t.tap(find.text('Biscuit'));
+  await t.pumpAndSettle();
+  await t.tap(find.widgetWithText(PrimaryButton, 'Continue'));
+  await t.pumpAndSettle();
+  final steps = run ? _healthQuestionCount : answerSteps;
+  for (var i = 0; i < steps; i++) {
+    await t.tap(find.byType(PressScale).first);
+    await t.pumpAndSettle();
+    await t.tap(find.widgetWithText(PrimaryButton, 'Continue'));
+    await t.pumpAndSettle();
+  }
+  if (run) {
+    await t.tap(find.widgetWithText(PrimaryButton, 'Run health check'));
+    await t.pumpAndSettle();
+  }
+}
 
 void main() {
   testWidgets('01 home', (t) => shot(t, const RootShell(), '01_home'));
@@ -167,37 +253,47 @@ void main() {
     (t) => shot(t, const PetProfileScreen(petId: 'p1'), '07_pet_profile'),
   );
   testWidgets(
-    '08 triage input',
-    (t) => shot(t, const TriageScreen(), '08_triage_input'),
+    '08 health check pet step',
+    (t) => shot(t, const TriageScreen(), '08_health_pet_step'),
   );
-  testWidgets('09 emergency outcome', (t) async {
-    // Drive the result view with a fixed triage outcome so the screenshot
-    // never depends on the network or an API key.
-    const r = TriageResult(
-      route: TriageRoute.emergency,
-      urgency: 2,
-      title: 'Possible emergency — see Biscuit now',
-      summary: 'What you described can be life-threatening within hours.',
-      redFlags: ['Laboured breathing or blue/pale gums'],
+
+  /// Fake AI backend so the golden never depends on the network or an API
+  /// key. Defined here (not imported) because test files stay self-contained.
+  testWidgets('08b health check question step', (t) async {
+    await _pumpHealthFlow(t, _shotTriage(), answerSteps: 1);
+    await expectLater(
+      find.byType(CupertinoApp),
+      matchesGoldenFile('goldens/08b_health_question.png'),
     );
-    final s = seeded();
-    await t.pumpWidget(
-      AppScope(
-        store: s,
-        child: CupertinoApp(
-          theme: themeFor(AppPalette.light),
-          home: EmergencyTriageView(
-            result: r,
-            pet: s.pets.first,
-            entry: TriageEntry.home,
-          ),
-        ),
-      ),
+  });
+  testWidgets('09 health check results urgent', (t) async {
+    await _pumpHealthFlow(t, _shotTriageUrgent(), run: true);
+    await expectLater(
+      find.byType(CupertinoApp),
+      matchesGoldenFile('goldens/09_health_results_urgent.png'),
     );
+  });
+  testWidgets('09b health check results low', (t) async {
+    await _pumpHealthFlow(t, _shotTriage(), run: true);
+    await expectLater(
+      find.byType(CupertinoApp),
+      matchesGoldenFile('goldens/09b_health_results_low.png'),
+    );
+  });
+  testWidgets('09c health check results expanded', (t) async {
+    await _pumpHealthFlow(t, _shotTriage(), run: true);
+    await t.tap(find.text('Possible causes'));
     await t.pumpAndSettle();
     await expectLater(
       find.byType(CupertinoApp),
-      matchesGoldenFile('goldens/09_triage_emergency.png'),
+      matchesGoldenFile('goldens/09c_health_results_expanded.png'),
+    );
+  });
+  testWidgets('09d health check results dark', (t) async {
+    await _pumpHealthFlow(t, _shotTriageUrgent(), run: true, dark: true);
+    await expectLater(
+      find.byType(CupertinoApp),
+      matchesGoldenFile('goldens/09d_health_results_dark.png'),
     );
   });
   testWidgets(

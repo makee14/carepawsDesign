@@ -547,3 +547,138 @@ class AppNotification {
     read: read ?? this.read,
   );
 }
+
+// ------------------------------------------------------- Stream C: health check
+
+/// Urgency of a health-check result. Maps from the AI triage outcome:
+/// emergency route -> urgent, triage urgency 2 -> high, 1 -> moderate,
+/// 0 -> low.
+enum Urgency { low, moderate, high, urgent }
+
+@immutable
+class HealthSection {
+  const HealthSection({required this.title, required this.body});
+  final String title;
+  final String body;
+}
+
+@immutable
+class HealthAnswer {
+  const HealthAnswer({
+    required this.questionId,
+    required this.question,
+    required this.answer,
+  });
+  final String questionId;
+  final String question;
+  final String answer;
+}
+
+/// The display + persistence model for one completed AI Health Check. The
+/// [petId] is threaded from the step-0 pet selection — it is authoritative
+/// and never re-derived from AI output (that fallback produced the
+/// wrong-pet-name bug).
+@immutable
+class HealthCheckResult {
+  const HealthCheckResult({
+    required this.id,
+    required this.petId,
+    required this.summary,
+    required this.urgency,
+    required this.recommendation,
+    required this.route,
+    this.sections = const [],
+    this.answers = const [],
+    required this.createdAt,
+  });
+
+  final String id;
+  final String petId;
+  final String summary;
+  final Urgency urgency;
+  final String recommendation;
+  final TriageRoute route;
+  final List<HealthSection> sections;
+  final List<HealthAnswer> answers;
+  final DateTime createdAt;
+
+  /// Builds the display model from the AI triage outcome. [petId] must be the
+  /// step-0 selection — callers thread it through, never detect it.
+  factory HealthCheckResult.fromTriage({
+    required String id,
+    required String petId,
+    required TriageResult triage,
+    required List<HealthAnswer> answers,
+    required DateTime createdAt,
+  }) {
+    final urgency = triage.route == TriageRoute.emergency
+        ? Urgency.urgent
+        : switch (triage.urgency) {
+            2 => Urgency.high,
+            1 => Urgency.moderate,
+            _ => Urgency.low,
+          };
+    return HealthCheckResult(
+      id: id,
+      petId: petId,
+      summary: triage.summary,
+      urgency: urgency,
+      recommendation: _recommendationFor(triage.route),
+      route: triage.route,
+      sections: [
+        if (answers.isNotEmpty)
+          HealthSection(
+            title: 'What you told us',
+            body: answers.map((a) => '${a.question}\n${a.answer}').join('\n\n'),
+          ),
+        if (triage.bullets.isNotEmpty)
+          HealthSection(
+            title: 'Possible causes',
+            body: triage.bullets.map((b) => '• $b').join('\n'),
+          ),
+        if (triage.homeCare.isNotEmpty)
+          HealthSection(
+            title: 'Home care',
+            body: triage.homeCare.map((b) => '• $b').join('\n'),
+          ),
+        if (triage.redFlags.isNotEmpty)
+          HealthSection(
+            title: 'Watch for',
+            body: triage.redFlags.map((b) => '• $b').join('\n'),
+          ),
+      ],
+      answers: answers,
+      createdAt: createdAt,
+    );
+  }
+
+  static String _recommendationFor(TriageRoute route) => switch (route) {
+    TriageRoute.book =>
+      'Book a visit at the clinic — a vet should take a look.',
+    TriageRoute.chat =>
+      'Chat with the clinic team — they can advise on the next step.',
+    TriageRoute.homeCare => 'You can care for them at home for now — keep an eye on the warning signs below.',
+    TriageRoute.emergency => 'This needs a vet right away — call now.',
+  };
+}
+
+/// An in-progress health check. Held in memory by the flow; only completed
+/// results are persisted (see [HealthCheckResult]).
+@immutable
+class HealthCheckSession {
+  const HealthCheckSession({
+    required this.id,
+    required this.petId,
+    this.answers = const [],
+    this.result,
+    required this.startedAt,
+    this.completedAt,
+  });
+
+  final String id;
+  final String petId;
+  final List<HealthAnswer> answers;
+  final HealthCheckResult? result;
+  final DateTime startedAt;
+  final DateTime? completedAt;
+}

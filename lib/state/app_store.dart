@@ -90,6 +90,9 @@ class AppStore extends ChangeNotifier {
   List<ChatMessage> messages = Seed.messages;
   List<CartLine> cart = const [];
 
+  /// Completed AI health checks, newest last. Per-account persisted.
+  List<HealthCheckResult> healthResults = const [];
+
   /// Products the user asked to be notified about (out-of-stock flow).
   final Set<String> notifyMe = {};
 
@@ -798,6 +801,33 @@ class AppStore extends ChangeNotifier {
     _queueWrite(DatasetStore.writeMessages(acct, snapshot));
   }
 
+  void _saveHealthChecks() {
+    final acct = _dataAccount;
+    if (acct == null) return;
+    final snapshot = healthResults;
+    _queueWrite(DatasetStore.writeHealthChecks(acct, snapshot));
+  }
+
+  /// Records a completed health check (newest last) and persists it.
+  void recordHealthResult(HealthCheckResult result) {
+    healthResults = [...healthResults, result];
+    _saveHealthChecks();
+    notifyListeners();
+  }
+
+  /// The most recent health-check result for [petId], or null when the pet
+  /// has never been checked. Stream B's chat button consumes this.
+  HealthCheckResult? latestHealthResult(String petId) {
+    HealthCheckResult? latest;
+    for (final r in healthResults) {
+      if (r.petId != petId) continue;
+      if (latest == null || r.createdAt.isAfter(latest.createdAt)) {
+        latest = r;
+      }
+    }
+    return latest;
+  }
+
   void _saveNotifications() {
     final acct = _dataAccount;
     if (acct == null) return;
@@ -839,6 +869,9 @@ class AppStore extends ChangeNotifier {
         await DatasetStore.readPrescriptions(account) ??
         (registered ? const <Prescription>[] : Seed.prescriptions);
     cart = await DatasetStore.readCart(account) ?? const <CartLine>[];
+    healthResults =
+        await DatasetStore.readHealthChecks(account) ??
+        const <HealthCheckResult>[];
   }
 
   /// Demo reset path: restores the seed dataset, but ONLY for the demo
