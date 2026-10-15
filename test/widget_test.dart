@@ -1437,8 +1437,10 @@ void main() {
       tester,
     ) async {
       await pumpShell(tester);
-      await scrollToText(tester, 'Open now');
-      expect(find.text('Open now'), findsWidgets);
+      await scrollTo(tester, 'CarePaws Veterinary Clinic');
+      // The collapsed clinic card names the open/closed state in words —
+      // the green dot never stands alone.
+      expect(find.textContaining('Open now'), findsWidgets);
       await openTab(tester, 'Appointments');
       await scrollToText(tester, 'Confirmed');
       expect(find.text('Confirmed'), findsWidgets);
@@ -1467,8 +1469,8 @@ void main() {
     testWidgets('home scrolls (does not clip) at AX5', (tester) async {
       await pumpShell(tester, textScale: 1.35);
       expect(tester.takeException(), isNull);
-      await scrollToText(tester, 'Clinic info');
-      expect(find.text('Clinic info'), findsOneWidget);
+      await scrollToText(tester, 'CarePaws Veterinary Clinic');
+      expect(find.text('CarePaws Veterinary Clinic'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
 
