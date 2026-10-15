@@ -29,16 +29,15 @@ class TriageScreen extends StatefulWidget {
     this.entry = TriageEntry.home,
     this.preselectedPetId,
     this.onComplete,
-    this.showSkip = false,
   });
 
   final TriageEntry entry;
   final String? preselectedPetId;
 
-  /// When provided (Book step 2), the result is returned instead of pushing a
-  /// result screen, and "Skip triage" is offered.
+  /// When provided (the booking flow), the result is returned instead of
+  /// pushing a result screen. The check stays optional: backing out returns
+  /// no result and the booking simply continues without it.
   final void Function(TriageResult? result)? onComplete;
-  final bool showSkip;
 
   @override
   State<TriageScreen> createState() => _TriageScreenState();
@@ -75,6 +74,24 @@ class _TriageScreenState extends State<TriageScreen> {
   void dispose() {
     _text.dispose();
     super.dispose();
+  }
+
+  /// A typed description or an attached photo is a draft worth protecting.
+  /// The result view holds none — the draft was submitted to get there.
+  bool get _isDraft =>
+      _result == null && (_text.text.trim().isNotEmpty || _photo != null);
+
+  /// Nav-bar back / system back with a draft: leave only on confirm. The
+  /// nav bar keeps its default maybePop, which honours the PopScope below.
+  Future<void> _exit() async {
+    if (await confirmDiscardIfDirty(
+      context,
+      isDirty: _isDraft,
+      title: 'Discard health check?',
+      message: 'Your description and photo will be lost.',
+    )) {
+      if (mounted) Navigator.of(context).pop();
+    }
   }
 
   Future<void> _pick(ImageSource source) async {
@@ -205,15 +222,23 @@ class _TriageScreenState extends State<TriageScreen> {
     final result = _result;
     final pet = store.pet(_petId ?? '');
 
-    return CupertinoPageScaffold(
-      backgroundColor: p.background,
-      navigationBar: DetailNavBar(title: 'AI Health Check', showBack: true),
-      child: SafeArea(
-        child: result == null
-            ? _input(store, pet)
-            : _ambiguousPet
-            ? _disambiguate(store)
-            : _resultView(store, result, pet),
+    // Android system back honours the same draft guard as the nav-bar back.
+    return PopScope(
+      canPop: !_isDraft,
+      onPopInvokedWithResult: (didPop, _) async {
+        if (didPop) return;
+        await _exit();
+      },
+      child: CupertinoPageScaffold(
+        backgroundColor: p.background,
+        navigationBar: DetailNavBar(title: 'AI Health Check', showBack: true),
+        child: SafeArea(
+          child: result == null
+              ? _input(store, pet)
+              : _ambiguousPet
+              ? _disambiguate(store)
+              : _resultView(store, result, pet),
+        ),
       ),
     );
   }
@@ -365,25 +390,6 @@ class _TriageScreenState extends State<TriageScreen> {
           // explains why and offers the alternatives instead.
           onPressed: canSubmit && store.ai.isLive ? _submit : null,
         ),
-        if (widget.showSkip) ...[
-          const SizedBox(height: 10),
-          SecondaryButton(
-            label: 'Skip triage',
-            onPressed: _busy
-                ? null
-                : () {
-                    // Skipping returns no result — the booking flow treats an
-                    // absent triage as an explicit skip, not as a fake
-                    // outcome. onComplete pops the route exactly once.
-                    final complete = widget.onComplete;
-                    if (complete != null) {
-                      complete(null);
-                    } else {
-                      Navigator.of(context).pop();
-                    }
-                  },
-          ),
-        ],
       ],
     );
   }

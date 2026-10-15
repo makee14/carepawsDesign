@@ -62,6 +62,69 @@ Future<R?> showPopup<R>(
   );
 }
 
+/// Discard-dirty confirm shared by every flow screen (add/edit pet, booking,
+/// triage, chat, edit profile).
+///
+/// Returns `true` immediately when [isDirty] is false — no dialog, no await
+/// gap. Otherwise shows a centered alert via [showPopup] (so reduced motion
+/// is honored) and returns true only on the destructive "Discard" action.
+/// Barrier tap and "Keep editing" both return false.
+///
+/// PopScope recipe — paste into the flow's State.build:
+///
+/// ```dart
+/// PopScope(
+///   canPop: !_isDirty, // plus any step logic, e.g. the booking confirm step
+///   onPopInvokedWithResult: (didPop, _) async {
+///     if (didPop) return;
+///     // Step-aware flows handle their own step-back here first, e.g.
+///     // `if (_step > 0) { setState(() => _step--); return; }`
+///     if (await confirmDiscardIfDirty(context, isDirty: true, ...)) {
+///       // A direct pop bypasses PopScope's canPop, so no "confirmed" flag
+///       // dance is needed; dismissSheet's nav.pop() is such a direct pop.
+///       if (context.mounted) dismissSheet(context);
+///     }
+///   },
+///   child: ...,
+/// )
+/// ```
+///
+/// The nav-bar back button keeps its default `maybePop` — which honours
+/// PopScope — unless the flow overrides `onBack` for step-back behaviour, in
+/// which case the override must run the same confirm itself.
+Future<bool> confirmDiscardIfDirty(
+  BuildContext context, {
+  required bool isDirty,
+  String title = 'Discard changes?',
+  String message = 'Your unsaved changes will be lost.',
+}) async {
+  if (!isDirty) return true;
+  final discard = await showPopup<bool>(
+    context,
+    centered: true,
+    barrierDismissible: true,
+    builder: (ctx) => CupertinoAlertDialog(
+      title: Text(title),
+      content: Padding(
+        padding: const EdgeInsets.only(top: 8),
+        child: Text(message),
+      ),
+      actions: [
+        CupertinoDialogAction(
+          onPressed: () => Navigator.of(ctx).pop(false),
+          child: const Text('Keep editing'),
+        ),
+        CupertinoDialogAction(
+          isDestructiveAction: true,
+          onPressed: () => Navigator.of(ctx).pop(true),
+          child: const Text('Discard'),
+        ),
+      ],
+    ),
+  );
+  return discard ?? false;
+}
+
 /// Dials [number] via tel:. On devices with no dialer (desktop, simulators),
 /// shows the number in a sheet instead of a dead end.
 Future<void> callPhoneNumber(
