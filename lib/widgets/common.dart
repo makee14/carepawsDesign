@@ -1388,27 +1388,27 @@ class PrimaryButton extends StatelessWidget {
             borderRadius: BorderRadius.circular(T.rControl + 2),
           ),
           child: Row(
-          mainAxisSize: expand ? MainAxisSize.max : MainAxisSize.min,
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            if (busy)
-              CupertinoActivityIndicator(color: fg)
-            else if (icon != null) ...[
-              Ic.svg(icon!, color: fg, size: 19, stroke: 2.2),
-              const SizedBox(width: 9),
-            ],
-            Flexible(
-              child: Text(
-                label,
-                style: Type.button(p).copyWith(color: fg),
-                maxLines: 2,
-                textAlign: TextAlign.center,
-                overflow: TextOverflow.ellipsis,
+            mainAxisSize: expand ? MainAxisSize.max : MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              if (busy)
+                CupertinoActivityIndicator(color: fg)
+              else if (icon != null) ...[
+                Ic.svg(icon!, color: fg, size: 19, stroke: 2.2),
+                const SizedBox(width: 9),
+              ],
+              Flexible(
+                child: Text(
+                  label,
+                  style: Type.button(p).copyWith(color: fg),
+                  maxLines: 2,
+                  textAlign: TextAlign.center,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
-      ),
       ),
     );
 

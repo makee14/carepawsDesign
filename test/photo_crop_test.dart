@@ -351,6 +351,7 @@ void main() {
       _expectNear(corners[3], const ui.Color(0xFFFFFF00), 'bottom-right');
       expect(tester.takeException(), isNull);
     });
+
     /// Pan past the limit: dragging the photo so far that the crop window
     /// would show the dimmed surround snaps back to the fitted view on
     /// gesture end, so the export still matches the window (identity crop).
@@ -379,6 +380,7 @@ void main() {
       _expectNear(corners[3], const ui.Color(0xFFFFFF00), 'bottom-right');
       expect(tester.takeException(), isNull);
     });
+
     /// Landscape photo (wider than the crop area can fit by height): the
     /// crop window must be derived from the PHOTO, never the full area.
     /// Regression test for "background gets cropped too": with the window
@@ -452,10 +454,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
       expect(find.byType(PhotoCropScreen), findsOneWidget);
       expect(find.byType(InteractiveViewer), findsOneWidget);
-      expect(
-        find.widgetWithText(PrimaryButton, 'Use photo'),
-        findsOneWidget,
-      );
+      expect(find.widgetWithText(PrimaryButton, 'Use photo'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
   });
@@ -472,10 +471,7 @@ class _Ax5CropProbe extends StatelessWidget {
   Widget build(BuildContext context) {
     return CupertinoApp(
       theme: themeFor(AppPalette.light),
-      home: PhotoCropScreen(
-        bytes: bytes,
-        debugImageSize: const Size(120, 80),
-      ),
+      home: PhotoCropScreen(bytes: bytes, debugImageSize: const Size(120, 80)),
     );
   }
 }
@@ -492,7 +488,12 @@ Future<List<ui.Color>> _cornerColors(ui.Image image) async {
   const m = 3; // stay clear of resampled edges
   final w = image.width;
   final h = image.height;
-  return [at(m, m), at(w - 1 - m, m), at(m, h - 1 - m), at(w - 1 - m, h - 1 - m)];
+  return [
+    at(m, m),
+    at(w - 1 - m, m),
+    at(m, h - 1 - m),
+    at(w - 1 - m, h - 1 - m),
+  ];
 }
 
 /// Asserts [actual] is within [tolerance] per channel of [expected].

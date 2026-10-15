@@ -102,10 +102,7 @@ void main() {
       expect(panelAnchor, findsWidgets);
       // The panel itself is frosted glass, so the effect reads on the photo.
       expect(
-        find.descendant(
-          of: panelAnchor,
-          matching: find.byType(GlassCard),
-        ),
+        find.descendant(of: panelAnchor, matching: find.byType(GlassCard)),
         findsWidgets,
       );
       expect(tester.takeException(), isNull);
