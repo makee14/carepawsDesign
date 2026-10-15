@@ -4,7 +4,6 @@ import 'package:flutter/cupertino.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../app.dart';
-import '../data/clinic.dart';
 import '../data/models.dart';
 import '../data/seed.dart';
 import '../design/icons.dart';
@@ -12,12 +11,13 @@ import '../design/theme.dart';
 import '../design/tokens.dart';
 import '../services/ai_service.dart';
 import '../services/photo_store.dart';
+import '../services/staff_replies.dart';
 import '../state/app_store.dart';
 import '../widgets/ai_unavailable.dart';
 import '../widgets/common.dart';
-import 'appointments/book_flow.dart';
 import 'chats_screen.dart';
 import 'profile/settings_screens.dart';
+import 'triage/health_result_sheet.dart';
 import 'triage_screen.dart';
 
 /// A conversation thread. The CarePaws AI thread also carries the
@@ -28,6 +28,7 @@ class ChatThreadScreen extends StatefulWidget {
     required this.threadId,
     this.openedWithPetId,
     this.triageSummary,
+    this.replyRole = StaffRole.vetAssistant,
   });
 
   final String threadId;
@@ -35,6 +36,11 @@ class ChatThreadScreen extends StatefulWidget {
   /// Set when arriving from an AI → clinic handoff.
   final String? openedWithPetId;
   final String? triageSummary;
+
+  /// Which team member's voice answers in this thread. Defaults to Miguel
+  /// (vet assistant), who owns the clinic inbox; the member sheet passes the
+  /// tapped member's role so replies match who the user chose to chat with.
+  final StaffRole replyRole;
 
   @override
   State<ChatThreadScreen> createState() => _ChatThreadScreenState();
@@ -161,14 +167,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
 
     final reply = _isAi
         ? await _askAi(store, pet, text)
-        : (store.staffOnline()
-              ? '${_thanks(store)}! Got your message about ${pet?.name ?? 'your pet'} — '
-                    'I\'ll check the chart and reply here with a recommendation. '
-                    'If anything changes in the meantime, call the clinic and '
-                    'we\'ll sort it out right away.'
-              : '${_thanks(store)}! Your message is with us — we\'re closed right now '
-                    'and back at 9:00 AM. I\'ll pick this up first thing and reply here. '
-                    'If it\'s urgent, call ${Seed.clinicPhone} any time.');
+        // Dynamic, role-matched reply via the shared composer — the reply
+        // references the user's specific inquiry instead of reading canned.
+        : '${_thanks(store)}! ${composeStaffReply(role: widget.replyRole, userText: text, petName: pet?.name ?? 'your pet', clinicOpen: store.staffOnline())}';
 
     if (!mounted) return;
     setState(() => _sending = false);
@@ -176,7 +177,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
       ChatMessage(
         id: 'a${store.now.microsecondsSinceEpoch + 1}',
         threadId: widget.threadId,
-        author: _isAi ? ChatAuthor.ai : ChatAuthor.vetAssistant,
+        author: _isAi ? ChatAuthor.ai : authorForRole(widget.replyRole),
         text: reply,
         at: store.now.add(const Duration(minutes: 1)),
         petId: pet?.id,
@@ -234,11 +235,16 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
           children: [
             ClipRRect(
               borderRadius: BorderRadius.circular(T.rCard),
-              child: Image.memory(
-                bytes,
+              child: SizedBox(
                 height: 260,
                 width: double.infinity,
-                fit: BoxFit.cover,
+                child: PhotoStore.memoryImage(
+                  context,
+                  bytes,
+                  // Sheet content is inset 20pt on each side.
+                  displayWidthPt: MediaQuery.sizeOf(context).width - 40,
+                  semanticLabel: 'Photo preview',
+                ),
               ),
             ),
             const SizedBox(height: T.s16),
@@ -293,15 +299,13 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
       ),
     );
     _scrollToEnd();
-    final reply = store.staffOnline()
-        ? '${_thanks(store)}! Photo received — I\'ll take a look and get back to you here.'
-        : '${_thanks(store)}! Photo received — we\'re closed right now, but I\'ll '
-              'review it first thing at 9:00 AM and reply here.';
+    final reply =
+        '${_thanks(store)}! ${composeStaffReply(role: widget.replyRole, userText: '', petName: pet?.name ?? 'your pet', clinicOpen: store.staffOnline(), photoSent: true)}';
     store.pushMessage(
       ChatMessage(
         id: 'a${at.microsecondsSinceEpoch + 1}',
         threadId: widget.threadId,
-        author: ChatAuthor.vetAssistant,
+        author: authorForRole(widget.replyRole),
         text: reply,
         at: at.add(const Duration(minutes: 1)),
         petId: pet?.id,
@@ -316,6 +320,15 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
     final p = context.p;
     final thread = Seed.threads.firstWhere((t) => t.id == widget.threadId);
     final messages = store.thread(thread.id);
+
+    // B7: latest health-check result for this thread's pet. The stub in
+    // AppStore returns null until Stream C lands — the button stays hidden
+    // meanwhile, so this compiles and behaves sanely on its own.
+    final petIdForResult =
+        widget.openedWithPetId ?? store.pets.firstOrNull?.id ?? '';
+    final healthResult = _isAi
+        ? null
+        : store.latestHealthResult(petIdForResult);
 
     // Android system back honours the same draft guard as the nav-bar back.
     return PopScope(
@@ -345,18 +358,29 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
               if (_isAi && store.ai.status == AiStatus.unavailable)
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                  child: AiUnavailableCard(
-                    failure: store.ai.failure ?? AiFailure.noKey,
-                    onOpenSettings: () =>
-                        Navigator.of(context)
-                            .push(appRoute(const AiSettingsScreen())),
-                    onBook: () =>
-                        Navigator.of(context).push(appRoute(const BookFlow())),
-                    onCall: () => callPhoneNumber(
-                      context,
-                      number: Clinic.phone,
-                      name: Clinic.name,
-                    ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'AI is unavailable — add a key in Settings to chat.',
+                          style: Type.footnote(p)
+                              .copyWith(color: p.textSecondary),
+                        ),
+                      ),
+                      CupertinoButton(
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                        onPressed: () =>
+                            Navigator.of(context)
+                                .push(appRoute(const AiSettingsScreen())),
+                        child: Text(
+                          'Open Settings',
+                          style: Type.footnote(p).copyWith(
+                            color: p.accentText,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               if (!_isAi && store.offlineNote != null)
@@ -408,6 +432,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
                 controller: _input,
                 onSend: _send,
                 onPickPhoto: _isAi ? null : _pickPhoto,
+                onOpenHealthResult: _isAi ? null : _openHealthResult,
+                showHealthResult: healthResult != null,
                 hint: _isAi
                     ? 'Ask about feeding, grooming or vaccines'
                     : 'Message the clinic team',
@@ -428,6 +454,16 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
         ),
       ),
     );
+  }
+
+  /// B7: opens the latest AI Health Check result via Stream C's sheet API.
+  void _openHealthResult() {
+    final store = AppScope.read(context);
+    final petId = widget.openedWithPetId ?? store.pets.firstOrNull?.id ?? '';
+    final result = store.latestHealthResult(petId);
+    if (result != null && mounted) {
+      HealthCheckResultSheet.show(context, result);
+    }
   }
 }
 
@@ -753,18 +789,36 @@ class _Bubble extends StatelessWidget {
             _authorTag(p, mine, fromAi),
             Semantics(
               label: '$mineLabel sent a photo',
+              onTapHint: 'View full screen',
               child: ExcludeSemantics(
-                child: Container(
-                  constraints: const BoxConstraints(
-                    maxWidth: 260,
-                    maxHeight: 320,
+                child: PressScale(
+                  onTap: () => Navigator.of(context).push(
+                    appRoute(
+                      _PhotoViewerScreen(
+                        bytes: message.imageBytes!,
+                        caption: message.text.isNotEmpty ? message.text : null,
+                      ),
+                    ),
                   ),
-                  decoration: BoxDecoration(
-                    borderRadius: radius,
-                    border: Border.all(color: mine ? p.primaryFill : p.divider),
+                  child: Container(
+                    constraints: const BoxConstraints(
+                      maxWidth: 260,
+                      maxHeight: 320,
+                    ),
+                    decoration: BoxDecoration(
+                      borderRadius: radius,
+                      border: Border.all(
+                        color: mine ? p.primaryFill : p.divider,
+                      ),
+                    ),
+                    clipBehavior: Clip.antiAlias,
+                    child: PhotoStore.memoryImage(
+                      context,
+                      message.imageBytes!,
+                      displayWidthPt: 260,
+                      semanticLabel: 'Photo from $mineLabel',
+                    ),
                   ),
-                  clipBehavior: Clip.antiAlias,
-                  child: Image.memory(message.imageBytes!, fit: BoxFit.cover),
                 ),
               ),
             ),
@@ -849,12 +903,95 @@ class _Bubble extends StatelessWidget {
   }
 }
 
+/// Full-screen chat photo preview: pinch-zoom the photo, Close to return.
+///
+/// Follows the pet-profile document viewer pattern (InteractiveViewer) with
+/// the Chats visual spec: 92% black scrim, 1–4x zoom, 44pt close button.
+/// Renders at natural pixel size — a smaller source centers without
+/// stretching, never upscaled.
+class _PhotoViewerScreen extends StatelessWidget {
+  const _PhotoViewerScreen({required this.bytes, this.caption});
+
+  final Uint8List bytes;
+  final String? caption;
+
+  @override
+  Widget build(BuildContext context) {
+    return CupertinoPageScaffold(
+      backgroundColor: const Color(0xEB000000),
+      child: SafeArea(
+        child: Stack(
+          children: [
+            InteractiveViewer(
+              minScale: 1.0,
+              maxScale: 4.0,
+              boundaryMargin: const EdgeInsets.all(double.infinity),
+              child: Center(
+                child: Image.memory(
+                  bytes,
+                  fit: BoxFit.contain,
+                  gaplessPlayback: true,
+                  // No cacheWidth on purpose: natural pixel size. A smaller
+                  // source centers without stretching (plan §6).
+                ),
+              ),
+            ),
+            Positioned(
+              top: 16,
+              right: 16,
+              child: Semantics(
+                button: true,
+                label: 'Close photo viewer',
+                child: GestureDetector(
+                  onTap: () => Navigator.of(context).pop(),
+                  child: Container(
+                    width: 44,
+                    height: 44,
+                    decoration: const BoxDecoration(
+                      color: Color(0x99FFFFFF),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Center(
+                      child: Ic.svg(
+                        Ic.close,
+                        size: 20,
+                        color: const Color(0xFF000000),
+                        stroke: 2.4,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            if (caption != null && caption!.isNotEmpty)
+              Positioned(
+                left: 16,
+                right: 16,
+                bottom: 16,
+                child: Text(
+                  caption!,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: Color(0xCCFFFFFF),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _Composer extends StatelessWidget {
   const _Composer({
     required this.controller,
     required this.onSend,
     required this.hint,
     this.onPickPhoto,
+    this.onOpenHealthResult,
+    this.showHealthResult = false,
   });
 
   final TextEditingController controller;
@@ -863,6 +1000,12 @@ class _Composer extends StatelessWidget {
 
   /// Null hides the photo button (the AI thread is text-only).
   final VoidCallback? onPickPhoto;
+
+  /// Opens the latest AI Health Check result. Shown only on the clinic
+  /// thread, immediately left of the message field, and hidden when there
+  /// is no result for the thread's pet (B7).
+  final VoidCallback? onOpenHealthResult;
+  final bool showHealthResult;
 
   @override
   Widget build(BuildContext context) {
@@ -900,6 +1043,34 @@ class _Composer extends StatelessWidget {
                       child: Ic.svg(
                         Ic.image,
                         color: p.textSecondary,
+                        size: 20,
+                        stroke: 2.1,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+          ],
+          if (showHealthResult && onOpenHealthResult != null) ...[
+            Semantics(
+              button: true,
+              label: 'Open health check result',
+              child: ExcludeSemantics(
+                child: PressScale(
+                  onTap: onOpenHealthResult,
+                  child: Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: p.fieldBg,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Center(
+                      child: Ic.svg(
+                        Ic.clipboard,
+                        color: T.terracottaDeep,
                         size: 20,
                         stroke: 2.1,
                       ),

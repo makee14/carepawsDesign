@@ -13,6 +13,7 @@ import '../services/auth_store.dart';
 import '../services/dataset_store.dart';
 import '../services/photo_store.dart';
 import '../services/settings_store.dart';
+import '../services/staff_replies.dart';
 import 'profile_store.dart';
 
 /// Single source of truth for the whole app. A lightweight ChangeNotifier is
@@ -725,13 +726,14 @@ class AppStore extends ChangeNotifier {
     );
     final first = ownerFirstName;
     final thanks = first.isEmpty ? 'Thanks' : 'Thanks, $first';
+    // Dynamic, role-matched reply via the shared composer (B5) — the old
+    // inline hardcoded strings are gone.
     final reply = ChatMessage(
       id: 'r${now.microsecondsSinceEpoch}',
       threadId: 'th_clinic',
       author: ChatAuthor.vetAssistant,
-      text: staffOnline()
-          ? '$thanks — I have this. I will review ${pet.name}\'s chart and reply with a recommendation within clinic hours.'
-          : '$thanks — this came through while we were closed. I will pick it up from 9:00 AM and reply with a recommendation.',
+      text:
+          '$thanks! ${composeStaffReply(role: StaffRole.vetAssistant, userText: 'health check handoff: ${result.title}', petName: pet.name, clinicOpen: staffOnline())}',
       at: now.add(const Duration(minutes: 1)),
       petId: pet.id,
     );
@@ -739,6 +741,13 @@ class AppStore extends ChangeNotifier {
     _saveMessages();
     notifyListeners();
   }
+
+  // STREAM-B CONTRACT STUB — Stream C owns the real implementation (plan
+  // task C4: AppStore.latestHealthResult). This null stub exists only so
+  // Stream B's clinic-chat result button (B7) compiles against the B↔C
+  // contract before C merges. AT MERGE: delete this method in favor of
+  // Stream C's version.
+  HealthCheckResult? latestHealthResult(String petId) => null;
 
   // ------------------------------------------------------------ lifecycle
   /// Datasets are keyed per account, so two accounts on one device never

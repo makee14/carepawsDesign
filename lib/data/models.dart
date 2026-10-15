@@ -166,6 +166,7 @@ class Staff {
     required this.years,
     required this.initials,
     required this.focus,
+    required this.bio,
   });
   final String id;
   final String name;
@@ -173,6 +174,9 @@ class Staff {
   final int years;
   final String initials;
   final String focus;
+
+  /// Short, friendly bio shown on the member's profile sheet.
+  final String bio;
 
   String get firstName => name.split(' ').first;
 }
@@ -464,7 +468,10 @@ class ChatMessage {
   final ChatKind kind;
   final String? triageSummary;
 
-  /// Set for [ChatKind.image]: the downscaled photo bytes. Text stays empty.
+  /// Set for [ChatKind.image]: the photo bytes. Newly sent photos are kept
+  /// at full resolution (≤1600px longest edge, JPEG q85); historic/seeded
+  /// messages keep their downscaled bytes and are never upscaled at render.
+  /// Text stays empty.
   final Uint8List? imageBytes;
 }
 
@@ -546,4 +553,43 @@ class AppNotification {
     icon: icon,
     read: read ?? this.read,
   );
+}
+
+// ---------------------------------------------------------------------------
+// STREAM-B CONTRACT STUB — Stream C owns the real health-check models
+// (plan §5 / task C1). This stub exists only so Stream B's result-button
+// (B7) compiles against the B↔C contract before C merges. AT MERGE:
+// delete this entire block in favor of Stream C's models.dart version.
+// ---------------------------------------------------------------------------
+
+/// Urgency of an AI Health Check result. (Stub — see above.)
+enum Urgency { low, moderate, high, urgent }
+
+/// Result of one AI Health Check run. (Stub — see above.)
+@immutable
+class HealthCheckResult {
+  const HealthCheckResult({
+    required this.id,
+    required this.petId,
+    required this.summary,
+    required this.urgency,
+    required this.recommendation,
+    this.sections = const [],
+    required this.createdAt,
+  });
+  final String id;
+  final String petId;
+  final String summary;
+  final Urgency urgency;
+  final String recommendation;
+  final List<HealthSection> sections;
+  final DateTime createdAt;
+}
+
+/// One expandable detail section of a health-check result. (Stub — see above.)
+@immutable
+class HealthSection {
+  const HealthSection({required this.title, required this.body});
+  final String title;
+  final String body;
 }

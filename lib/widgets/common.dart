@@ -9,6 +9,7 @@ import '../design/icons.dart';
 import '../design/motion.dart';
 import '../design/theme.dart';
 import '../design/tokens.dart';
+import '../services/photo_store.dart';
 
 /// Shows a popup — a bottom sheet or a centered alert — that honors reduced
 /// motion.
@@ -1071,20 +1072,36 @@ class PetAvatar extends StatelessWidget {
       label: label ?? 'Photo of ${pet.name}',
       child: ClipRRect(
         borderRadius: BorderRadius.circular(radius),
-        child: Image.memory(
-          pet.photo!,
-          width: double.infinity,
-          height: double.infinity,
-          fit: BoxFit.cover,
-          gaplessPlayback: true,
-          errorBuilder: (_, _, _) => PetArt(
-            seed: pet.id.hashCode.abs() % 4,
-            species: pet.species,
-            radius: radius,
-            iconSize: iconSize,
-            alignment: alignment,
-            label: label ?? '${pet.name} portrait',
-          ),
+        // Decode at the laid-out width × DPR (capped at the store's ceiling)
+        // instead of full resolution: a 1600px photo in a 64pt tile decodes
+        // 64×dpr px. The layout box bounds what is painted, so a smaller
+        // source is never upscaled on screen.
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final w = constraints.maxWidth;
+            final cacheWidth = w.isFinite
+                ? (w * MediaQuery.devicePixelRatioOf(context)).round().clamp(
+                    1,
+                    PhotoStore.maxEdge,
+                  )
+                : null;
+            return Image.memory(
+              pet.photo!,
+              cacheWidth: cacheWidth,
+              width: double.infinity,
+              height: double.infinity,
+              fit: BoxFit.cover,
+              gaplessPlayback: true,
+              errorBuilder: (_, _, _) => PetArt(
+                seed: pet.id.hashCode.abs() % 4,
+                species: pet.species,
+                radius: radius,
+                iconSize: iconSize,
+                alignment: alignment,
+                label: label ?? '${pet.name} portrait',
+              ),
+            );
+          },
         ),
       ),
     );
@@ -1117,6 +1134,12 @@ class OwnerAvatar extends StatelessWidget {
           child: has
               ? Image.memory(
                   photo!,
+                  // Decode at the avatar's laid-out size × DPR (B1): the
+                  // layout box bounds what is painted, so a smaller source
+                  // is never upscaled on screen.
+                  cacheWidth: (size * MediaQuery.devicePixelRatioOf(context))
+                      .round()
+                      .clamp(1, PhotoStore.maxEdge),
                   fit: BoxFit.cover,
                   gaplessPlayback: true,
                   errorBuilder: (_, _, _) => _initials(p, initials, size),

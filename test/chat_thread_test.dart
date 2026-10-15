@@ -5,9 +5,11 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:carepaws/data/models.dart';
+import 'package:carepaws/design/icons.dart';
 import 'package:carepaws/design/theme.dart';
 import 'package:carepaws/screens/chat_thread_screen.dart';
 import 'package:carepaws/state/app_store.dart';
+import 'package:carepaws/widgets/ai_unavailable.dart';
 
 /// Tuesday 2026-10-13 10:00 — inside clinic hours (Mon–Sat 9:00–18:00).
 DateTime openNow() => DateTime(2026, 10, 13, 10, 0);
@@ -61,8 +63,9 @@ void main() {
       expect(find.textContaining('@'), findsNothing);
       // Warm copy, no bureaucratic "noted on".
       expect(find.textContaining('noted on'), findsNothing);
+      // Dynamic reply: references the booking inquiry, never canned.
       expect(
-        find.textContaining('reply here with a recommendation'),
+        find.textContaining('I\u2019ll confirm the slot here'),
         findsOneWidget,
       );
     });
@@ -165,6 +168,111 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.bySemanticsLabel('You sent a photo'), findsOneWidget);
       expect(find.byType(Image), findsWidgets);
+    });
+
+    testWidgets('tapping a photo bubble opens the full-screen preview', (
+      tester,
+    ) async {
+      final s = await pumpThread(tester, 'th_clinic', accountName: 'Mark');
+      final png = base64Decode(
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+      );
+      s.pushMessage(
+        ChatMessage(
+          id: 'u1',
+          threadId: 'th_clinic',
+          author: ChatAuthor.vetAssistant,
+          text: '',
+          kind: ChatKind.image,
+          imageBytes: png,
+          at: openNow(),
+          sentByMe: true,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Tap the bubble itself (what a finger hits): the 1x1 test PNG
+      // shrink-wraps the Image to 0x0, so tap the PressScale ancestor —
+      // its hit area is the bubble.
+      final bubble = find.ancestor(
+        of: find.byType(Image).first,
+        matching: find.byType(PressScale),
+      );
+      await tester.tap(bubble);
+      await tester.pumpAndSettle();
+      // Full-screen viewer: pinch-zoom surface + 44pt close button.
+      expect(find.byType(InteractiveViewer), findsOneWidget);
+      expect(find.bySemanticsLabel('Close photo viewer'), findsOneWidget);
+
+      await tester.tap(find.bySemanticsLabel('Close photo viewer'));
+      await tester.pumpAndSettle();
+      expect(find.bySemanticsLabel('Close photo viewer'), findsNothing);
+    });
+  });
+
+  group('dynamic replies (B5)', () {
+    testWidgets('grooming question gets a role-matched dynamic reply', (
+      tester,
+    ) async {
+      await pumpThread(tester, 'th_clinic', accountName: 'Mark');
+      await sendText(tester, 'How much is a full groom for Biscuit?');
+      // Miguel routes grooming to Ana — the reply names the inquiry.
+      expect(find.textContaining('Ana'), findsOneWidget);
+      expect(find.textContaining('Biscuit'), findsWidgets);
+    });
+
+    testWidgets('symptom question gets a calm, specific reply', (tester) async {
+      await pumpThread(tester, 'th_clinic', accountName: 'Mark');
+      await sendText(tester, 'Biscuit has been scratching a lot');
+      // The reply (not just the echoed question) names the symptom.
+      expect(find.textContaining('worth a proper look'), findsOneWidget);
+      expect(find.textContaining('redness'), findsOneWidget);
+    });
+
+    testWidgets('member role drives the reply voice', (tester) async {
+      SharedPreferences.setMockInitialValues({});
+      await tester.binding.setSurfaceSize(const Size(390, 844));
+      final s = AppStore(now: openNow());
+      s.accountName = 'Mark';
+      s.accountEmail = 'mark@example.com';
+      await tester.pumpWidget(
+        AppScope(
+          store: s,
+          child: CupertinoApp(
+            theme: themeFor(AppPalette.light),
+            home: const ChatThreadScreen(
+              threadId: 'th_clinic',
+              replyRole: StaffRole.groomer,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await sendText(tester, 'How much is a full groom?');
+      // Ana answers in her own voice, under her own name. The price matches
+      // Seed.services sv4 (Full Grooming) — the booking flow's price.
+      expect(find.textContaining('₱1450'), findsOneWidget);
+      expect(find.textContaining('Ana · Groomer'), findsOneWidget);
+    });
+  });
+
+  group('AI thread cleanup (B6)', () {
+    testWidgets('unavailable AI shows an inline notice, not the API card', (
+      tester,
+    ) async {
+      // No key in mock prefs → AiStatus.unavailable.
+      await pumpThread(tester, 'th_ai', accountName: 'Mark');
+      expect(find.textContaining('AI is unavailable'), findsOneWidget);
+      expect(find.text('Open Settings'), findsOneWidget);
+      expect(find.byType(AiUnavailableCard), findsNothing);
+    });
+  });
+
+  group('health result button (B7)', () {
+    testWidgets('hidden when no health-check result exists', (tester) async {
+      await pumpThread(tester, 'th_clinic', accountName: 'Mark');
+      expect(find.bySemanticsLabel('Open health check result'), findsNothing);
     });
   });
 }
