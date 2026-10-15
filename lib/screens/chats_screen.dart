@@ -4,6 +4,7 @@ import '../app.dart';
 import '../data/models.dart';
 import '../data/seed.dart';
 import '../design/icons.dart';
+import '../design/motion.dart';
 import '../design/theme.dart';
 import '../design/tokens.dart';
 import '../state/app_store.dart';
@@ -11,14 +12,23 @@ import '../widgets/common.dart';
 import 'chat_thread_screen.dart';
 
 /// CHATS — a single inbox. No presence system, no live availability badges.
-class ChatsScreen extends StatelessWidget {
+class ChatsScreen extends StatefulWidget {
   const ChatsScreen({super.key});
+
+  @override
+  State<ChatsScreen> createState() => _ChatsScreenState();
+}
+
+class _ChatsScreenState extends State<ChatsScreen> {
+  /// "How it works" starts collapsed (G2); the info icon expands it.
+  bool _howItWorksOpen = false;
 
   @override
   Widget build(BuildContext context) {
     final store = AppScope.of(context);
     final p = context.p;
     final offline = store.offlineNote;
+    final reduce = reduceMotionOf(context);
 
     return CupertinoPageScaffold(
       backgroundColor: p.background,
@@ -52,43 +62,60 @@ class ChatsScreen extends StatelessWidget {
                   const SizedBox(height: 12),
                   _OfflineNote(text: offline),
                 ],
-                SectionHeader(
-                  title: 'Clinic team',
-                  icon: Ic.person,
-                  actionLabel: 'All staff',
-                  onAction: () =>
-                      showAppSheet(context, child: const StaffDirectorySheet()),
-                ),
-                const StaffDirectory(compact: true),
                 const SizedBox(height: T.s20),
-                SoftCard(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Ic.svg(Ic.info, color: p.textSecondary, size: 18),
-                          const SizedBox(width: 9),
-                          Expanded(
-                            child: Text(
-                              'How this works',
-                              style: Type.headline(p),
+                // ---- Clinic chat section: how-it-works (G2, collapsed) +
+                // clinic team carousel below it.
+                Row(
+                  children: [
+                    Expanded(child: Text('Clinic chat', style: Type.title3(p))),
+                    Semantics(
+                      button: true,
+                      container: true,
+                      label: _howItWorksOpen
+                          ? 'Hide how clinic chat works'
+                          : 'How clinic chat works',
+                      child: ExcludeSemantics(
+                        child: PressScale(
+                          onTap: () => setState(
+                            () => _howItWorksOpen = !_howItWorksOpen,
+                          ),
+                          child: Container(
+                            width: 44,
+                            height: 44,
+                            alignment: Alignment.center,
+                            child: Ic.svg(
+                              Ic.info,
+                              color: T.taupe,
+                              size: 20,
+                              stroke: 2,
                             ),
                           ),
-                        ],
+                        ),
                       ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'CarePaws AI is the clinic\'s in-app assistant — feeding, health, vaccines, '
-                        'grooming and health checks. It gives guidance, never a diagnosis. Anything '
-                        'outside veterinary care it will turn back to your pet. Anything clinical goes '
-                        'to Miguel the vet assistant, who loops in Dr. Alvarez or Ana when needed. '
-                        'A health check carries your pet and the summary automatically — no retyping.',
-                        style: Type.body(p).copyWith(color: p.textSecondary),
-                      ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
+                AnimatedSize(
+                  duration: reduce
+                      ? Duration.zero
+                      : const Duration(milliseconds: 200),
+                  alignment: Alignment.topCenter,
+                  child: _howItWorksOpen
+                      ? Padding(
+                          padding: const EdgeInsets.only(top: 4, bottom: 4),
+                          child: Text(
+                            'Message the clinic team directly. A vet, vet '
+                            'assistant, or groomer replies during clinic hours '
+                            '(Mon–Sat 9–6). For emergencies after hours, call '
+                            'the clinic number.',
+                            style: Type.footnote(p)
+                                .copyWith(color: p.textSecondary),
+                          ),
+                        )
+                      : const SizedBox.shrink(),
+                ),
+                const SizedBox(height: 12),
+                const _TeamCarousel(),
               ],
             ),
           ),
@@ -96,6 +123,286 @@ class ChatsScreen extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Horizontal clinic-team carousel: 132×168 cards with photo, name, role.
+/// Tap opens the member's profile sheet.
+class _TeamCarousel extends StatefulWidget {
+  const _TeamCarousel();
+
+  @override
+  State<_TeamCarousel> createState() => _TeamCarouselState();
+}
+
+class _TeamCarouselState extends State<_TeamCarousel> {
+  PageController? _pages;
+  double _vpWidth = 0;
+
+  @override
+  void dispose() {
+    _pages?.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // The sliver insets 20pt on each side; one 132pt card + 12pt gap per page.
+    final vp = MediaQuery.sizeOf(context).width - 40;
+    if (_pages == null || (_vpWidth - vp).abs() > 0.5) {
+      _pages?.dispose();
+      _pages = PageController(viewportFraction: 144 / vp);
+      _vpWidth = vp;
+    }
+    return SizedBox(
+      height: 184,
+      child: PageView.builder(
+        controller: _pages,
+        padEnds: false,
+        itemCount: Seed.staff.length,
+        itemBuilder: (context, i) => Padding(
+          padding: const EdgeInsets.only(right: 12),
+          child: _TeamCard(member: Seed.staff[i]),
+        ),
+      ),
+    );
+  }
+}
+
+class _TeamCard extends StatelessWidget {
+  const _TeamCard({required this.member});
+  final Staff member;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.p;
+    return Semantics(
+      button: true,
+      label: '${member.name}, ${member.role.label}',
+      child: ExcludeSemantics(
+        child: PressScale(
+          onTap: () => _openMemberSheet(context, member),
+          child: Container(
+            width: 132,
+            height: 168,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: p.surface,
+              borderRadius: BorderRadius.circular(T.rControl),
+              boxShadow: p.isDark
+                  ? null
+                  : const [
+                      BoxShadow(
+                        color: T.shadowLight,
+                        blurRadius: T.shadowBlur,
+                        offset: Offset(0, T.shadowDy),
+                      ),
+                    ],
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                _TeamAvatar(initials: member.initials, size: 64),
+                const SizedBox(height: 8),
+                Text(
+                  member.name,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ).copyWith(color: p.text),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  member.role.label,
+                  style: const TextStyle(fontSize: 12)
+                      .copyWith(color: p.textSecondary),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Initials avatar for the team carousel/sheet: orange→terracotta gradient
+/// disc, white initials. No photo assets (deliberate, per plan).
+class _TeamAvatar extends StatelessWidget {
+  const _TeamAvatar({required this.initials, required this.size});
+  final String initials;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: size,
+      height: size,
+      alignment: Alignment.center,
+      decoration: const BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: LinearGradient(
+          colors: [T.orange, T.terracotta],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+      ),
+      child: Text(
+        initials,
+        style: TextStyle(
+          fontSize: size * 0.375,
+          fontWeight: FontWeight.w600,
+          color: const Color(0xFFFFFFFF),
+        ),
+      ),
+    );
+  }
+}
+
+/// Member profile sheet: bio, role, focus, and a Chat button that opens the
+/// clinic thread with that member's reply voice.
+///
+/// Detents at 60%/92% (draggable), 40% scrim, dismiss on scrim tap or
+/// drag-down. Built on showGeneralDialog + DraggableScrollableSheet rather
+/// than showModalBottomSheet: the app root is a CupertinoApp, which provides
+/// no MaterialLocalizations, so the Material sheet API throws here.
+void _openMemberSheet(BuildContext context, Staff member) {
+  final p = context.p;
+  final reduce = reduceMotionOf(context);
+  showGeneralDialog(
+    context: context,
+    barrierColor: const Color(0x66000000),
+    barrierDismissible: true,
+    barrierLabel: 'Dismiss',
+    useRootNavigator: false,
+    transitionDuration: reduce
+        ? Duration.zero
+        : const Duration(milliseconds: 300),
+    pageBuilder: (ctx, _, _) => SafeArea(
+      top: false,
+      child: Align(
+        alignment: Alignment.bottomCenter,
+        child: DraggableScrollableSheet(
+          initialChildSize: 0.6,
+          minChildSize: 0.25,
+          maxChildSize: 0.92,
+          expand: false,
+          snap: true,
+          snapSizes: const [0.6, 0.92],
+          builder: (sheetCtx, scrollController) =>
+              NotificationListener<DraggableScrollableNotification>(
+                onNotification: (n) {
+                  if (n.extent <= 0.26) Navigator.of(sheetCtx).pop();
+                  return false;
+                },
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: p.surface,
+                    borderRadius: const BorderRadius.vertical(
+                      top: Radius.circular(22),
+                    ),
+                  ),
+                  child: SingleChildScrollView(
+                    controller: scrollController,
+                    child: Padding(
+                      padding: EdgeInsets.fromLTRB(
+                        24,
+                        12,
+                        24,
+                        24 + MediaQuery.paddingOf(sheetCtx).bottom,
+                      ),
+                      child: Column(
+                        children: [
+                          Container(
+                            width: 36,
+                            height: 4,
+                            decoration: BoxDecoration(
+                              color: T.taupe.withValues(alpha: 0.4),
+                              borderRadius: BorderRadius.circular(2),
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          _TeamAvatar(initials: member.initials, size: 80),
+                          const SizedBox(height: 12),
+                          Text(
+                            member.name,
+                            style: Type.title2(p),
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 6,
+                            ),
+                            decoration: BoxDecoration(
+                              color: T.amber.withValues(alpha: 0.35),
+                              borderRadius: BorderRadius.circular(T.rPill),
+                            ),
+                            child: Text(
+                              member.role.label,
+                              style: const TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                color: T.text,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          Text(
+                            member.bio,
+                            style: Type.callout(p)
+                                .copyWith(color: p.textSecondary),
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            member.focus,
+                            style: Type.footnote(p)
+                                .copyWith(color: p.textSecondary),
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 24),
+                          PrimaryButton(
+                            label: 'Chat',
+                            onPressed: () {
+                              Navigator.of(sheetCtx).pop();
+                              Navigator.of(context).push(
+                                appRoute(
+                                  ChatThreadScreen(
+                                    threadId: Seed.clinicThread.id,
+                                    replyRole: member.role,
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+        ),
+      ),
+    ),
+    transitionBuilder: (ctx, anim, _, child) {
+      if (reduce) return child;
+      final slide = Tween<Offset>(
+        begin: const Offset(0, 0.15),
+        end: Offset.zero,
+      ).animate(CurvedAnimation(parent: anim, curve: Curves.easeOut));
+      return SlideTransition(
+        position: slide,
+        child: FadeTransition(opacity: anim, child: child),
+      );
+    },
+  );
 }
 
 class _ThreadRow extends StatelessWidget {
@@ -266,6 +573,7 @@ class _OfflineNote extends StatelessWidget {
 }
 
 /// Staff directory — photo/avatar, name, role. No availability badges.
+/// (Kept for the inline team list inside the clinic thread.)
 class StaffDirectory extends StatelessWidget {
   const StaffDirectory({super.key, this.compact = false});
   final bool compact;
@@ -306,34 +614,6 @@ class StaffDirectory extends StatelessWidget {
               ),
             ),
           ],
-        ],
-      ),
-    );
-  }
-}
-
-class StaffDirectorySheet extends StatelessWidget {
-  const StaffDirectorySheet({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    final p = context.p;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Clinic team', style: Type.title1(p)),
-          const SizedBox(height: 6),
-          Text(
-            'Miguel the vet assistant owns this inbox and loops in Dr. Alvarez or Ana as needed.',
-            style: Type.footnote(p),
-          ),
-          const SizedBox(height: T.s16),
-          const StaffDirectory(),
-          const SizedBox(height: T.s20),
-          PrimaryButton(label: 'Done', onPressed: () => dismissSheet(context)),
         ],
       ),
     );

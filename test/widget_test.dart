@@ -825,18 +825,23 @@ void main() {
 
   group('AI unavailable', () {
     testWidgets(
-      'the AI thread pins the unavailable card when no key is configured',
+      'the AI thread shows an inline unavailable notice, not the API card',
       (tester) async {
         await pumpShell(tester);
         await openTab(tester, 'Chats');
         await tester.tap(find.text('CarePaws AI').first);
         await tester.pumpAndSettle();
-        expect(find.text('CarePaws AI is unavailable'), findsOneWidget);
-        expect(find.textContaining('No API key is configured'), findsOneWidget);
-        expect(find.text('Add an API key'), findsOneWidget);
-        // Never a dead end: working alternatives are right there.
-        expect(find.text('Book a visit'), findsOneWidget);
-        expect(find.text('Call the clinic'), findsOneWidget);
+        // B6: the AI thread no longer pins the AiUnavailableCard — an inline
+        // notice with a direct path to Settings instead. The card stays in
+        // the triage/booking flows (story-map S7).
+        expect(
+          find.text('AI is unavailable — add a key in Settings to chat.'),
+          findsOneWidget,
+        );
+        expect(find.text('Open Settings'), findsOneWidget);
+        expect(find.text('Add an API key'), findsNothing);
+        expect(find.text('Book a visit'), findsNothing);
+        expect(find.text('Call the clinic'), findsNothing);
       },
     );
 

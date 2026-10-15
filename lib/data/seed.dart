@@ -148,6 +148,10 @@ class Seed {
     years: 14,
     initials: 'RA',
     focus: 'Internal medicine, dermatology',
+    bio:
+        'Veterinarian with 14 years in internal medicine and dermatology. '
+        'Calm, thorough, and straight with you — he explains what he sees, '
+        'what it could mean, and what to do next.',
   );
   static final assistant = Staff(
     id: 's2',
@@ -156,6 +160,10 @@ class Seed {
     years: 6,
     initials: 'MC',
     focus: 'Vaccinations, microchipping, client care',
+    bio:
+        'Vet assistant who runs this inbox. Vaccinations, microchipping, '
+        'scheduling — and he loops in Dr. Alvarez or Ana the moment a '
+        'question needs them.',
   );
   static final groomer = Staff(
     id: 's3',
@@ -164,6 +172,10 @@ class Seed {
     years: 9,
     initials: 'AR',
     focus: 'Breed-standard cuts, desensitising',
+    bio:
+        'Groomer specialising in breed-standard cuts and gentle '
+        'desensitising for nervous pets. Baths, cuts, nails, ears — done '
+        'patiently, at your pet\u2019s pace.',
   );
   static List<Staff> get staff => [vet, assistant, groomer];
 

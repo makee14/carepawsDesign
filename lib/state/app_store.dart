@@ -13,6 +13,7 @@ import '../services/auth_store.dart';
 import '../services/dataset_store.dart';
 import '../services/photo_store.dart';
 import '../services/settings_store.dart';
+import '../services/staff_replies.dart';
 import 'profile_store.dart';
 
 /// Single source of truth for the whole app. A lightweight ChangeNotifier is
@@ -728,13 +729,14 @@ class AppStore extends ChangeNotifier {
     );
     final first = ownerFirstName;
     final thanks = first.isEmpty ? 'Thanks' : 'Thanks, $first';
+    // Dynamic, role-matched reply via the shared composer (B5) — the old
+    // inline hardcoded strings are gone.
     final reply = ChatMessage(
       id: 'r${now.microsecondsSinceEpoch}',
       threadId: 'th_clinic',
       author: ChatAuthor.vetAssistant,
-      text: staffOnline()
-          ? '$thanks — I have this. I will review ${pet.name}\'s chart and reply with a recommendation within clinic hours.'
-          : '$thanks — this came through while we were closed. I will pick it up from 9:00 AM and reply with a recommendation.',
+      text:
+          '$thanks! ${composeStaffReply(role: StaffRole.vetAssistant, userText: 'health check handoff: ${result.title}', petName: pet.name, clinicOpen: staffOnline())}',
       at: now.add(const Duration(minutes: 1)),
       petId: pet.id,
     );

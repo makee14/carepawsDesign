@@ -166,6 +166,7 @@ class Staff {
     required this.years,
     required this.initials,
     required this.focus,
+    required this.bio,
   });
   final String id;
   final String name;
@@ -173,6 +174,9 @@ class Staff {
   final int years;
   final String initials;
   final String focus;
+
+  /// Short, friendly bio shown on the member's profile sheet.
+  final String bio;
 
   String get firstName => name.split(' ').first;
 }
@@ -464,7 +468,10 @@ class ChatMessage {
   final ChatKind kind;
   final String? triageSummary;
 
-  /// Set for [ChatKind.image]: the downscaled photo bytes. Text stays empty.
+  /// Set for [ChatKind.image]: the photo bytes. Newly sent photos are kept
+  /// at full resolution (≤1600px longest edge, JPEG q85); historic/seeded
+  /// messages keep their downscaled bytes and are never upscaled at render.
+  /// Text stays empty.
   final Uint8List? imageBytes;
 }
 
@@ -569,6 +576,7 @@ class Promo {
   final int art;
   final String ctaLabel;
   final String route;
+}
 // ------------------------------------------------------- Stream C: health check
 
 /// Urgency of a health-check result. Maps from the AI triage outcome:
