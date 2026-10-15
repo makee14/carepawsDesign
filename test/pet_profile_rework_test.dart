@@ -107,31 +107,75 @@ void main() {
   });
 
   group('banner stats strip', () {
-    testWidgets('weight tile always; height/length hidden when null', (
+    /// Topmost text with the label = the banner's (vitals grid repeats
+    /// Weight further down the page).
+    Offset topmost(WidgetTester tester, String label) {
+      final spots = find
+          .text(label)
+          .evaluate()
+          .map((e) => (e.renderObject! as RenderBox).localToGlobal(Offset.zero))
+          .toList();
+      spots.sort((a, b) => a.dy.compareTo(b.dy));
+      return spots.first;
+    }
+
+    testWidgets('always shows Weight, Age, Gender — in that order', (
       tester,
     ) async {
       final store = seedStore();
-      // Biscuit's seed data now includes measurements; use a cleared copy to
-      // exercise the null-hiding behavior.
-      store.pets = [unmeasuredPet(store.pet('p1')!)];
       await pumpProfile(tester, store);
-      // Weight tile is in the banner (value also appears in the vitals
-      // grid, so just require presence).
+      // Values: weight repeats in the vitals grid; age/gender are
+      // banner-only now that the age pill is gone.
       expect(find.text('31.4 kg'), findsWidgets);
-      expect(find.text('Weight'), findsWidgets);
-      // Null measurements leave no tile and no invented data.
-      expect(find.text('Height'), findsNothing);
-      expect(find.text('Length'), findsNothing);
+      expect(find.text('5 yr old'), findsOneWidget);
+      expect(find.text('Male'), findsOneWidget);
+      // Label order left → right.
+      final w = topmost(tester, 'Weight');
+      final a = topmost(tester, 'Age');
+      final g = topmost(tester, 'Gender');
+      expect(w.dx, lessThan(a.dx));
+      expect(a.dx, lessThan(g.dx));
     });
 
-    testWidgets('height/length tiles appear when set', (tester) async {
+    testWidgets('height/length never appear in the banner', (tester) async {
       final store = seedStore();
+      // Even with measurements recorded, the banner shows only the trio.
       store.pets = [measuredPet(store.pet('p1')!), store.pet('p2')!];
       await pumpProfile(tester, store);
-      expect(find.text('25.0 cm'), findsOneWidget);
-      expect(find.text('40.0 cm'), findsOneWidget);
-      expect(find.text('Height'), findsOneWidget);
-      expect(find.text('Length'), findsOneWidget);
+      expect(find.text('Height'), findsNothing);
+      expect(find.text('Length'), findsNothing);
+      // …but they stay editable in the edit screen (data is not deleted).
+      expect(store.pet('p1')!.heightCm, 25);
+      expect(store.pet('p1')!.lengthCm, 40);
+    });
+
+    testWidgets('Pet ID chip sits beside the name and opens the ID card', (
+      tester,
+    ) async {
+      final store = seedStore();
+      final pet = store.pet('p1')!;
+      await pumpProfile(tester, store);
+      // Banner chip is above the fold; the Details row is lazily built
+      // below it, so .first is the banner chip.
+      final chip = find.text(pet.petCode).first;
+      expect(chip, findsOneWidget);
+      // …and it sits on the same row as the name (beside it, not below).
+      // (Tree order puts the nav-bar title last, so .first is the banner.)
+      final chipY = tester.getCenter(chip).dy;
+      final nameY = tester.getCenter(find.text('Biscuit').first).dy;
+      expect((chipY - nameY).abs(), lessThan(24));
+      await tester.tap(chip);
+      await tester.pumpAndSettle();
+      // The digital ID card opened (its caption is unique to the sheet).
+      expect(
+        find.text('Show this card at the clinic front desk.'),
+        findsOneWidget,
+      );
+      expect(find.text(pet.petCode), findsWidgets); // chip + card + row
+      await tester.ensureVisible(find.text('Done'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Done'));
+      await tester.pumpAndSettle();
     });
   });
 

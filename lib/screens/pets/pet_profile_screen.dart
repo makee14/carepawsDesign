@@ -144,12 +144,14 @@ class _PetProfileScreenState extends State<PetProfileScreen> {
                                 children: [
                                   _NameRow(
                                     name: pet.name,
-                                    ageLabel: pet.ageLabel,
+                                    petCode: pet.petCode,
+                                    onPetIdTap: () => _openIdCard(context, pet),
                                   ),
                                   const SizedBox(height: 12),
-                                  // Weight always; height/length tiles only
-                                  // when the clinic has recorded them — null
-                                  // hides the tile, never invents a value.
+                                  // Weight / Age / Gender, always all three —
+                                  // height/length stay editable in
+                                  // EditPetScreen but don't show in the
+                                  // banner.
                                   _MeasureStrip(pet: pet),
                                 ],
                               ),
@@ -608,23 +610,40 @@ class _DocViewerScreen extends StatelessWidget {
   }
 }
 
-/// Name + age pill. Side by side at normal type sizes (the reference
-/// composition); stacked when Dynamic Type goes huge, so the pill can never
-/// starve the name to zero width — at AX5 that produced a 31px overflow and
-/// a 728px-tall single-character name column.
+/// Name + Pet ID chip. The chip opens the digital ID card — the same action
+/// as the Pet ID row in Details, so the code is discoverable from the banner
+/// too. Side by side at normal type sizes (the reference composition);
+/// stacked when Dynamic Type goes huge, so the chip can never starve the
+/// name to zero width — at AX5 that produced a 31px overflow and a 728px-tall
+/// single-character name column.
 class _NameRow extends StatelessWidget {
-  const _NameRow({required this.name, required this.ageLabel});
+  const _NameRow({
+    required this.name,
+    required this.petCode,
+    required this.onPetIdTap,
+  });
   final String name;
-  final String ageLabel;
+  final String petCode;
+  final VoidCallback onPetIdTap;
 
   @override
   Widget build(BuildContext context) {
     final p = context.p;
-    final pill = StatusChip(
-      label: ageLabel,
-      compact: true,
-      fg: p.accentText,
-      bg: p.accent.withValues(alpha: 0.12),
+    final chip = Semantics(
+      button: true,
+      label: 'Pet ID $petCode. Show ID card.',
+      child: ExcludeSemantics(
+        child: PressScale(
+          onTap: onPetIdTap,
+          child: StatusChip(
+            label: petCode,
+            icon: Ic.qr,
+            compact: true,
+            fg: p.accentText,
+            bg: p.accent.withValues(alpha: 0.12),
+          ),
+        ),
+      ),
     );
     // Same "huge" threshold as Layout.heroHeight.
     final huge = MediaQuery.textScalerOf(context).scale(1) > 1.35;
@@ -640,7 +659,7 @@ class _NameRow extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
           ),
           const SizedBox(height: 8),
-          pill,
+          chip,
         ],
       );
     }
@@ -655,16 +674,20 @@ class _NameRow extends StatelessWidget {
           ),
         ),
         const SizedBox(width: 8),
-        pill,
+        chip,
       ],
     );
   }
 }
 
-/// Measurement tiles in the banner: weight always, height/length only when
-/// recorded (null hides the tile). Same tile style as the old weight stat —
-/// icon, value, label, leading-aligned — with FittedBox scale-down so AX5
-/// shrinks the value instead of overflowing.
+/// Banner stats: Weight, Age, Gender — always all three, in that order.
+/// Typographic tiles (value + label, no icons): the icon set has no gender
+/// glyph, and the HIG-native stat strip is typographic anyway. Values at
+/// headline size so the strip holds its own against the title1 name; labels
+/// are caption-size but full-strength text — the panel floats over an
+/// arbitrary photo, where textSecondary can't promise 4.5:1 (same rule as
+/// the appointment card body). Height/length stay on the Pet model and
+/// editable in EditPetScreen; they just don't show in the banner.
 class _MeasureStrip extends StatelessWidget {
   const _MeasureStrip({required this.pet});
   final Pet pet;
@@ -673,50 +696,40 @@ class _MeasureStrip extends StatelessWidget {
   Widget build(BuildContext context) {
     final p = context.p;
     final tiles = [
-      (Ic.scale, '${pet.weightKg} kg', 'Weight'),
-      if (pet.heightCm != null) (Ic.arrowUp, '${pet.heightCm} cm', 'Height'),
-      if (pet.lengthCm != null) (Ic.arrowRight, '${pet.lengthCm} cm', 'Length'),
+      ('${pet.weightKg} kg', 'Weight'),
+      (pet.ageLabel, 'Age'),
+      (pet.sex, 'Gender'),
     ];
-    return Row(
-      children: [
-        for (var i = 0; i < tiles.length; i++) ...[
-          if (i > 0)
-            Container(
-              width: 1,
-              height: 34,
-              color: p.isDark
-                  ? T.card.withValues(alpha: 0.18)
-                  : T.taupe.withValues(alpha: 0.3),
-            ),
-          Expanded(
-            // Leading-aligned: the stat sits under the name's leading edge
-            // instead of drifting centered beneath the full-width name row.
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Ic.svg(tiles[i].$1, color: p.accent, size: 16),
-                const SizedBox(height: 4),
-                FittedBox(
-                  fit: BoxFit.scaleDown,
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    tiles[i].$2,
-                    style: Type.footnoteEmph(p).copyWith(fontSize: 14),
-                  ),
-                ),
-                Text(
-                  tiles[i].$3,
-                  style: Type.caption(p),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
-            ),
+    final dividerColor = p.isDark
+        ? T.card.withValues(alpha: 0.18)
+        : T.taupe.withValues(alpha: 0.3);
+    Widget tile(int i) => Expanded(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        // Leading-aligned: each value sits under the name's leading edge
+        // (first tile) or with even breathing room around the dividers.
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(tiles[i].$1, style: Type.headline(p), maxLines: 1),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            tiles[i].$2,
+            style: Type.caption(p).copyWith(color: p.text),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
         ],
-      ],
+      ),
     );
+    Widget divider() => Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      child: Container(width: 1, height: 36, color: dividerColor),
+    );
+    return Row(children: [tile(0), divider(), tile(1), divider(), tile(2)]);
   }
 }
 
