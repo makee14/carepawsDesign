@@ -296,6 +296,8 @@ class AppStore extends ChangeNotifier {
     sex: p.sex,
     birthDate: p.birthDate,
     weightKg: p.weightKg,
+    heightCm: p.heightCm,
+    lengthCm: p.lengthCm,
     color: p.color,
     microchip: p.microchip,
     allergies: p.allergies,

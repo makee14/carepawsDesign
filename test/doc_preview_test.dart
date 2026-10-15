@@ -166,6 +166,10 @@ Future<void> openDocSheet(WidgetTester tester, String docName) async {
       400,
       scrollable: find.byType(Scrollable).first,
     );
+    // Let the scroll settle: without this the tap can land while the row is
+    // still moving (exposed by the shorter reworked banner shifting scroll
+    // distances) and miss the RowTile.
+    await tester.pumpAndSettle();
     await tester.tap(find.text(docName));
     // The sheet opens and its preview image decodes.
     await pumpUntil(tester, () => find.text('Download').evaluate().isNotEmpty);

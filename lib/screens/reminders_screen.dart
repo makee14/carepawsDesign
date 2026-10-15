@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/cupertino.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -12,8 +14,38 @@ import 'home_screen.dart' show toggleReminderWithSheet;
 import '../widgets/common.dart';
 
 /// Reminders — the full settings surface behind Home and Profile → Notifications.
-class RemindersScreen extends StatelessWidget {
+class RemindersScreen extends StatefulWidget {
   const RemindersScreen({super.key});
+
+  @override
+  State<RemindersScreen> createState() => _RemindersScreenState();
+}
+
+class _RemindersScreenState extends State<RemindersScreen> {
+  final _scroll = ScrollController();
+
+  @override
+  void dispose() {
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  /// "Add reminder": turns on the first reminder that is off, through the same
+  /// permission-aware toggle path as the switch rows. If everything is already
+  /// on, scrolls to the toggle list so the CTA is never a dead end.
+  void _addReminder() {
+    final store = AppScope.of(context);
+    final off = store.reminders.where((r) => !r.on);
+    if (off.isEmpty) {
+      _scroll.animateTo(
+        0,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOut,
+      );
+      return;
+    }
+    unawaited(toggleReminderWithSheet(context, store, off.first.id, true));
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -28,6 +60,7 @@ class RemindersScreen extends StatelessWidget {
           children: [
             Expanded(
               child: ListView(
+                controller: _scroll,
                 padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
                 children: [
                   SoftCard(
@@ -78,7 +111,7 @@ class RemindersScreen extends StatelessWidget {
                   const SizedBox(height: T.s16),
                   Text('Upcoming', style: Type.headline(p)),
                   const SizedBox(height: 10),
-                  _UpcomingList(store: store),
+                  _UpcomingList(store: store, onAddReminder: _addReminder),
                 ],
               ),
             ),
@@ -90,8 +123,9 @@ class RemindersScreen extends StatelessWidget {
 }
 
 class _UpcomingList extends StatelessWidget {
-  const _UpcomingList({required this.store});
+  const _UpcomingList({required this.store, required this.onAddReminder});
   final AppStore store;
+  final VoidCallback onAddReminder;
 
   @override
   Widget build(BuildContext context) {
@@ -105,7 +139,8 @@ class _UpcomingList extends StatelessWidget {
         ),
     ];
     final vaccines = [
-      (pet: store.pets.last, when: '9 Jul 2027', what: 'Triose booster'),
+      if (store.pets.isNotEmpty)
+        (pet: store.pets.last, when: '9 Jul 2027', what: 'Triose booster'),
     ];
     final appts = [
       for (final a in store.upcoming)
@@ -115,6 +150,19 @@ class _UpcomingList extends StatelessWidget {
           what: store.serviceOf(a.serviceId).name,
         ),
     ];
+
+    if (meds.isEmpty && vaccines.isEmpty && appts.isEmpty) {
+      return EmptyState(
+        icon: Ic.bell,
+        title: 'No reminders yet',
+        body:
+            'Turn on a reminder above — medication schedules, vaccine due dates '
+            'and appointment nudges will land here.',
+        actionLabel: 'Add reminder',
+        onAction: onAddReminder,
+        compact: true,
+      );
+    }
 
     return SoftCard(
       padding: EdgeInsets.zero,
