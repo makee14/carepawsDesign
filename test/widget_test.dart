@@ -1381,8 +1381,12 @@ void main() {
         expect(find.text('Delete'), findsOneWidget);
 
         await tester.tap(find.text('Delete'));
-        await tester.pumpAndSettle();
-        expect(find.text('Account deleted'), findsOneWidget);
+        // Real deletion now lands on the splash (ambient animation loops, so
+        // pumpAndSettle would time out — pump fixed frames instead).
+        await tester.pump();
+        await tester.pump(const Duration(seconds: 1));
+        await tester.pump(const Duration(seconds: 1));
+        expect(find.text('Get started'), findsOneWidget);
         expect(store.petCount, 0);
       },
     );
