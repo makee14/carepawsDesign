@@ -8,7 +8,6 @@ import '../design/theme.dart';
 import '../design/tokens.dart';
 import '../state/app_store.dart';
 import '../widgets/common.dart';
-import '../widgets/nav_actions.dart';
 import 'appointments/appointment_detail_screen.dart';
 import 'appointments/book_flow.dart';
 
@@ -27,59 +26,90 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
   Widget build(BuildContext context) {
     final store = AppScope.of(context);
     final p = context.p;
+    final landscape =
+        MediaQuery.orientationOf(context) == Orientation.landscape;
     return CupertinoPageScaffold(
       backgroundColor: p.background,
-      child: CustomScrollView(
-        slivers: [
-          const LargeTitleBar(title: 'Appointments'),
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
-              // Segmented control and the "book" action share one row.
-              child: Row(
-                children: [
-                  Expanded(
-                    child: _Segmented(
-                      index: _seg,
-                      labels: const ['Upcoming', 'Past'],
-                      onChanged: (i) {
-                        HapticFeedback.selectionClick();
-                        setState(() => _seg = i);
-                      },
+      child: Stack(
+        children: [
+          CustomScrollView(
+            slivers: [
+              const LargeTitleBar(title: 'Appointments'),
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
+                  child: _Segmented(
+                    index: _seg,
+                    labels: const ['Upcoming', 'Past'],
+                    onChanged: (i) {
+                      HapticFeedback.selectionClick();
+                      setState(() => _seg = i);
+                    },
+                  ),
+                ),
+              ),
+              SliverPadding(
+                padding: EdgeInsets.fromLTRB(
+                  20,
+                  8,
+                  20,
+                  // FAB clearance: the 56pt button sits tab-bar height + s16
+                  // above the bottom, so the list needs 56 + s32 below the
+                  // tab bar to never slide under it.
+                  56 + T.s32 + TabBarClearance.of(context),
+                ),
+                sliver: _seg == 0
+                    ? _UpcomingList(
+                        store: store,
+                        onBook: () => _book(context, store),
+                      )
+                    : _PastList(
+                        store: store,
+                        onBook: () => _book(context, store),
+                      ),
+              ),
+            ],
+          ),
+          // Circular booking FAB: bottom-right, floating above the tab bar.
+          // Tab-bar height is read from the shell at build time — never
+          // hardcoded. 56pt fixed even at AX5 (platform convention).
+          Positioned(
+            right: T.s16,
+            bottom: TabBarClearance.of(context) + (landscape ? T.s12 : T.s16),
+            child: Semantics(
+              button: true,
+              label: 'Book a new appointment',
+              child: ExcludeSemantics(
+                child: PressScale(
+                  scale: 0.94,
+                  onTap: () => _book(context, store),
+                  child: Container(
+                    width: 56,
+                    height: 56,
+                    decoration: BoxDecoration(
+                      color: T.orange,
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: T.espresso.withValues(alpha: 0.12),
+                          blurRadius: 18,
+                          offset: const Offset(0, 6),
+                        ),
+                      ],
+                    ),
+                    child: Center(
+                      // T.ink on T.orange ≈ 5.9:1 — white would be ~2.9:1.
+                      child: Ic.svg(
+                        Ic.plus,
+                        color: T.ink,
+                        size: 24,
+                        stroke: 2.4,
+                      ),
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  NavActions(
-                    actions: [
-                      IconTap(
-                        path: Ic.plus,
-                        label: 'Book a new appointment',
-                        color: p.primaryFill,
-                        onPressed: () => Navigator.of(context).push(
-                          appRoute(
-                            BookFlow(initialPetId: store.pets.firstOrNull?.id),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
+                ),
               ),
             ),
-          ),
-          SliverPadding(
-            padding: EdgeInsets.fromLTRB(
-              20,
-              8,
-              20,
-              40 + TabBarClearance.of(context),
-            ),
-            sliver: _seg == 0
-                ? _UpcomingList(
-                    store: store,
-                    onBook: () => _book(context, store),
-                  )
-                : _PastList(store: store, onBook: () => _book(context, store)),
           ),
         ],
       ),

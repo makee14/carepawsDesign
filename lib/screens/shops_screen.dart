@@ -8,6 +8,7 @@ import '../design/tokens.dart';
 import '../state/app_store.dart';
 import '../widgets/common.dart';
 import '../widgets/nav_actions.dart';
+import '../widgets/product_card.dart';
 import 'shop/cart_screen.dart';
 import 'shop/orders_screen.dart';
 import 'shop/product_detail_screen.dart';
@@ -170,27 +171,51 @@ class _ShopsScreenState extends State<ShopsScreen> {
               ),
             )
           else
-            SliverPadding(
-              padding: EdgeInsets.fromLTRB(
-                20,
-                0,
-                20,
-                40 + TabBarClearance.of(context),
-              ),
-              sliver: SliverGrid(
-                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: MediaQuery.sizeOf(context).width > 620
-                      ? 3
-                      : 2,
-                  mainAxisSpacing: 16,
-                  crossAxisSpacing: 16,
-                  childAspectRatio: 0.62,
-                ),
-                delegate: SliverChildBuilderDelegate(
-                  (context, i) => ProductCard(product: results[i]),
-                  childCount: results.length,
-                ),
-              ),
+            // SliverLayoutBuilder (not MediaQuery) decides the column count:
+            // it measures the width the grid actually gets, so split-screen
+            // and test harnesses can't disagree with it.
+            SliverLayoutBuilder(
+              builder: (context, constraints) {
+                final screenW = constraints.crossAxisExtent;
+                final cols = screenW >= 700 ? 3 : 2;
+                final cardW = (screenW - T.s16 * 2 - T.s12 * (cols - 1)) / cols;
+                // Contract anatomy: 4:3 image + ~106pt text block at 1.0x
+                // (s12, name 2 lines, tagline, s8, price row, s12). The text
+                // block scales with Dynamic Type so the card grows at AX5
+                // instead of clipping (sweep gate); Stream A re-tunes this
+                // against its measured card at merge if needed.
+                final textScale = MediaQuery.textScalerOf(context)
+                    .scale(1)
+                    .clamp(1.0, 3.2);
+                final cellH = cardW * 3 / 4 + 106 * textScale;
+                return SliverPadding(
+                  padding: EdgeInsets.fromLTRB(
+                    T.s16,
+                    0,
+                    T.s16,
+                    40 + TabBarClearance.of(context),
+                  ),
+                  sliver: SliverGrid(
+                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: cols,
+                      mainAxisSpacing: T.s12,
+                      crossAxisSpacing: T.s12,
+                      childAspectRatio: cardW / cellH,
+                    ),
+                    delegate: SliverChildBuilderDelegate(
+                      (context, i) => ProductCard(
+                        product: results[i],
+                        onTap: () => Navigator.of(context).push(
+                          appRoute(
+                            ProductDetailScreen(productId: results[i].id),
+                          ),
+                        ),
+                      ),
+                      childCount: results.length,
+                    ),
+                  ),
+                );
+              },
             ),
         ],
       ),
@@ -246,156 +271,6 @@ class _CartBadge extends StatelessWidget {
                   ),
                 ),
             ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class ProductCard extends StatelessWidget {
-  const ProductCard({super.key, required this.product});
-  final Product product;
-
-  @override
-  Widget build(BuildContext context) {
-    final store = AppScope.of(context);
-    final p = context.p;
-    final inCart = store.qtyOf(product.id);
-
-    // The card is a link to the detail screen; the "Add" control is a separate
-    // sibling button so VoiceOver still reaches it (no nested exclusion).
-    return SoftCard(
-      padding: const EdgeInsets.all(12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            child: Semantics(
-              button: true,
-              label:
-                  '${product.name}. ${product.tagline}. ${peso(product.price)}. '
-                  '${product.inStock ? '${product.stock} in stock' : 'Out of stock'}',
-              child: ExcludeSemantics(
-                child: PressScale(
-                  scale: 0.98,
-                  onTap: () => Navigator.of(
-                    context,
-                  ).push(appRoute(ProductDetailScreen(productId: product.id))),
-                  child: Stack(
-                    children: [
-                      Positioned.fill(
-                        child: ProductArt(art: product.art, radius: 14),
-                      ),
-                      if (product.restricted)
-                        Positioned(
-                          left: 6,
-                          top: 6,
-                          child: StatusChip(
-                            label: 'Rx',
-                            icon: Ic.shield,
-                            compact: true,
-                            fg: p.onPrimaryFill,
-                            bg: p.primaryFill,
-                          ),
-                        ),
-                      if (!product.inStock)
-                        Positioned(
-                          left: 6,
-                          bottom: 6,
-                          child: StatusChip(
-                            label: 'Out of stock',
-                            compact: true,
-                            fg: p.onPrimaryFill,
-                            bg: p.destructive,
-                          ),
-                        ),
-                      if (inCart > 0)
-                        Positioned(
-                          right: 6,
-                          top: 6,
-                          child: StatusChip(
-                            label: '$inCart in cart',
-                            compact: true,
-                            fg: T.espresso,
-                            bg: T.cream.withValues(alpha: 0.92),
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 8),
-          Flexible(
-            child: Text(
-              product.name,
-              style: Type.headline(p),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            product.tagline,
-            style: Type.footnote(p).copyWith(color: p.textSecondary),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  peso(product.price),
-                  style: Type.headline(p).copyWith(color: p.accentText),
-                  // One line, always: at large Dynamic Type the price must
-                  // ellipsize instead of wrapping and pushing the card taller.
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              _MiniAdd(product: product),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _MiniAdd extends StatelessWidget {
-  const _MiniAdd({required this.product});
-  final Product product;
-
-  @override
-  Widget build(BuildContext context) {
-    final p = context.p;
-    return Semantics(
-      button: true,
-      enabled: product.inStock,
-      label: product.inStock
-          ? 'Add ${product.name} to cart'
-          : '${product.name} is out of stock. Tap to notify me when it returns',
-      child: ExcludeSemantics(
-        child: PressScale(
-          onTap: () => addToCartWithFeedback(context, product),
-          child: Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: product.inStock ? p.primaryFill : p.fieldBg,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Center(
-              child: Ic.svg(
-                product.inStock ? Ic.plus : Ic.bell,
-                color: product.inStock ? p.onPrimaryFill : p.textSecondary,
-                size: 20,
-                stroke: 2.3,
-              ),
-            ),
           ),
         ),
       ),

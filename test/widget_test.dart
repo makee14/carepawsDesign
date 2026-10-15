@@ -1340,12 +1340,14 @@ void main() {
       await pumpShell(tester, store: store);
       await openTab(tester, 'Shop');
 
+      // The grid card carries no add button: tap the card -> product detail.
       await tapInView(
         tester,
-        find.bySemanticsLabel(
-          'Add Grass-fed Lamb & Oat Adult Dog Food to cart',
-        ),
+        find.text('Grass-fed Lamb & Oat Adult Dog Food').first,
       );
+      await tester.pumpAndSettle();
+      await tester.tap(find.textContaining('Add to cart').first);
+      await tester.pumpAndSettle();
       expect(find.text('Added to cart'), findsOneWidget);
       await tester.tap(find.text('View cart'));
       await tester.pumpAndSettle();

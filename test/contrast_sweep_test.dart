@@ -381,4 +381,10 @@ void main() {
       expect(opacityOn.opacity, 1.0);
     }
   });
+
+  test('booking FAB glyph — T.ink on T.orange (both themes)', () {
+    // The FAB is T.orange in both themes. A white glyph would be ~2.9:1,
+    // so the glyph is T.ink. Icons need >= 3:1; this clears 4.5:1.
+    check('FAB glyph on orange', T.ink, T.orange, 4.5);
+  });
 }
