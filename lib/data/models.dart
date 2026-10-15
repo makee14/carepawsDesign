@@ -72,6 +72,8 @@ class Pet {
     required this.sex,
     required this.birthDate,
     required this.weightKg,
+    this.heightCm,
+    this.lengthCm,
     required this.color,
     required this.microchip,
     required this.allergies,
@@ -88,6 +90,12 @@ class Pet {
   final String sex;
   final DateTime birthDate;
   final double weightKg;
+
+  /// Optional clinic measurements. Null means "never recorded" — the UI
+  /// hides the tile instead of inventing a value.
+  final double? heightCm;
+  final double? lengthCm;
+
   final Color color;
   final String microchip;
   final List<String> allergies;
@@ -102,6 +110,19 @@ class Pet {
 
   /// Deterministic portrait palette so pet cards read instantly.
   Color get tint => color;
+
+  /// Stable, human-readable patient ID derived from the record id
+  /// (e.g. CP-0002PT). A manual digit fold, not hashCode — String.hashCode
+  /// is not guaranteed stable across runs, and this code is shown to the
+  /// clinic as the pet's identity.
+  String get petCode {
+    var h = 0;
+    for (final c in id.codeUnits) {
+      h = (h * 31 + c) & 0xFFFFFF;
+    }
+    return 'CP-${h.toRadixString(36).toUpperCase().padLeft(6, '0')}';
+  }
+
   String get ageLabel {
     final now = DateTime.now();
     int y = now.year - birthDate.year;

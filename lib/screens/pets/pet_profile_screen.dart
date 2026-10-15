@@ -88,17 +88,19 @@ class _PetProfileScreenState extends State<PetProfileScreen> {
               child: ListView(
                 padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
                 children: [
-                  // Photo hero with floating vitals card — structural overlap: the
-                  // Column (spacer + card) sizes the hero in normal flow; the
-                  // photo is a fixed-size slot painted behind. Nothing
-                  // overflows, so no ancestor can clip the card.
+                  // Banner: full-bleed photo (~210pt, the appointment card's
+                  // language at a smaller size) with the glass name panel
+                  // floating over its lower portion. Structural overlap: the
+                  // Column (spacer + panel) sizes the block in normal flow;
+                  // the photo is a fixed-size slot painted behind. Nothing
+                  // overflows, so no ancestor can clip the panel.
                   Stack(
                     children: [
                       Positioned(
                         top: 0,
                         left: 0,
                         right: 0,
-                        height: Layout.heroHeight(context, 250),
+                        height: Layout.heroHeight(context, 210),
                         child: Stack(
                           children: [
                             Positioned.fill(
@@ -106,7 +108,7 @@ class _PetProfileScreenState extends State<PetProfileScreen> {
                                 borderRadius: BorderRadius.circular(T.rCard),
                                 child: PetAvatar(
                                   pet: pet,
-                                  iconSize: 160,
+                                  iconSize: 120,
                                   label: '${pet.name} portrait',
                                 ),
                               ),
@@ -130,7 +132,7 @@ class _PetProfileScreenState extends State<PetProfileScreen> {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           SizedBox(
-                            height: Layout.heroHeight(context, 250) - 34,
+                            height: Layout.heroHeight(context, 210) - 40,
                           ),
                           Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -140,32 +142,15 @@ class _PetProfileScreenState extends State<PetProfileScreen> {
                                 mainAxisSize: MainAxisSize.min,
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Row(
-                                    children: [
-                                      Expanded(
-                                        child: Text(
-                                          pet.name,
-                                          style: Type.title1(p),
-                                        ),
-                                      ),
-                                      StatusChip(
-                                        label: pet.ageLabel,
-                                        compact: true,
-                                        fg: p.accentText,
-                                        bg: p.accent.withValues(alpha: 0.12),
-                                      ),
-                                    ],
+                                  _NameRow(
+                                    name: pet.name,
+                                    ageLabel: pet.ageLabel,
                                   ),
-                                  const SizedBox(height: 8),
-                                  // The hero strip keeps weight only: temperature
-                                  // and heart rate duplicate the Vitals section
-                                  // below, and weight is dropped from the stat
-                                  // strip further down so it is not shown twice.
-                                  _VitalsInline(
-                                    vitals: pet.vitals
-                                        .where((v) => v.icon == 'scale')
-                                        .toList(),
-                                  ),
+                                  const SizedBox(height: 12),
+                                  // Weight always; height/length tiles only
+                                  // when the clinic has recorded them — null
+                                  // hides the tile, never invents a value.
+                                  _MeasureStrip(pet: pet),
                                 ],
                               ),
                             ),
@@ -220,6 +205,9 @@ class _PetProfileScreenState extends State<PetProfileScreen> {
                   const SizedBox(height: T.s16),
                   Text('Details', style: Type.headline(p)),
                   const SizedBox(height: 8),
+                  // Each fact appears exactly once on this screen: breed and
+                  // sex live in the photo pill, weight in the banner strip —
+                  // so Details keeps only Pet ID, Born and Allergies.
                   SoftCard(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 16,
@@ -227,19 +215,17 @@ class _PetProfileScreenState extends State<PetProfileScreen> {
                     ),
                     child: Column(
                       children: [
-                        AmountRow(label: 'Breed', value: pet.breed, bold: true),
-                        AmountRow(label: 'Sex', value: pet.sex),
+                        RowTile(
+                          title: 'Pet ID',
+                          subtitle: pet.petCode,
+                          leadingPath: Ic.qr,
+                          onTap: () => _openIdCard(context, pet),
+                        ),
                         AmountRow(
                           label: 'Born',
                           value:
                               '${shortDate(pet.birthDate)}, ${pet.birthDate.year}',
                         ),
-                        AmountRow(
-                          label: 'Weight',
-                          value: '${pet.weightKg} kg',
-                          bold: true,
-                        ),
-                        AmountRow(label: 'Microchip', value: pet.microchip),
                         AmountRow(
                           label: 'Allergies',
                           value: pet.allergies.isEmpty
@@ -386,6 +372,104 @@ class _PetProfileScreenState extends State<PetProfileScreen> {
     Navigator.of(context).pop();
   }
 
+  /// Digital pet ID card: photo, name, the CP-XXXXXX code, breed, sex,
+  /// birthdate and microchip. The microchip number lives here now that
+  /// Details shows the Pet ID row instead. Compact by design: the whole
+  /// card fits the sheet at 1x, and the sheet scrolls rather than
+  /// overflowing at AX5.
+  void _openIdCard(BuildContext context, Pet pet) {
+    final p = context.p;
+    showAppSheet(
+      context,
+      scrollable: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('Pet ID', style: Type.title2(p)),
+            const SizedBox(height: 12),
+            SoftCard(
+              borderColor: p.accent.withValues(alpha: 0.35),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      SizedBox.square(
+                        dimension: 84,
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(14),
+                          child: PetAvatar(
+                            pet: pet,
+                            iconSize: 52,
+                            label: '${pet.name} portrait',
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              pet.name,
+                              style: Type.title2(p),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 6),
+                            StatusChip(
+                              label: pet.petCode,
+                              icon: Ic.qr,
+                              compact: true,
+                              fg: p.accentText,
+                              bg: p.accent.withValues(alpha: 0.12),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              '${pet.breed} · ${pet.sex}',
+                              style: Type.footnote(p)
+                                  .copyWith(color: p.textSecondary),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: Divider(height: 1, color: p.divider),
+                  ),
+                  AmountRow(
+                    label: 'Born',
+                    value: '${shortDate(pet.birthDate)}, ${pet.birthDate.year}',
+                  ),
+                  AmountRow(label: 'Microchip', value: pet.microchip),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Show this card at the clinic front desk.',
+              style: Type.footnote(p).copyWith(color: p.textSecondary),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: T.s16),
+            PrimaryButton(
+              label: 'Done',
+              onPressed: () => dismissSheet(context),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   void _openDoc(BuildContext context, PetDoc d) {
     showAppSheet(
       context,
@@ -524,17 +608,78 @@ class _DocViewerScreen extends StatelessWidget {
   }
 }
 
-class _VitalsInline extends StatelessWidget {
-  const _VitalsInline({required this.vitals});
-  final List<Vital> vitals;
+/// Name + age pill. Side by side at normal type sizes (the reference
+/// composition); stacked when Dynamic Type goes huge, so the pill can never
+/// starve the name to zero width — at AX5 that produced a 31px overflow and
+/// a 728px-tall single-character name column.
+class _NameRow extends StatelessWidget {
+  const _NameRow({required this.name, required this.ageLabel});
+  final String name;
+  final String ageLabel;
 
   @override
   Widget build(BuildContext context) {
     final p = context.p;
-    final shown = vitals;
+    final pill = StatusChip(
+      label: ageLabel,
+      compact: true,
+      fg: p.accentText,
+      bg: p.accent.withValues(alpha: 0.12),
+    );
+    // Same "huge" threshold as Layout.heroHeight.
+    final huge = MediaQuery.textScalerOf(context).scale(1) > 1.35;
+    if (huge) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            name,
+            style: Type.title1(p),
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: 8),
+          pill,
+        ],
+      );
+    }
     return Row(
       children: [
-        for (var i = 0; i < shown.length; i++) ...[
+        Expanded(
+          child: Text(
+            name,
+            style: Type.title1(p),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+        const SizedBox(width: 8),
+        pill,
+      ],
+    );
+  }
+}
+
+/// Measurement tiles in the banner: weight always, height/length only when
+/// recorded (null hides the tile). Same tile style as the old weight stat —
+/// icon, value, label, leading-aligned — with FittedBox scale-down so AX5
+/// shrinks the value instead of overflowing.
+class _MeasureStrip extends StatelessWidget {
+  const _MeasureStrip({required this.pet});
+  final Pet pet;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.p;
+    final tiles = [
+      (Ic.scale, '${pet.weightKg} kg', 'Weight'),
+      if (pet.heightCm != null) (Ic.arrowUp, '${pet.heightCm} cm', 'Height'),
+      if (pet.lengthCm != null) (Ic.arrowRight, '${pet.lengthCm} cm', 'Length'),
+    ];
+    return Row(
+      children: [
+        for (var i = 0; i < tiles.length; i++) ...[
           if (i > 0)
             Container(
               width: 1,
@@ -550,17 +695,18 @@ class _VitalsInline extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Ic.svg(Ic.byName(shown[i].icon), color: p.accent, size: 16),
+                Ic.svg(tiles[i].$1, color: p.accent, size: 16),
                 const SizedBox(height: 4),
                 FittedBox(
                   fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
                   child: Text(
-                    '${shown[i].value} ${shown[i].unit}'.trim(),
+                    tiles[i].$2,
                     style: Type.footnoteEmph(p).copyWith(fontSize: 14),
                   ),
                 ),
                 Text(
-                  shown[i].label,
+                  tiles[i].$3,
                   style: Type.caption(p),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -732,7 +878,16 @@ class _TimelineCard extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(width: 8),
-                      Text(shortDate(entry.date), style: Type.caption(p)),
+                      // Flexible + ellipsis: at AX5 the date and the chip
+                      // share the row instead of the date pushing past it.
+                      Flexible(
+                        child: Text(
+                          shortDate(entry.date),
+                          style: Type.caption(p),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
                     ],
                   ),
                   const SizedBox(height: 8),

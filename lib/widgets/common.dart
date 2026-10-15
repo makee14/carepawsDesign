@@ -1306,33 +1306,39 @@ class PrimaryButton extends StatelessWidget {
     final fg = p.isDark ? T.espresso : T.card;
     final h = compact ? 46.0 : 54.0;
 
-    final child = Container(
-      height: h,
-      padding: EdgeInsets.symmetric(horizontal: compact ? T.s16 : T.s20),
-      decoration: BoxDecoration(
-        color: enabled ? fill : fill.withValues(alpha: 0.4),
-        borderRadius: BorderRadius.circular(T.rControl + 2),
-      ),
-      child: Row(
-        mainAxisSize: expand ? MainAxisSize.max : MainAxisSize.min,
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          if (busy)
-            CupertinoActivityIndicator(color: fg)
-          else if (icon != null) ...[
-            Ic.svg(icon!, color: fg, size: 19, stroke: 2.2),
-            const SizedBox(width: 9),
-          ],
-          Flexible(
-            child: Text(
-              label,
-              style: Type.button(p).copyWith(color: fg),
-              maxLines: 2,
-              textAlign: TextAlign.center,
-              overflow: TextOverflow.ellipsis,
+    // IntrinsicHeight + minHeight (not a fixed height): at very large text
+    // scales the label wraps to two lines and the button grows so it is never
+    // clipped (AX5). At 1x the intrinsic height is the 54pt/46pt design
+    // height, so rendering is unchanged.
+    final child = IntrinsicHeight(
+      child: Container(
+        constraints: BoxConstraints(minHeight: h),
+        padding: EdgeInsets.symmetric(horizontal: compact ? T.s16 : T.s20),
+        decoration: BoxDecoration(
+          color: enabled ? fill : fill.withValues(alpha: 0.4),
+          borderRadius: BorderRadius.circular(T.rControl + 2),
+        ),
+        child: Row(
+          mainAxisSize: expand ? MainAxisSize.max : MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            if (busy)
+              CupertinoActivityIndicator(color: fg)
+            else if (icon != null) ...[
+              Ic.svg(icon!, color: fg, size: 19, stroke: 2.2),
+              const SizedBox(width: 9),
+            ],
+            Flexible(
+              child: Text(
+                label,
+                style: Type.button(p).copyWith(color: fg),
+                maxLines: 2,
+                textAlign: TextAlign.center,
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
 
@@ -1373,36 +1379,42 @@ class SecondaryButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final p = context.p;
     final fg = destructive ? p.destructive : p.accentText;
-    final child = Container(
-      height: 52,
-      padding: const EdgeInsets.symmetric(horizontal: T.s20),
-      decoration: BoxDecoration(
-        color: p.fieldBg,
-        borderRadius: BorderRadius.circular(T.rControl + 2),
-        border: Border.all(
-          color: destructive
-              ? p.destructive.withValues(alpha: 0.4)
-              : p.accent.withValues(alpha: 0.35),
-        ),
-      ),
-      child: Row(
-        mainAxisSize: expand ? MainAxisSize.max : MainAxisSize.min,
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          if (icon != null) ...[
-            Ic.svg(icon!, color: fg, size: 19, stroke: 2.1),
-            const SizedBox(width: 9),
-          ],
-          Flexible(
-            child: Text(
-              label,
-              style: Type.button(p).copyWith(color: fg),
-              maxLines: 2,
-              textAlign: TextAlign.center,
-              overflow: TextOverflow.ellipsis,
-            ),
+    // IntrinsicHeight + minHeight (not a fixed height): at very large text
+    // scales the label wraps to two lines and the button grows so it is never
+    // clipped (AX5). At 1x the intrinsic height is the 52pt design height,
+    // so rendering is unchanged.
+    final child = IntrinsicHeight(
+      child: Container(
+        constraints: const BoxConstraints(minHeight: 52),
+        padding: const EdgeInsets.symmetric(horizontal: T.s20),
+        decoration: BoxDecoration(
+          color: p.fieldBg,
+          borderRadius: BorderRadius.circular(T.rControl + 2),
+          border: Border.all(
+            color: destructive
+                ? p.destructive.withValues(alpha: 0.4)
+                : p.accent.withValues(alpha: 0.35),
           ),
-        ],
+        ),
+        child: Row(
+          mainAxisSize: expand ? MainAxisSize.max : MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            if (icon != null) ...[
+              Ic.svg(icon!, color: fg, size: 19, stroke: 2.1),
+              const SizedBox(width: 9),
+            ],
+            Flexible(
+              child: Text(
+                label,
+                style: Type.button(p).copyWith(color: fg),
+                maxLines: 2,
+                textAlign: TextAlign.center,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
       ),
     );
     return Semantics(
