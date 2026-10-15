@@ -107,4 +107,32 @@ void main() {
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('AX5: out-of-stock badge does not overflow', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    await tester.pumpWidget(
+      CupertinoApp(
+        theme: themeFor(AppPalette.light),
+        builder: (context, child) {
+          final mq = MediaQuery.of(context);
+          return MediaQuery(
+            data: mq.copyWith(textScaler: const TextScaler.linear(3.2)),
+            child: child!,
+          );
+        },
+        home: CupertinoPageScaffold(
+          child: Center(
+            child: SizedBox(
+              width: 200,
+              child: ProductCard(product: product(stock: 0), onTap: () {}),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    // The badge flexes and ellipsizes instead of overflowing the Row.
+    expect(find.text('Out of stock'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 }
