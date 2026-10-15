@@ -674,6 +674,36 @@ class Tone {
   static const mid = Tone(Color(0xFFA8480F), Color(0x1FE4843E));
   static const alert = Tone(Color(0xFF9B1C1C), Color(0x1FDC2626));
   static const info = Tone(Color(0xFF1F5C33), Color(0x1FDDF2E3));
+
+  /// Dark-mode twins. The light constants above were script-measured at
+  /// 1.5–2.4:1 on dark surfaces; the twins are palette colours, all >= 4.5:1.
+  static final calmDark = Tone(
+    AppPalette.dark.warning,
+    AppPalette.dark.warning.withValues(alpha: 0.22),
+  );
+  static final midDark = Tone(
+    AppPalette.dark.accent,
+    AppPalette.dark.accent.withValues(alpha: 0.18),
+  );
+  static final alertDark = Tone(
+    AppPalette.dark.destructive,
+    AppPalette.dark.destructive.withValues(alpha: 0.18),
+  );
+  static final infoDark = Tone(
+    AppPalette.dark.success,
+    AppPalette.dark.success.withValues(alpha: 0.16),
+  );
+
+  /// Theme-aware pick — every call site routes through this so dark mode
+  /// never renders the light constants.
+  static Tone of(Tone light, bool dark) {
+    if (!dark) return light;
+    // The four constants are canonicalized, so identity is exact here.
+    if (identical(light, calm)) return calmDark;
+    if (identical(light, mid)) return midDark;
+    if (identical(light, alert)) return alertDark;
+    return infoDark;
+  }
 }
 
 class _Bullets extends StatelessWidget {
@@ -742,7 +772,10 @@ class BookTriageView extends StatelessWidget {
           child: _OutcomeShell(
             title: result.title,
             icon: Ic.calendar,
-            tone: result.urgency == 2 ? Tone.alert : Tone.mid,
+            tone: Tone.of(
+              result.urgency == 2 ? Tone.alert : Tone.mid,
+              p.isDark,
+            ),
             result: result,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -751,13 +784,13 @@ class BookTriageView extends StatelessWidget {
                 _Bullets(
                   items: result.bullets,
                   icon: Ic.check,
-                  tone: Tone.info,
+                  tone: Tone.of(Tone.info, p.isDark),
                   heading: 'What we noted',
                 ),
                 _Bullets(
                   items: result.redFlags,
                   icon: Ic.alert,
-                  tone: Tone.alert,
+                  tone: Tone.of(Tone.alert, p.isDark),
                   heading: 'Contact us sooner if you notice',
                 ),
                 if (result.nextStep != null) ...[
@@ -814,7 +847,7 @@ class ChatTriageView extends StatelessWidget {
           child: _OutcomeShell(
             title: result.title,
             icon: Ic.chat,
-            tone: Tone.mid,
+            tone: Tone.of(Tone.mid, p.isDark),
             result: result,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -823,13 +856,13 @@ class ChatTriageView extends StatelessWidget {
                 _Bullets(
                   items: result.bullets,
                   icon: Ic.check,
-                  tone: Tone.info,
+                  tone: Tone.of(Tone.info, p.isDark),
                   heading: 'What we noted',
                 ),
                 _Bullets(
                   items: result.redFlags,
                   icon: Ic.alert,
-                  tone: Tone.alert,
+                  tone: Tone.of(Tone.alert, p.isDark),
                   heading: 'Contact us sooner if you notice',
                 ),
                 const SizedBox(height: T.s16),
@@ -893,7 +926,7 @@ class HomeCareTriageView extends StatelessWidget {
           child: _OutcomeShell(
             title: result.title,
             icon: Ic.heart,
-            tone: Tone.calm,
+            tone: Tone.of(Tone.calm, p.isDark),
             result: result,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -902,13 +935,13 @@ class HomeCareTriageView extends StatelessWidget {
                 _Bullets(
                   items: result.homeCare,
                   icon: Ic.checkCircle,
-                  tone: Tone.info,
+                  tone: Tone.of(Tone.info, p.isDark),
                   heading: 'Care instructions for the next 48 hours',
                 ),
                 _Bullets(
                   items: result.redFlags,
                   icon: Ic.alert,
-                  tone: Tone.alert,
+                  tone: Tone.of(Tone.alert, p.isDark),
                   heading: 'Book a visit if you notice',
                 ),
                 const SizedBox(height: T.s16),
@@ -1080,13 +1113,13 @@ class EmergencyTriageView extends StatelessWidget {
               _Bullets(
                 items: result.redFlags,
                 icon: Ic.alert,
-                tone: Tone.alert,
+                tone: Tone.of(Tone.alert, p.isDark),
                 heading: 'Why we suggest this',
               ),
               _Bullets(
                 items: result.bullets,
                 icon: Ic.info,
-                tone: Tone.mid,
+                tone: Tone.of(Tone.mid, p.isDark),
                 heading: 'On the way',
               ),
               const SizedBox(height: T.s16),

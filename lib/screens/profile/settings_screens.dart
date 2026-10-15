@@ -376,7 +376,12 @@ class _ProviderCardState extends State<_ProviderCard> {
       subtitle = status.modelLabel ?? 'Connected';
       chipLabel = 'Live';
       chipFg = p.success;
-      chipBg = const Color(0xFFDDF2E3);
+      // The chip bg must follow the theme: the bright dark-mode success
+      // green on the light-only green measured 1.48:1. Same pattern as the
+      // triage clinic-open chip.
+      chipBg = p.isDark
+          ? p.success.withValues(alpha: 0.12)
+          : const Color(0xFFDDF2E3);
     } else if (status.keyConfigured) {
       subtitle = status.failure?.label ?? 'Key saved';
       chipLabel = 'Key saved';

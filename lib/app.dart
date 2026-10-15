@@ -535,9 +535,10 @@ class _LargeTitleDelegate extends SliverPersistentHeaderDelegate {
     final t = delta <= 0 ? 1.0 : (shrinkOffset / delta).clamp(0.0, 1.0);
 
     final size = _large + (_small - _large) * t;
-    // Expanded: the title sits just under the status bar. Collapsed: it is
-    // centred in the 44pt bar, the way a normal nav bar title is.
-    final yExpanded = top + 4;
+    // Expanded: the title sits one 8pt grid step below the status bar (was 4pt,
+    // which read as crowded). Collapsed: it is centred in the 44pt bar, the
+    // way a normal nav bar title is.
+    final yExpanded = top + 12;
     final yCollapsed = top + (LargeTitleBar.collapsedHeight - _small) / 2 - 3;
     final y = yExpanded + (yCollapsed - yExpanded) * t;
 
