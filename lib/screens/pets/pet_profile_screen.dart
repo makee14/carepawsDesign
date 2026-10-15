@@ -90,6 +90,7 @@ class _PetProfileScreenState extends State<PetProfileScreen> {
                 children: [
                   // Banner: full-bleed photo (~210pt, the appointment card's
                   // language at a smaller size) with the glass name panel
+                  // (deliberate G1 deviation — see contracts Deviation Log #2)
                   // floating over its lower portion. Structural overlap: the
                   // Column (spacer + panel) sizes the block in normal flow;
                   // the photo is a fixed-size slot painted behind. Nothing

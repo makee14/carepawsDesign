@@ -321,9 +321,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
     final thread = Seed.threads.firstWhere((t) => t.id == widget.threadId);
     final messages = store.thread(thread.id);
 
-    // B7: latest health-check result for this thread's pet. The stub in
-    // AppStore returns null until Stream C lands — the button stays hidden
-    // meanwhile, so this compiles and behaves sanely on its own.
+    // B7: latest health-check result for this thread's pet. The button
+    // stays hidden when no result exists for this pet.
     final petIdForResult =
         widget.openedWithPetId ?? store.pets.firstOrNull?.id ?? '';
     final healthResult = _isAi
