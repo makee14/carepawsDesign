@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:carepaws/app.dart';
 import 'package:carepaws/data/seed.dart';
+import 'package:carepaws/design/icons.dart';
 import 'package:carepaws/design/theme.dart';
 import 'package:carepaws/screens/add_pet_screen.dart';
 import 'package:carepaws/screens/appointments/book_flow.dart';
@@ -383,12 +384,21 @@ void main() {
 
     testWidgets('typed draft: system back asks; discard pops', (tester) async {
       await pumpPushable(tester, const TriageScreen());
-      await tester.enterText(
-        find.byType(CupertinoTextField).first,
-        'Vomited twice this morning',
-      );
-      await tester.pump();
+      // Build a draft in the stepped flow: pick a pet, answer one question.
+      await tester.tap(find.text('Biscuit'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(PrimaryButton, 'Continue'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byType(PressScale).first);
+      await tester.pumpAndSettle();
 
+      // Mid-flow back steps back inside the flow — the draft is kept, and
+      // moving between steps never asks.
+      await systemBack(tester);
+      expect(find.text('Discard health check?'), findsNothing);
+      expect(find.text('Which pet is this check for?'), findsOneWidget);
+
+      // Back on the pet step with answers kept: leaving now would discard.
       await systemBack(tester);
       expect(find.text('Discard health check?'), findsOneWidget);
       await tester.tap(find.text('Keep editing'));

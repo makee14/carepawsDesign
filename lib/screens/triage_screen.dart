@@ -8,6 +8,7 @@ import '../data/clinic.dart';
 import '../data/models.dart';
 import '../data/seed.dart';
 import '../design/icons.dart';
+import '../design/motion.dart';
 import '../design/theme.dart';
 import '../design/tokens.dart';
 import '../services/ai_service.dart';
@@ -18,11 +19,84 @@ import 'add_pet_screen.dart';
 import 'appointments/book_flow.dart';
 import 'chat_thread_screen.dart';
 import 'profile/settings_screens.dart';
+import 'triage/health_result_sheet.dart';
 
 enum TriageEntry { home, aiChat, booking }
 
-/// Shared triage engine. Three entry points (Home quick action, the CarePaws AI
-/// thread, Book step 2) all land here.
+/// One question on its own screen. `{pet}` in a title is replaced with the
+/// step-0-selected pet's name.
+class _Question {
+  const _Question({
+    required this.id,
+    required this.title,
+    required this.topic,
+    required this.options,
+  });
+  final String id;
+  final String title;
+  final String topic;
+  final List<String> options;
+}
+
+const _questions = [
+  _Question(
+    id: 'concern',
+    title: 'What\u2019s the main concern?',
+    topic: 'Concern',
+    options: [
+      'Eating or drinking',
+      'Energy or behavior',
+      'Skin, coat, or ears',
+      'Vomiting or diarrhea',
+      'Breathing or coughing',
+      'Limping or pain',
+      'Something else',
+    ],
+  ),
+  _Question(
+    id: 'duration',
+    title: 'How long has this been going on?',
+    topic: 'Duration',
+    options: [
+      'Started today',
+      'A few days',
+      'About a week',
+      'Longer than a week',
+    ],
+  ),
+  _Question(
+    id: 'overall',
+    title: 'How is {pet} doing overall?',
+    topic: 'Overall',
+    options: [
+      'Normal — eating and playing',
+      'A bit quieter than usual',
+      'Clearly unwell — low energy',
+      'Very unwell — barely eating or moving',
+    ],
+  ),
+  _Question(
+    id: 'warnings',
+    title: 'Any of these warning signs?',
+    topic: 'Warning signs',
+    options: [
+      'None of these',
+      'Vomiting',
+      'Diarrhea',
+      'Not eating',
+      'Trouble breathing',
+      'Bleeding or injury',
+    ],
+  ),
+];
+
+/// Minimal AI Health Check. Three entry points (Home quick action, the
+/// CarePaws AI thread, Book step 2) all land here.
+///
+/// Step 0 is pet selection and it is required — the check cannot start
+/// without a pet, and the step-0 petId is authoritative for everything
+/// downstream (name, AI call, result, handoff). The old AI-detects-the-pet
+/// fallback produced the wrong-pet-name bug and is gone.
 class TriageScreen extends StatefulWidget {
   const TriageScreen({
     super.key,
@@ -34,9 +108,9 @@ class TriageScreen extends StatefulWidget {
   final TriageEntry entry;
   final String? preselectedPetId;
 
-  /// When provided (the booking flow), the result is returned instead of
-  /// pushing a result screen. The check stays optional: backing out returns
-  /// no result and the booking simply continues without it.
+  /// When provided (the booking flow), the raw triage result is returned
+  /// instead of pushing a result screen. The check stays optional: backing
+  /// out returns no result and the booking simply continues without it.
   final void Function(TriageResult? result)? onComplete;
 
   @override
@@ -44,25 +118,29 @@ class TriageScreen extends StatefulWidget {
 }
 
 class _TriageScreenState extends State<TriageScreen> {
-  final _text = TextEditingController();
+  /// 0 = pet selection, 1..N = questions, N+1 = photo (optional).
+  int _step = 0;
   String? _petId;
-  TriageResult? _result;
-  bool _busy = false;
+  final Map<String, String> _answers = {};
   Uint8List? _photo;
   String? _photoMime;
   bool _picking = false;
+  bool _busy = false;
 
-  /// Set when a request fails after the input view was already shown — the
-  /// card replaces the form's top slot so the failure is never a dead end.
+  /// Set when a request fails after the flow already started — the failure
+  /// surfaces inline so it is never a dead end.
   AiFailure? _aiFailure;
 
-  /// The pet this check is for. Set from [TriageScreen.preselectedPetId] when an
-  /// entry point already knows the pet; otherwise the AI identifies the pet
-  /// from the description at submit time (never a manual picker).
-  ///
-  /// True when the AI could not determine which pet the concern is about —
-  /// the result view then offers an honest disambiguation instead of guessing.
-  bool _ambiguousPet = false;
+  HealthCheckResult? _result;
+
+  /// The raw AI outcome, kept for the booking onComplete contract and the
+  /// clinic handoff.
+  TriageResult? _triage;
+
+  /// Contact-vet decision: null = undecided, true = sent, false = declined.
+  bool? _sent;
+
+  int get _stepCount => 1 + _questions.length + 1;
 
   @override
   void initState() {
@@ -72,26 +150,52 @@ class _TriageScreenState extends State<TriageScreen> {
 
   @override
   void dispose() {
-    _text.dispose();
     super.dispose();
   }
 
-  /// A typed description or an attached photo is a draft worth protecting.
-  /// The result view holds none — the draft was submitted to get there.
+  /// Any progress in the flow is a draft worth protecting. The result view
+  /// holds none — the answers were submitted to get there.
   bool get _isDraft =>
-      _result == null && (_text.text.trim().isNotEmpty || _photo != null);
+      _result == null && (_step > 0 || _answers.isNotEmpty || _photo != null);
 
-  /// Nav-bar back / system back with a draft: leave only on confirm. The
-  /// nav bar keeps its default maybePop, which honours the PopScope below.
+  /// Nav-bar back / system back: step back inside the flow; confirm only
+  /// when leaving the flow entirely with a draft. The nav bar keeps its
+  /// default maybePop, which honours the PopScope below.
   Future<void> _exit() async {
     if (await confirmDiscardIfDirty(
       context,
       isDirty: _isDraft,
       title: 'Discard health check?',
-      message: 'Your description and photo will be lost.',
+      message: 'Your answers will be lost.',
     )) {
       if (mounted) Navigator.of(context).pop();
     }
+  }
+
+  void _onBack() {
+    if (_step > 0) {
+      setState(() => _step--);
+    } else {
+      _exit();
+    }
+  }
+
+  void _onContinue(AppStore store) {
+    if (_step == _stepCount - 1) {
+      _submit();
+    } else {
+      setState(() => _step++);
+    }
+  }
+
+  bool _canContinue(AppStore store) {
+    if (_step == 0) return _petId != null;
+    if (_step <= _questions.length) {
+      return _answers[_questions[_step - 1].id] != null;
+    }
+    // Photo step: the photo is optional, but without a live model the
+    // request would only fail — the card above explains why instead.
+    return !_busy && store.ai.isLive;
   }
 
   Future<void> _pick(ImageSource source) async {
@@ -112,7 +216,7 @@ class _TriageScreenState extends State<TriageScreen> {
       });
     } catch (_) {
       // No camera / gallery available (desktop, simulator without photos).
-      // Never a dead end: the text-only path continues identically.
+      // Never a dead end: the photo is optional anyway.
       if (!mounted) return;
       await showPopup<void>(
         context,
@@ -124,14 +228,14 @@ class _TriageScreenState extends State<TriageScreen> {
             padding: EdgeInsets.only(top: 6),
             child: Text(
               'This device cannot open the camera or photo library right now. '
-              'You can still submit a description — the health check works the same without a photo.',
+              'You can skip this step — the health check works the same without a photo.',
             ),
           ),
           actions: [
             CupertinoDialogAction(
               isDefaultAction: true,
               onPressed: () => dismissSheet(ctx),
-              child: const Text('Continue without photo'),
+              child: const Text('Skip photo'),
             ),
           ],
         ),
@@ -141,141 +245,107 @@ class _TriageScreenState extends State<TriageScreen> {
     }
   }
 
+  String _transcript(Pet pet) {
+    final lines = <String>[
+      'Health check answers for ${pet.name} (${pet.breed}):',
+    ];
+    for (final q in _questions) {
+      final title = q.title.replaceAll('{pet}', pet.name);
+      lines.add('- $title ${_answers[q.id]}');
+    }
+    return lines.join('\n');
+  }
+
   Future<void> _submit() async {
     final store = AppScope.read(context);
+    final pet = store.pet(_petId ?? '');
+    if (pet == null || _busy) return;
     setState(() {
       _busy = true;
       _aiFailure = null;
-      _ambiguousPet = false;
     });
-    TriageResult result;
-    String? petId = _petId;
     try {
-      if (petId != null) {
-        final pet = store.pet(petId);
-        if (pet == null) return;
-        result = await store.ai.triage(
-          petName: pet.name,
-          species: pet.breed,
-          text: _text.text.trim(),
-          photo: _photo,
-          photoMime: _photoMime,
-          ownerFirstName: store.ownerFirstName,
-        );
-      } else {
-        // No entry point knew the pet: the AI identifies it from the
-        // description (never a manual picker).
-        final detected = await store.ai.triageDetect(
-          pets: store.pets,
-          text: _text.text.trim(),
-          photo: _photo,
-          photoMime: _photoMime,
-          ownerFirstName: store.ownerFirstName,
-        );
-        result = detected.result;
-        petId = _matchPetId(store, detected.petName);
-        if (petId == null) {
-          // The AI honestly could not tell which pet this is about — show the
-          // result with a disambiguation step instead of guessing.
-          if (!mounted) return;
-          setState(() {
-            _busy = false;
-            _result = result;
-            _ambiguousPet = true;
-          });
-          return;
-        }
+      final triage = await store.ai.triage(
+        petName: pet.name,
+        species: pet.breed,
+        text: _transcript(pet),
+        photo: _photo,
+        photoMime: _photoMime,
+        ownerFirstName: store.ownerFirstName,
+      );
+      final answers = [
+        for (final q in _questions)
+          HealthAnswer(
+            questionId: q.id,
+            question: q.title.replaceAll('{pet}', pet.name),
+            answer: _answers[q.id]!,
+          ),
+      ];
+      // The step-0 petId is authoritative — threaded in, never re-derived.
+      final result = HealthCheckResult.fromTriage(
+        id: 'hc${store.now.microsecondsSinceEpoch}',
+        petId: pet.id,
+        triage: triage,
+        answers: answers,
+        createdAt: store.now,
+      );
+      store.recordHealthResult(result);
+      if (!mounted) return;
+      setState(() => _busy = false);
+      // Booking entry: return the raw result; the caller's onComplete pops.
+      if (widget.onComplete != null) {
+        widget.onComplete!(triage);
+        return;
       }
+      setState(() {
+        _result = result;
+        _triage = triage;
+        _sent = null;
+      });
+      successHaptic();
     } on AiException catch (e) {
       if (!mounted) return;
       setState(() {
         _busy = false;
         _aiFailure = e.failure;
       });
-      return;
     }
-    if (!mounted) return;
-    setState(() {
-      _busy = false;
-      _result = result;
-      _petId = petId;
-    });
-    successHaptic();
   }
 
-  /// Matches the model's pet name against the roster (case-insensitive).
-  /// Returns null when the model could not determine the pet or no roster pet
-  /// matches — the UI then asks honestly instead of guessing.
-  String? _matchPetId(AppStore store, String? petName) {
-    final name = petName?.trim();
-    if (name == null || name.isEmpty) return null;
-    return store.pets
-        .where((p) => p.name.toLowerCase() == name.toLowerCase())
-        .firstOrNull
-        ?.id;
+  void _sendToClinic(AppStore store, Pet pet, TriageResult triage) {
+    store.handOffToClinic(pet: pet, result: triage);
+    setState(() => _sent = true);
   }
 
   @override
   Widget build(BuildContext context) {
     final store = AppScope.of(context);
     final p = context.p;
-    final result = _result;
-    final pet = store.pet(_petId ?? '');
 
-    // Android system back honours the same draft guard as the nav-bar back.
+    // Android system back honours the same step-aware guard as the nav bar.
     return PopScope(
       canPop: !_isDraft,
       onPopInvokedWithResult: (didPop, _) async {
         if (didPop) return;
+        if (_step > 0 && _result == null) {
+          setState(() => _step--);
+          return;
+        }
         await _exit();
       },
       child: CupertinoPageScaffold(
         backgroundColor: p.background,
         navigationBar: DetailNavBar(title: 'AI Health Check', showBack: true),
         child: SafeArea(
-          child: result == null
-              ? _input(store, pet)
-              : _ambiguousPet
-              ? _disambiguate(store)
-              : _resultView(store, result, pet),
+          child: _result == null ? _flow(store) : _results(store),
         ),
       ),
     );
   }
 
-  // ------------------------------------------------------------ input view
-  Widget _input(AppStore store, Pet? pet) {
-    final p = context.p;
-    // No pets on file: the check needs a pet to be about. Never a dead end.
-    if (store.pets.isEmpty) {
-      return ListView(
-        padding: const EdgeInsets.fromLTRB(20, 20, 20, 40),
-        children: [
-          GlassCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Add your pet first', style: Type.title1(p)),
-                const SizedBox(height: 8),
-                Text(
-                  'The health check needs a pet to be about. Add one and come back — it takes a minute.',
-                  style: Type.body(p).copyWith(color: p.textSecondary),
-                ),
-                const SizedBox(height: 16),
-                PrimaryButton(
-                  label: 'Add a pet',
-                  onPressed: () =>
-                      Navigator.of(context)
-                          .push(appRoute(const AddPetScreen())),
-                ),
-              ],
-            ),
-          ),
-        ],
-      );
-    }
-    final canSubmit =
-        !_busy && (_text.text.trim().isNotEmpty || _photo != null);
+  // ------------------------------------------------------------------ flow
+  Widget _flow(AppStore store) {
+    if (store.pets.isEmpty) return _noPets();
     // Bootstrap state (no key / unreachable / API error) and a request that
     // just failed both land here — one card, never a dead end.
     final failure =
@@ -283,77 +353,264 @@ class _TriageScreenState extends State<TriageScreen> {
         (store.ai.status == AiStatus.unavailable
             ? store.ai.failure ?? AiFailure.noKey
             : null);
-    return ListView(
-      padding: EdgeInsets.fromLTRB(
-        20,
-        20,
-        20,
-        120 + MediaQuery.paddingOf(context).bottom,
-      ),
+    final showCard = failure != null && (_step == 0 || _step == _stepCount - 1);
+    return Column(
       children: [
-        if (failure != null) ...[
-          AiUnavailableCard(
-            failure: failure,
-            onOpenSettings: () =>
-                Navigator.of(context).push(appRoute(const AiSettingsScreen())),
-            onBook: widget.onComplete == null
-                ? () => Navigator.of(context).push(appRoute(const BookFlow()))
-                : null,
-            onCall: () => callPhoneNumber(
-              context,
-              number: Clinic.phone,
-              name: Clinic.name,
+        Expanded(
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+            children: [
+              if (showCard) ...[
+                AiUnavailableCard(
+                  failure: failure,
+                  onOpenSettings: () =>
+                      Navigator.of(context)
+                          .push(appRoute(const AiSettingsScreen())),
+                  onBook: widget.onComplete == null
+                      ? () =>
+                            Navigator.of(context)
+                                .push(appRoute(const BookFlow()))
+                      : null,
+                  onCall: () => callPhoneNumber(
+                    context,
+                    number: Clinic.phone,
+                    name: Clinic.name,
+                  ),
+                ),
+                const SizedBox(height: T.s16),
+              ],
+              _progress(),
+              const SizedBox(height: T.s20),
+              _stepBody(store),
+            ],
+          ),
+        ),
+        _bottomBar(store),
+      ],
+    );
+  }
+
+  Widget _noPets() {
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 40),
+      children: [
+        EmptyState(
+          icon: 'paw',
+          title: 'No pets yet',
+          body: 'The health check needs a pet to be about. Add one — it takes a minute.',
+          actionLabel: 'Add your first pet',
+          onAction: () =>
+              Navigator.of(context).push(appRoute(const AddPetScreen())),
+        ),
+      ],
+    );
+  }
+
+  Widget _progress() {
+    final p = context.p;
+    final reduce = reduceMotionOf(context);
+    final topic = _step == 0
+        ? 'Pet'
+        : _step <= _questions.length
+        ? _questions[_step - 1].topic
+        : 'Photo';
+    final frac = (_step + 1) / _stepCount;
+    return Column(
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(2),
+          child: SizedBox(
+            height: 4,
+            child: LayoutBuilder(
+              builder: (ctx, c) => Stack(
+                children: [
+                  Container(color: T.taupe.withValues(alpha: 0.3)),
+                  AnimatedContainer(
+                    duration: reduce
+                        ? Duration.zero
+                        : const Duration(milliseconds: 250),
+                    width: c.maxWidth * frac,
+                    color: T.orange,
+                  ),
+                ],
+              ),
             ),
           ),
-          const SizedBox(height: T.s16),
-        ],
-        Text(
-          'Tell us what is happening and we will sort it into the right next step.',
-          style: Type.body(p).copyWith(color: p.textSecondary),
         ),
-        const SizedBox(height: T.s20),
-        if (pet != null) ...[
-          _PetContextRow(pet: pet),
-          const SizedBox(height: T.s20),
-        ] else ...[
-          Text(
-            'The AI will identify which pet this is about from your description — no need to pick one.',
-            style: Type.footnote(p).copyWith(color: p.textSecondary),
-          ),
-          const SizedBox(height: T.s20),
-        ],
-        Text('Describe the concern', style: Type.headline(p)),
-        const SizedBox(height: 4),
-        Text(
-          'Symptoms, when it started, and anything that changed.',
-          style: Type.footnote(p),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Text(
+              'Step ${_step + 1} of $_stepCount',
+              style: Type.footnote(p).copyWith(color: p.textSecondary),
+            ),
+            const Spacer(),
+            Text(
+              topic,
+              style: Type.footnote(p).copyWith(color: p.textSecondary),
+            ),
+          ],
         ),
-        const SizedBox(height: 10),
-        CupertinoTextField(
-          controller: _text,
-          onChanged: (_) => setState(() {}),
-          placeholder:
-              'e.g. Vomited twice this morning and will not eat breakfast',
-          placeholderStyle: Type.body(p).copyWith(color: p.textSecondary),
-          style: Type.body(p),
-          minLines: 4,
-          maxLines: 7,
-          padding: const EdgeInsets.all(14),
-          cursorColor: p.primaryFill,
+      ],
+    );
+  }
+
+  Widget _stepBody(AppStore store) {
+    if (_step == 0) return _petStep(store);
+    if (_step <= _questions.length) {
+      return _questionStep(store, _questions[_step - 1]);
+    }
+    return _photoStep();
+  }
+
+  Widget _petStep(AppStore store) {
+    final p = context.p;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Which pet is this check for?', style: Type.title2(p)),
+        const SizedBox(height: T.s16),
+        for (final pet in store.pets) ...[
+          _petOption(pet),
+          const SizedBox(height: 10),
+        ],
+      ],
+    );
+  }
+
+  Widget _petOption(Pet pet) {
+    final p = context.p;
+    final selected = _petId == pet.id;
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: 'Check ${pet.name}',
+      child: PressScale(
+        onTap: () => setState(() => _petId = pet.id),
+        child: Container(
+          constraints: const BoxConstraints(minHeight: 80),
+          padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: p.surface,
-            borderRadius: BorderRadius.circular(T.rCard),
-            border: Border.all(color: p.divider),
+            color: selected ? T.orange.withValues(alpha: 0.15) : p.surface,
+            borderRadius: BorderRadius.circular(T.rControl),
+            border: Border.all(
+              color: selected ? T.orange : p.divider,
+              width: selected ? 2 : 1,
+            ),
+          ),
+          child: Row(
+            children: [
+              PetArt(
+                seed: pet.id.hashCode.abs() % 4,
+                species: pet.species,
+                radius: 12,
+                iconSize: 34,
+                label: '${pet.name} portrait',
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      pet.name,
+                      style: Type.title1(p),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    Text(
+                      '${pet.species.name[0].toUpperCase()}${pet.species.name.substring(1)} · ${pet.ageLabel}',
+                      style: Type.footnote(p).copyWith(color: p.textSecondary),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Container(
+                width: 24,
+                height: 24,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: selected ? T.orange : const Color(0x00000000),
+                  border: Border.all(
+                    color: selected ? T.orange : p.textSecondary,
+                    width: 2,
+                  ),
+                ),
+                child: selected
+                    ? Ic.svg(Ic.check, color: T.card, size: 14, stroke: 3)
+                    : null,
+              ),
+            ],
           ),
         ),
-        const SizedBox(height: T.s20),
-        Text('Add a photo (optional)', style: Type.headline(p)),
+      ),
+    );
+  }
+
+  Widget _questionStep(AppStore store, _Question q) {
+    final p = context.p;
+    final pet = store.pet(_petId ?? '');
+    final title = q.title.replaceAll('{pet}', pet?.name ?? 'your pet');
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(title, style: Type.title2(p)),
+        const SizedBox(height: T.s24),
+        for (final opt in q.options) ...[
+          _optionRow(q, opt),
+          const SizedBox(height: 10),
+        ],
+      ],
+    );
+  }
+
+  Widget _optionRow(_Question q, String opt) {
+    final p = context.p;
+    final selected = _answers[q.id] == opt;
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: opt,
+      child: PressScale(
+        onTap: () => setState(() => _answers[q.id] = opt),
+        child: Container(
+          constraints: const BoxConstraints(minHeight: 56),
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: selected ? T.orange.withValues(alpha: 0.15) : p.surface,
+            borderRadius: BorderRadius.circular(T.rControl),
+            border: Border.all(
+              color: selected ? T.orange : p.divider,
+              width: selected ? 2 : 1,
+            ),
+          ),
+          child: Row(
+            children: [
+              Expanded(child: Text(opt, style: Type.body(p))),
+              if (selected) Ic.svg(Ic.check, color: T.orange, size: 20),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _photoStep() {
+    final p = context.p;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Add a photo (optional)', style: Type.title2(p)),
         const SizedBox(height: 4),
         Text(
-          'Sent to a vision-capable model. The text-only path works identically.',
-          style: Type.footnote(p),
+          'A clear photo helps the assessment. You can skip this step.',
+          style: Type.footnote(p).copyWith(color: p.textSecondary),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: T.s16),
         if (_photo != null)
           _PhotoPreview(
             bytes: _photo!,
@@ -379,110 +636,274 @@ class _TriageScreenState extends State<TriageScreen> {
               ),
             ],
           ),
-        const SizedBox(height: T.s16),
-        _Disclaimer(pet),
-        const SizedBox(height: T.s24),
-        PrimaryButton(
-          label: 'Run health check',
-          icon: Ic.sparkle,
-          busy: _busy,
-          // Without a live model the request would only fail: the card above
-          // explains why and offers the alternatives instead.
-          onPressed: canSubmit && store.ai.isLive ? _submit : null,
-        ),
       ],
     );
   }
 
-  // ----------------------------------------------------------- result view
-  /// Shown when the AI could not determine which pet the concern is about.
-  /// An honest note plus pet rows that re-run the check for the chosen pet —
-  /// this only appears after the AI tried, never as the primary input.
-  Widget _disambiguate(AppStore store) {
+  Widget _bottomBar(AppStore store) {
     final p = context.p;
+    return SafeArea(
+      top: false,
+      minimum: EdgeInsets.only(bottom: TabBarClearance.of(context)),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (_step == 0 && _petId == null)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Text(
+                  'Choose a pet to start the check',
+                  style: Type.footnote(p).copyWith(color: p.textSecondary),
+                ),
+              ),
+            Row(
+              children: [
+                Expanded(
+                  child: SecondaryButton(label: 'Back', onPressed: _onBack),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  flex: 2,
+                  child: PrimaryButton(
+                    label: _step == _stepCount - 1
+                        ? 'Run health check'
+                        : 'Continue',
+                    busy: _busy,
+                    onPressed: _canContinue(store)
+                        ? () => _onContinue(store)
+                        : null,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // --------------------------------------------------------------- results
+  Widget _results(AppStore store) {
+    final result = _result!;
+    final triage = _triage!;
+    // The step-0 selection is authoritative — the header, the AI call and
+    // the handoff all read this petId, never a re-derived one.
+    final pet = store.pet(result.petId);
+    final petName = pet?.name ?? 'your pet';
     return ListView(
       padding: EdgeInsets.fromLTRB(
         20,
+        16,
         20,
-        20,
-        120 + MediaQuery.paddingOf(context).bottom,
+        40 + MediaQuery.paddingOf(context).bottom,
       ),
       children: [
-        GlassCard(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Which pet is this about?', style: Type.title1(p)),
-              const SizedBox(height: 8),
-              Text(
-                'I couldn\u2019t tell from your description, so I didn\u2019t guess. '
-                'Pick a pet and I\u2019ll run the check for them.',
-                style: Type.body(p).copyWith(color: p.textSecondary),
-              ),
-            ],
-          ),
+        HealthCheckResultView(
+          result: result,
+          petName: petName,
+          // Any emergency route leads with the call card; its chat button
+          // stays as the secondary path inside the recommendation card.
+          leading: triage.route == TriageRoute.emergency
+              ? _emergencyCard(store, pet)
+              : null,
+          action: _resultAction(store, pet, triage),
+          contactVet: _contactVet(store, pet, triage),
         ),
-        const SizedBox(height: T.s16),
-        for (final pet in store.pets) ...[
-          PressScale(
-            onTap: () {
-              setState(() {
-                _petId = pet.id;
-                _result = null;
-                _ambiguousPet = false;
-              });
-              _submit();
-            },
-            child: _PetContextRow(pet: pet),
-          ),
-          const SizedBox(height: 10),
-        ],
       ],
     );
   }
 
-  Widget _resultView(AppStore store, TriageResult result, Pet? pet) {
-    // Emergency outcome: the call CTA is rendered first, above the fold.
-    if (result.route == TriageRoute.emergency) {
-      return EmergencyTriageView(result: result, pet: pet, entry: widget.entry);
-    }
-    void handoff() {
-      if (pet == null) return;
-      store.handOffToClinic(pet: pet, result: result);
-      Navigator.of(context).pushReplacement(
-        appRoute(
-          ChatThreadScreen(
-            threadId: 'th_clinic',
-            openedWithPetId: pet.id,
-            triageSummary: result.summary,
+  /// Urgent outcomes keep the call CTA above the fold.
+  Widget _emergencyCard(AppStore store, Pet? pet) {
+    final p = context.p;
+    final open = clinicOpenAt(store.now);
+    final number = open ? Seed.clinicPhone : Seed.afterHoursPhone;
+    final name = open ? Seed.clinicName : Seed.afterHoursName;
+    return SoftCard(
+      color: p.destructive,
+      padding: const EdgeInsets.all(T.s16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Ic.svg(Ic.phone, color: p.onPrimaryFill, size: 20, stroke: 2.2),
+              const SizedBox(width: 9),
+              Expanded(
+                child: Text(
+                  open ? 'Call the clinic now' : 'Call $name',
+                  style: Type.headline(p).copyWith(color: p.onPrimaryFill),
+                ),
+              ),
+            ],
           ),
-        ),
-      );
-    }
-
-    return switch (result.route) {
-      TriageRoute.book => BookTriageView(
-        result: result,
-        pet: pet,
-        entry: widget.entry,
+          const SizedBox(height: 6),
+          Text(
+            number,
+            style: Type.title2(p)
+                .copyWith(color: p.onPrimaryFill, letterSpacing: 0.4),
+          ),
+          const SizedBox(height: 14),
+          PrimaryButton(
+            label: open ? 'Call the clinic now' : 'Call $name',
+            icon: Ic.phone,
+            onPressed: () =>
+                callPhoneNumber(context, number: number, name: name),
+          ),
+        ],
       ),
-      TriageRoute.chat => ChatTriageView(
-        result: result,
-        pet: pet,
-        handoff: handoff,
-      ),
-      TriageRoute.homeCare => HomeCareTriageView(
-        result: result,
-        pet: pet,
-        entry: widget.entry,
-      ),
-      TriageRoute.emergency => EmergencyTriageView(
-        result: result,
-        pet: pet,
-        entry: widget.entry,
-      ),
-    };
+    );
   }
+
+  Widget? _resultAction(AppStore store, Pet? pet, TriageResult triage) {
+    switch (triage.route) {
+      case TriageRoute.book:
+        return PrimaryButton(
+          label: 'Book appointment',
+          icon: Ic.calendar,
+          onPressed: () => Navigator.of(context)
+              .push(appRoute(BookFlow(initialPetId: pet?.id, triage: triage))),
+        );
+      case TriageRoute.chat:
+        return Column(
+          children: [
+            PrimaryButton(
+              label: 'Chat clinic team about this',
+              icon: Ic.send,
+              onPressed: pet == null
+                  ? null
+                  : () => _handoff(context, pet, triage),
+            ),
+            const SizedBox(height: 8),
+            SecondaryButton(
+              label: 'Book instead',
+              icon: Ic.calendar,
+              onPressed: () => Navigator.of(
+                context,
+              ).push(appRoute(BookFlow(initialPetId: pet?.id, triage: triage))),
+            ),
+          ],
+        );
+      case TriageRoute.homeCare:
+        return Column(
+          children: [
+            PrimaryButton(
+              label: 'Chat clinic team about this',
+              icon: Ic.send,
+              onPressed: pet == null
+                  ? null
+                  : () => _handoff(context, pet, triage),
+            ),
+            const SizedBox(height: 8),
+            SecondaryButton(
+              label: 'Book anyway',
+              icon: Ic.calendar,
+              onPressed: () => Navigator.of(
+                context,
+              ).push(appRoute(BookFlow(initialPetId: pet?.id, triage: triage))),
+            ),
+          ],
+        );
+      case TriageRoute.emergency:
+        // The urgent call card above carries the primary action; the chat
+        // team stays reachable as a secondary path.
+        return SecondaryButton(
+          label: 'Chat clinic team about this',
+          icon: Ic.chat,
+          onPressed: pet == null ? null : () => _handoff(context, pet, triage),
+        );
+    }
+  }
+
+  /// "Contact vet": the row recommends whether to send, the user decides.
+  /// Both paths land somewhere sensible — never a dead end.
+  Widget _contactVet(AppStore store, Pet? pet, TriageResult triage) {
+    final p = context.p;
+    Widget line(String icon, String text) => Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: p.surface,
+        borderRadius: BorderRadius.circular(T.rControl),
+        border: Border.all(color: p.divider),
+      ),
+      child: Row(
+        children: [
+          Ic.svg(icon, color: p.textSecondary, size: 16),
+          const SizedBox(width: 9),
+          Expanded(child: Text(text, style: Type.footnote(p))),
+        ],
+      ),
+    );
+    if (_sent == true) return line(Ic.check, 'Sent to the clinic team.');
+    if (_sent == false) {
+      return line(Ic.info, 'Kept private to this check.');
+    }
+    final recommend = _result!.urgency != Urgency.low;
+    return Container(
+      padding: const EdgeInsets.all(T.s16),
+      decoration: BoxDecoration(
+        color: p.surface,
+        borderRadius: BorderRadius.circular(T.rCard),
+        border: Border.all(color: p.divider),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Ic.svg(Ic.info, color: p.textSecondary, size: 16),
+              const SizedBox(width: 9),
+              Expanded(
+                child: Text(
+                  recommend
+                      ? 'We recommend sending this to the clinic — the vet can review it before your visit.'
+                      : 'No need to send this — but you can if you\u2019d like.',
+                  style: Type.footnote(p),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: PrimaryButton(
+                  label: 'Send to clinic',
+                  onPressed: pet == null
+                      ? null
+                      : () => _sendToClinic(store, pet, triage),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: SecondaryButton(
+                  label: 'Don\u2019t send',
+                  onPressed: () => setState(() => _sent = false),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Shared AI -> clinic handoff. No-ops safely when there is no pet yet.
+Future<void> _handoff(
+  BuildContext context,
+  Pet? pet,
+  TriageResult result,
+) async {
+  if (pet == null) return;
+  AppScope.read(context).handOffToClinic(pet: pet, result: result);
+  if (!context.mounted) return;
+  await Navigator.of(context).pushReplacement(
+    appRoute(ChatThreadScreen(threadId: 'th_clinic', openedWithPetId: pet.id)),
+  );
 }
 
 class _PhotoPreview extends StatelessWidget {
@@ -570,706 +991,6 @@ class _PhotoPickTile extends StatelessWidget {
               ],
             ),
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class _Disclaimer extends StatelessWidget {
-  const _Disclaimer(this.pet);
-  final Pet? pet;
-
-  @override
-  Widget build(BuildContext context) {
-    final p = context.p;
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: p.fieldBg,
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Ic.svg(Ic.info, color: p.textSecondary, size: 16),
-          const SizedBox(width: 9),
-          Expanded(
-            child: Text(
-              "CarePaws AI gives guidance, not a diagnosis. A veterinarian has to examine "
-              "${pet?.name ?? 'your pet'} in person to confirm anything.",
-              style: Type.footnote(p),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ---------------------------------------------------------------- outcomes
-
-class _OutcomeShell extends StatelessWidget {
-  const _OutcomeShell({
-    required this.child,
-    required this.title,
-    required this.icon,
-    required this.tone,
-    this.result,
-  });
-
-  final Widget child;
-  final String title;
-  final String icon;
-  final Tone tone;
-  final TriageResult? result;
-
-  @override
-  Widget build(BuildContext context) {
-    final p = context.p;
-    return ListView(
-      padding: EdgeInsets.fromLTRB(
-        20,
-        16,
-        20,
-        40 + MediaQuery.paddingOf(context).bottom,
-      ),
-      children: [
-        Row(
-          children: [
-            Container(
-              width: 52,
-              height: 52,
-              decoration: BoxDecoration(color: tone.bg, shape: BoxShape.circle),
-              child: Center(
-                child: Ic.svg(icon, color: tone.fg, size: 26, stroke: 2),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(title, style: Type.title2(p)),
-                  const SizedBox(height: 4),
-                  StatusChip(
-                    label: result?.urgencyLabel ?? 'Reviewed',
-                    compact: true,
-                    icon: Ic.info,
-                    fg: tone.fg,
-                    bg: tone.bg,
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: T.s16),
-        child,
-      ],
-    );
-  }
-}
-
-class Tone {
-  const Tone(this.fg, this.bg);
-  final Color fg;
-  final Color bg;
-  static const calm = Tone(Color(0xFF7A4A1B), Color(0x1AF4AE52));
-  static const mid = Tone(Color(0xFFA8480F), Color(0x1FE4843E));
-  static const alert = Tone(Color(0xFF9B1C1C), Color(0x1FDC2626));
-  static const info = Tone(Color(0xFF1F5C33), Color(0x1FDDF2E3));
-
-  /// Dark-mode twins. The light constants above were script-measured at
-  /// 1.5–2.4:1 on dark surfaces; the twins are palette colours, all >= 4.5:1.
-  static final calmDark = Tone(
-    AppPalette.dark.warning,
-    AppPalette.dark.warning.withValues(alpha: 0.22),
-  );
-  static final midDark = Tone(
-    AppPalette.dark.accent,
-    AppPalette.dark.accent.withValues(alpha: 0.18),
-  );
-  static final alertDark = Tone(
-    AppPalette.dark.destructive,
-    AppPalette.dark.destructive.withValues(alpha: 0.18),
-  );
-  static final infoDark = Tone(
-    AppPalette.dark.success,
-    AppPalette.dark.success.withValues(alpha: 0.16),
-  );
-
-  /// Theme-aware pick — every call site routes through this so dark mode
-  /// never renders the light constants.
-  static Tone of(Tone light, bool dark) {
-    if (!dark) return light;
-    // The four constants are canonicalized, so identity is exact here.
-    if (identical(light, calm)) return calmDark;
-    if (identical(light, mid)) return midDark;
-    if (identical(light, alert)) return alertDark;
-    return infoDark;
-  }
-}
-
-class _Bullets extends StatelessWidget {
-  const _Bullets({
-    required this.items,
-    required this.icon,
-    required this.tone,
-    this.heading,
-  });
-  final List<String> items;
-  final String icon;
-  final Tone tone;
-  final String? heading;
-
-  @override
-  Widget build(BuildContext context) {
-    if (items.isEmpty) return const SizedBox.shrink();
-    final p = context.p;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        if (heading != null) ...[
-          const SizedBox(height: T.s20),
-          Text(heading!, style: Type.headline(p)),
-          const SizedBox(height: 8),
-        ],
-        for (final item in items)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 9),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.only(top: 1),
-                  child: Ic.svg(icon, color: tone.fg, size: 16, stroke: 2.2),
-                ),
-                const SizedBox(width: 10),
-                Expanded(child: Text(item, style: Type.callout(p))),
-              ],
-            ),
-          ),
-      ],
-    );
-  }
-}
-
-/// Outcome: book an appointment.
-class BookTriageView extends StatelessWidget {
-  const BookTriageView({
-    super.key,
-    required this.result,
-    required this.pet,
-    required this.entry,
-  });
-
-  final TriageResult result;
-  final Pet? pet;
-  final TriageEntry entry;
-
-  @override
-  Widget build(BuildContext context) {
-    final p = context.p;
-    return Column(
-      children: [
-        Expanded(
-          child: _OutcomeShell(
-            title: result.title,
-            icon: Ic.calendar,
-            tone: Tone.of(
-              result.urgency == 2 ? Tone.alert : Tone.mid,
-              p.isDark,
-            ),
-            result: result,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(result.summary, style: Type.body(p)),
-                _Bullets(
-                  items: result.bullets,
-                  icon: Ic.check,
-                  tone: Tone.of(Tone.info, p.isDark),
-                  heading: 'What we noted',
-                ),
-                _Bullets(
-                  items: result.redFlags,
-                  icon: Ic.alert,
-                  tone: Tone.of(Tone.alert, p.isDark),
-                  heading: 'Contact us sooner if you notice',
-                ),
-                if (result.nextStep != null) ...[
-                  const SizedBox(height: T.s16),
-                  _NoteBox(text: result.nextStep!, icon: Ic.arrowRight),
-                ],
-                const SizedBox(height: T.s16),
-                _NotADiagnosis(),
-              ],
-            ),
-          ),
-        ),
-        StickyCta(
-          extra: pet == null
-              ? null
-              : SecondaryButton(
-                  label: 'Chat clinic team about this',
-                  icon: Ic.chat,
-                  onPressed: () => _handoff(context, pet, result),
-                ),
-          child: PrimaryButton(
-            label: 'Book appointment',
-            icon: Ic.calendar,
-            onPressed: () => Navigator.of(
-              context,
-            ).push(appRoute(BookFlow(initialPetId: pet?.id, triage: result))),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-/// Outcome: talk to the clinic team.
-class ChatTriageView extends StatelessWidget {
-  const ChatTriageView({
-    super.key,
-    required this.result,
-    required this.pet,
-    required this.handoff,
-  });
-
-  final TriageResult result;
-  final Pet? pet;
-  final VoidCallback handoff;
-
-  @override
-  Widget build(BuildContext context) {
-    final p = context.p;
-    final store = AppScope.of(context);
-    return Column(
-      children: [
-        Expanded(
-          child: _OutcomeShell(
-            title: result.title,
-            icon: Ic.chat,
-            tone: Tone.of(Tone.mid, p.isDark),
-            result: result,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(result.summary, style: Type.body(p)),
-                _Bullets(
-                  items: result.bullets,
-                  icon: Ic.check,
-                  tone: Tone.of(Tone.info, p.isDark),
-                  heading: 'What we noted',
-                ),
-                _Bullets(
-                  items: result.redFlags,
-                  icon: Ic.alert,
-                  tone: Tone.of(Tone.alert, p.isDark),
-                  heading: 'Contact us sooner if you notice',
-                ),
-                const SizedBox(height: T.s16),
-                _NoteBox(
-                  text: store.staffOnline()
-                      ? 'The clinic team is online now and usually replies within 10 minutes.'
-                      : store.offlineNote ??
-                            'The clinic team replies during clinic hours.',
-                  icon: Ic.clock,
-                ),
-                const SizedBox(height: 12),
-                _NoteBox(
-                  text:
-                      '${pet?.name ?? 'Your pet'} and this summary travel with the message — no retyping.',
-                  icon: Ic.info,
-                ),
-                const SizedBox(height: T.s16),
-                _NotADiagnosis(),
-              ],
-            ),
-          ),
-        ),
-        StickyCta(
-          extra: SecondaryButton(
-            label: 'Book instead',
-            icon: Ic.calendar,
-            onPressed: () => Navigator.of(
-              context,
-            ).push(appRoute(BookFlow(initialPetId: pet?.id, triage: result))),
-          ),
-          child: PrimaryButton(
-            label: 'Chat clinic team about this',
-            icon: Ic.send,
-            onPressed: handoff,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-/// Outcome: home care, with a red-flag list and a "Book anyway" secondary.
-class HomeCareTriageView extends StatelessWidget {
-  const HomeCareTriageView({
-    super.key,
-    required this.result,
-    required this.pet,
-    required this.entry,
-  });
-
-  final TriageResult result;
-  final Pet? pet;
-  final TriageEntry entry;
-
-  @override
-  Widget build(BuildContext context) {
-    final p = context.p;
-    return Column(
-      children: [
-        Expanded(
-          child: _OutcomeShell(
-            title: result.title,
-            icon: Ic.heart,
-            tone: Tone.of(Tone.calm, p.isDark),
-            result: result,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(result.summary, style: Type.body(p)),
-                _Bullets(
-                  items: result.homeCare,
-                  icon: Ic.checkCircle,
-                  tone: Tone.of(Tone.info, p.isDark),
-                  heading: 'Care instructions for the next 48 hours',
-                ),
-                _Bullets(
-                  items: result.redFlags,
-                  icon: Ic.alert,
-                  tone: Tone.of(Tone.alert, p.isDark),
-                  heading: 'Book a visit if you notice',
-                ),
-                const SizedBox(height: T.s16),
-                _NotADiagnosis(),
-              ],
-            ),
-          ),
-        ),
-        StickyCta(
-          extra: SecondaryButton(
-            label: 'Book anyway',
-            icon: Ic.calendar,
-            onPressed: () => Navigator.of(
-              context,
-            ).push(appRoute(BookFlow(initialPetId: pet?.id, triage: result))),
-          ),
-          child: PrimaryButton(
-            label: 'Chat clinic team about this',
-            icon: Ic.send,
-            onPressed: () {
-              final store = AppScope.read(context);
-              store.handOffToClinic(pet: pet!, result: result);
-              Navigator.of(context).pushReplacement(
-                appRoute(
-                  ChatThreadScreen(
-                    threadId: 'th_clinic',
-                    openedWithPetId: pet!.id,
-                  ),
-                ),
-              );
-            },
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-/// Emergency outcome. Primary "Call the clinic now" (tel:) sits above the fold;
-/// after hours it becomes "Call {nearest emergency clinic}" with the number.
-class EmergencyTriageView extends StatelessWidget {
-  const EmergencyTriageView({
-    super.key,
-    required this.result,
-    required this.pet,
-    required this.entry,
-  });
-
-  final TriageResult result;
-  final Pet? pet;
-  final TriageEntry entry;
-
-  static bool isOpen() => clinicOpenAt(DateTime.now());
-
-  @override
-  Widget build(BuildContext context) {
-    final store = AppScope.of(context);
-    final p = context.p;
-    final open = clinicOpenAt(store.now);
-    final number = open ? Seed.clinicPhone : Seed.afterHoursPhone;
-    final name = open ? Seed.clinicName : Seed.afterHoursName;
-
-    return Column(
-      children: [
-        Expanded(
-          child: ListView(
-            padding: EdgeInsets.fromLTRB(20, 12, 20, 24),
-            children: [
-              Row(
-                children: [
-                  Container(
-                    width: 52,
-                    height: 52,
-                    decoration: BoxDecoration(
-                      color: p.destructive.withValues(alpha: 0.14),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Center(
-                      child: Ic.svg(
-                        Ic.alert,
-                        color: p.destructive,
-                        size: 26,
-                        stroke: 2.1,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text('Needs a vet right away', style: Type.title2(p)),
-                        const SizedBox(height: 4),
-                        StatusChip(
-                          label: open
-                              ? 'Clinic open now'
-                              : 'Clinic closed — after hours',
-                          icon: Ic.clock,
-                          compact: true,
-                          fg: open ? p.success : p.destructive,
-                          bg: open
-                              ? (p.isDark
-                                    ? p.success.withValues(alpha: 0.12)
-                                    : const Color(0xFFDDF2E3))
-                              : p.destructive.withValues(alpha: 0.12),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: T.s16),
-              Text(result.title, style: Type.title1(p)),
-              const SizedBox(height: 8),
-              Text(result.summary, style: Type.body(p)),
-              // The call CTA is duplicated as an inline row so it is reachable
-              // even before the sticky bar at the bottom of the scroll view.
-              const SizedBox(height: T.s16),
-              SoftCard(
-                color: p.destructive,
-                padding: const EdgeInsets.all(T.s16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Ic.svg(
-                          Ic.phone,
-                          color: p.onPrimaryFill,
-                          size: 20,
-                          stroke: 2.2,
-                        ),
-                        const SizedBox(width: 9),
-                        Expanded(
-                          child: Text(
-                            open ? 'Call the clinic now' : 'Call $name',
-                            style: Type.headline(p)
-                                .copyWith(color: p.onPrimaryFill),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      number,
-                      style: Type.title2(p)
-                          .copyWith(color: p.onPrimaryFill, letterSpacing: 0.4),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      open
-                          ? "Ask for the vet on duty \u2014 keeping ${pet?.name ?? 'your pet'} calm and warm on the way helps."
-                          : 'They are open 24 hours \u2014 head over when you are ready, and drive safe.',
-                      style: Type.footnote(p).copyWith(
-                        color: p.onPrimaryFill.withValues(alpha: 0.92),
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-                    PrimaryButton(
-                      label: open ? 'Call the clinic now' : 'Call $name',
-                      icon: Ic.phone,
-                      onPressed: () =>
-                          callPhoneNumber(context, number: number, name: name),
-                    ),
-                  ],
-                ),
-              ),
-              _Bullets(
-                items: result.redFlags,
-                icon: Ic.alert,
-                tone: Tone.of(Tone.alert, p.isDark),
-                heading: 'Why we suggest this',
-              ),
-              _Bullets(
-                items: result.bullets,
-                icon: Ic.info,
-                tone: Tone.of(Tone.mid, p.isDark),
-                heading: 'On the way',
-              ),
-              const SizedBox(height: T.s16),
-              _NotADiagnosis(),
-            ],
-          ),
-        ),
-        StickyCta(
-          extra: SecondaryButton(
-            label: 'Chat clinic team about this',
-            icon: Ic.chat,
-            onPressed: () => _handoff(context, pet, result),
-          ),
-          child: PrimaryButton(
-            label: open ? 'Call the clinic now' : 'Call $name',
-            icon: Ic.phone,
-            destructive: true,
-            onPressed: () =>
-                callPhoneNumber(context, number: number, name: name),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-/// Shared AI -> clinic handoff. No-ops safely when there is no pet yet.
-Future<void> _handoff(
-  BuildContext context,
-  Pet? pet,
-  TriageResult result,
-) async {
-  if (pet == null) return;
-  AppScope.read(context).handOffToClinic(pet: pet, result: result);
-  if (!context.mounted) return;
-  await Navigator.of(context).pushReplacement(
-    appRoute(ChatThreadScreen(threadId: 'th_clinic', openedWithPetId: pet.id)),
-  );
-}
-
-class _NotADiagnosis extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    final p = context.p;
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: p.fieldBg,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: p.divider),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Ic.svg(Ic.shield, color: p.textSecondary, size: 17),
-          const SizedBox(width: 9),
-          Expanded(
-            child: Text(
-              'This is guidance, not a diagnosis. Only a veterinarian who examines '
-              'your pet can confirm what is going on.',
-              style: Type.footnote(p),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _NoteBox extends StatelessWidget {
-  const _NoteBox({required this.text, required this.icon});
-  final String text;
-  final String icon;
-
-  @override
-  Widget build(BuildContext context) {
-    final p = context.p;
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: T.amber.withValues(alpha: 0.16),
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Ic.svg(icon, color: p.accentText, size: 16),
-          const SizedBox(width: 9),
-          Expanded(child: Text(text, style: Type.footnote(p))),
-        ],
-      ),
-    );
-  }
-}
-
-/// Non-interactive context line shown when the entry point already knows the
-/// pet — the AI never asks the user to pick one.
-class _PetContextRow extends StatelessWidget {
-  const _PetContextRow({required this.pet});
-
-  final Pet pet;
-
-  @override
-  Widget build(BuildContext context) {
-    final p = context.p;
-    return Semantics(
-      label: 'Health check for ${pet.name}',
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        decoration: BoxDecoration(
-          color: p.surface,
-          borderRadius: BorderRadius.circular(T.rCard),
-          border: Border.all(color: p.divider),
-        ),
-        child: Row(
-          children: [
-            PetArt(
-              seed: pet.id.hashCode.abs() % 4,
-              species: pet.species,
-              radius: 12,
-              iconSize: 34,
-              label: '${pet.name} portrait',
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Checking ${pet.name}',
-                    style: Type.headline(p),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  Text(
-                    pet.breed,
-                    style: Type.footnote(p).copyWith(color: p.textSecondary),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
-              ),
-            ),
-          ],
         ),
       ),
     );

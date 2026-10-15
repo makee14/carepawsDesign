@@ -1263,36 +1263,6 @@ class AiService {
   }
 
   /// Health check where the AI also identifies which pet the concern is about.
-  /// Returns the triage result plus the matched pet name exactly as the model
-  /// wrote it (null when the model could not determine it — never guessed).
-  /// Throws [AiException] when no provider can answer. An unparseable reply
-  /// counts as a failed attempt, so the next provider gets a turn.
-  Future<({TriageResult result, String? petName})> triageDetect({
-    required List<Pet> pets,
-    required String text,
-    Uint8List? photo,
-    String? photoMime,
-    String ownerFirstName = '',
-  }) async {
-    return _withFailover((b) async {
-      final raw = await b.triage(
-        system: VetPersona.systemFor(
-          now: DateTime.now(),
-          ownerFirstName: ownerFirstName,
-        ),
-        prompt: _triageDetectPrompt(pets, hasPhoto: photo != null),
-        description: text,
-        photo: photo,
-        photoMime: photoMime,
-      );
-      final parsed = _parseDetect(raw);
-      if (parsed == null) {
-        throw const AiException(AiFailure.serviceError, 'unparseable reply');
-      }
-      return parsed;
-    });
-  }
-
   /// General pet-care chat answer. Throws [AiException] when no provider can
   /// answer. An empty reply counts as a failed attempt so the next provider
   /// gets a turn; a malformed-but-nonempty reply is shown as-is (better an
@@ -1376,46 +1346,13 @@ String _triagePrompt(
     'Write warmly and reassuringly, like a calm vet nurse talking to a worried owner: plain words, no alarming '
     'language ("emergency", "critical", "danger", "immediately") in the title or summary — say what is needed, kindly.';
 
-String _triageDetectPrompt(List<Pet> pets, {required bool hasPhoto}) {
-  final roster = pets
-      .map((p) => '${p.name} (${p.species.name}, ${p.breed})')
-      .join('; ');
-  return 'You triage pet health concerns for a veterinary clinic app. '
-      "The owner's pets are: $roster. "
-      '${hasPhoto ? 'A photo of the pet is attached. ' : ''}'
-      'First identify which pet the concern is about from the description: use the exact name '
-      'from the list above. If there is only one pet, it is that one. If the description does not '
-      'identify a pet, use null for petName — never guess. '
-      'Reply with ONLY a JSON object, no markdown, using exactly these keys: '
-      '{"petName":"exact name from the list or null","route":"book|chat|homeCare|emergency",'
-      '"urgency":0|1|2,"title":"short headline",'
-      '"summary":"2-3 sentences","bullets":["what we noticed"],'
-      '"redFlags":["danger signs that need a vet"],'
-      '"homeCare":["care instructions"],"nextStep":"one sentence"}'
-      'Choose route "emergency" for breathing difficulty, collapse, seizures, heavy bleeding, poisoning or severe pain. '
-      'Choose "homeCare" only for mild, low-risk concerns. Otherwise use "book". This is guidance, not a diagnosis. '
-      'Write warmly and reassuringly, like a calm vet nurse talking to a worried owner: plain words, no alarming '
-      'language ("emergency", "critical", "danger", "immediately") in the title or summary — say what is needed, kindly.';
-}
+/// (removed: _triageDetectPrompt — the detect-the-pet path was the
+/// wrong-pet-name bug’s root cause; step-0 selection is authoritative now)
 
 /// Parses the model's JSON reply and clamps it into a valid TriageResult.
 TriageResult? _parseTriage(String raw) {
   final j = _extractJson(raw);
   return j == null ? null : _triageFromJson(j);
-}
-
-/// Parses a detect-mode reply: the triage result plus the model's pet
-/// identification (null when the model could not determine it).
-({TriageResult result, String? petName})? _parseDetect(String raw) {
-  final j = _extractJson(raw);
-  if (j == null) return null;
-  final result = _triageFromJson(j);
-  if (result == null) return null;
-  final petName = (j['petName'] as String?)?.trim();
-  return (
-    result: result,
-    petName: petName == null || petName.isEmpty ? null : petName,
-  );
 }
 
 Map<String, dynamic>? _extractJson(String raw) {

@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:carepaws/app.dart';
+import 'package:carepaws/design/icons.dart';
 import 'package:carepaws/design/tokens.dart';
 import 'package:carepaws/data/models.dart';
 import 'package:carepaws/data/seed.dart';
@@ -599,9 +600,10 @@ void main() {
   });
 
   group('Triage — all four routes', () {
-    // Drives the real triage engine through a canned Gemini API: model
-    // discovery returns one flash model and content generation returns the
-    // canned triage JSON under test. No canned app-side answers involved.
+    // Drives the stepped health-check flow through a canned Gemini API:
+    // model discovery returns one flash model and content generation
+    // returns the canned triage JSON under test. No canned app-side answers
+    // involved.
     Future<void> submitTriage(
       WidgetTester tester,
       Map<String, dynamic> triageJson, {
@@ -618,11 +620,19 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      await tester.enterText(
-        find.byType(CupertinoTextField).first,
-        'test description',
-      );
-      await tester.pump();
+      // Step 0: pet selection is required before the check can start.
+      await tester.tap(find.text('Biscuit'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(PrimaryButton, 'Continue'));
+      await tester.pumpAndSettle();
+      // Steps 1-4: answer each question with its first option.
+      for (var i = 0; i < 4; i++) {
+        await tester.tap(find.byType(PressScale).first);
+        await tester.pumpAndSettle();
+        await tester.tap(find.widgetWithText(PrimaryButton, 'Continue'));
+        await tester.pumpAndSettle();
+      }
+      // Photo step: run without a photo.
       await scrollAndTap(tester, find.text('Run health check'));
       await tester.pumpAndSettle();
     }
@@ -637,11 +647,16 @@ void main() {
           redFlags: ['Laboured breathing or blue/pale gums'],
         ),
       );
-      expect(find.text('Possible emergency — canned'), findsOneWidget);
+      // Summary-first: the badge leads, then the canned summary.
+      expect(find.text('Urgent — see a vet now'), findsOneWidget);
+      expect(
+        find.text('A canned test summary for "Possible emergency — canned".'),
+        findsOneWidget,
+      );
       // Primary call CTA is present and above the fold.
       expect(find.text('Call the clinic now'), findsWidgets);
       expect(find.text(Seed.clinicPhone), findsWidgets);
-      expect(find.text('Chat clinic team about this'), findsOneWidget);
+      expect(find.text('Chat clinic team about this'), findsWidgets);
       // States it is not a diagnosis.
       await scrollToText(tester, 'not a diagnosis');
       expect(find.textContaining('not a diagnosis'), findsOneWidget);
@@ -657,8 +672,8 @@ void main() {
           redFlags: ['Blood in vomit, stool or urine'],
         ),
       );
+      expect(find.text('Needs a visit'), findsOneWidget);
       expect(find.text('Book appointment'), findsWidgets);
-      expect(find.text('Chat clinic team about this'), findsWidgets);
       expect(find.textContaining('not a diagnosis'), findsOneWidget);
     });
 
@@ -672,10 +687,8 @@ void main() {
           homeCare: ['Keep fresh water available at all times'],
         ),
       );
-      expect(
-        find.text('Care instructions for the next 48 hours'),
-        findsOneWidget,
-      );
+      expect(find.text('Low urgency'), findsOneWidget);
+      expect(find.text('Home care'), findsOneWidget);
       expect(find.text('Book anyway'), findsOneWidget);
       expect(find.text('Chat clinic team about this'), findsWidgets);
     });
@@ -737,14 +750,11 @@ void main() {
       expect(find.byType(BookFlow), findsOneWidget);
     });
 
-    testWidgets('no manual pet picker — AI identifies the pet', (tester) async {
+    testWidgets('step 0 requires a pet before the check starts', (
+      tester,
+    ) async {
       final ai = await _liveAi(
-        _triageJson(
-          route: 'book',
-          urgency: 1,
-          title: 'Needs a visit — canned',
-          petName: 'Mochi',
-        ),
+        _triageJson(route: 'book', urgency: 1, title: 'Needs a visit — canned'),
       );
       await tester.pumpWidget(
         AppScope(
@@ -756,45 +766,40 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      // The manual picker is gone; the AI context line is shown instead.
+      // The picker is step 0 — no AI identification step exists anymore.
+      expect(find.text('Which pet is this check for?'), findsOneWidget);
       expect(find.text('Which pet?'), findsNothing);
       expect(
         find.textContaining('The AI will identify which pet'),
-        findsOneWidget,
+        findsNothing,
       );
-      await tester.enterText(
-        find.byType(CupertinoTextField).first,
-        'Mochi is limping',
-      );
-      await tester.pump();
-      await scrollAndTap(tester, find.text('Run health check'));
+      // Continue stays disabled until a pet is chosen.
+      final cont = find.widgetWithText(PrimaryButton, 'Continue');
+      expect(tester.widget<PrimaryButton>(cont).onPressed, isNull);
+      await tester.tap(find.text('Biscuit'));
       await tester.pumpAndSettle();
-      expect(find.text('Needs a visit — canned'), findsWidgets);
+      expect(tester.widget<PrimaryButton>(cont).onPressed, isNotNull);
     });
 
-    testWidgets('ambiguous pet shows honest disambiguation', (tester) async {
+    testWidgets('step-0 pet is authoritative — no disambiguation', (
+      tester,
+    ) async {
+      // Even when the AI names a different pet, the step-0 selection wins:
+      // the wrong-pet-name bug can never resurface.
       await submitTriage(
         tester,
         _triageJson(
           route: 'book',
           urgency: 1,
           title: 'Needs a visit — canned',
-          petName: null,
+          petName: 'Mochi',
         ),
       );
-      // No guessing: an honest prompt to pick the pet, then a re-run.
-      expect(find.text('Which pet is this about?'), findsOneWidget);
-      expect(find.textContaining('didn\u2019t guess'), findsOneWidget);
-      expect(find.text('Checking Biscuit'), findsOneWidget);
-      expect(find.text('Checking Mochi'), findsOneWidget);
-      await scrollAndTap(tester, find.text('Checking Mochi'));
-      await tester.pumpAndSettle();
-      // Re-ran with the chosen pet through the known-pet path.
-      expect(find.text('Needs a visit — canned'), findsWidgets);
       expect(find.text('Which pet is this about?'), findsNothing);
+      expect(find.text('Health check — Biscuit'), findsOneWidget);
     });
 
-    testWidgets('preselected pet skips detection', (tester) async {
+    testWidgets('preselected pet starts selected at step 0', (tester) async {
       final ai = await _liveAi(
         _triageJson(route: 'book', urgency: 1, title: 'Needs a visit — canned'),
       );
@@ -811,7 +816,10 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      expect(find.textContaining('Checking Biscuit'), findsOneWidget);
+      expect(find.text('Which pet is this check for?'), findsOneWidget);
+      // Biscuit (p1) is already selected: Continue is enabled immediately.
+      final cont = find.widgetWithText(PrimaryButton, 'Continue');
+      expect(tester.widget<PrimaryButton>(cont).onPressed, isNotNull);
     });
   });
 
@@ -863,15 +871,20 @@ void main() {
           ),
         );
         await tester.pumpAndSettle();
+        // Step 0 shows the explicit unavailable card (never fake answers).
         expect(find.text('CarePaws AI is unavailable'), findsOneWidget);
-        // The card pushes the form down — scroll until the field is built.
-        await scrollToText(tester, 'Describe the concern');
-        await tester.enterText(
-          find.byType(CupertinoTextField).first,
-          'Biscuit is limping',
-        );
-        await tester.pump();
-        // Run is disabled without a live model: no request can fire.
+        // Walk the flow to the photo step; Run stays disabled without a
+        // live model: no request can fire.
+        await tester.tap(find.text('Biscuit'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.widgetWithText(PrimaryButton, 'Continue'));
+        await tester.pumpAndSettle();
+        for (var i = 0; i < 4; i++) {
+          await tester.tap(find.byType(PressScale).first);
+          await tester.pumpAndSettle();
+          await tester.tap(find.widgetWithText(PrimaryButton, 'Continue'));
+          await tester.pumpAndSettle();
+        }
         await scrollToText(tester, 'Run health check');
         final runButton = find.ancestor(
           of: find.text('Run health check'),
@@ -1184,18 +1197,27 @@ void main() {
 
       await scrollAndTap(tester, find.text('Continue').first);
       await scrollAndTap(tester, find.text('Start health check'));
-      await scrollToText(tester, 'Describe the concern');
-      await tester.enterText(
-        find.byType(CupertinoTextField).first,
-        'Biscuit has been vomiting and is not eating',
+      // Stepped health check: the booking's pet is pre-selected; answer the
+      // questions and run without a photo.
+      await scrollAndTap(
+        tester,
+        find.widgetWithText(PrimaryButton, 'Continue'),
       );
-      await tester.pump();
+      await tester.pumpAndSettle();
+      for (var i = 0; i < 4; i++) {
+        await tester.tap(find.byType(PressScale).first);
+        await tester.pumpAndSettle();
+        await scrollAndTap(
+          tester,
+          find.widgetWithText(PrimaryButton, 'Continue'),
+        );
+        await tester.pumpAndSettle();
+      }
       await scrollAndTap(tester, find.text('Run health check'));
       await tester.pumpAndSettle();
 
-      // Routed to the book outcome.
-      expect(find.text('Book appointment'), findsWidgets);
-      await scrollAndTap(tester, find.text('Book appointment'));
+      // The result returns to the booking flow as an inline summary card.
+      expect(find.text('Needs a visit — canned'), findsWidgets);
 
       // Step 1 (pet) -> step 2 (health check supplied) -> step 3 (service).
       await scrollAndTap(tester, find.text('Continue').first);

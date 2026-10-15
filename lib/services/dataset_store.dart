@@ -7,9 +7,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../data/models.dart';
 
 /// Persists the user-owned datasets (pets, appointments, reminders, orders,
-/// chat messages, notifications, prescriptions, cart) per account, so
-/// everything the user saves survives backgrounding, process death and cold
-/// starts. Each dataset is one JSON document under
+/// chat messages, notifications, prescriptions, cart, health checks) per
+/// account, so everything the user saves survives backgrounding, process
+/// death and cold starts. Each dataset is one JSON document under
 /// `carepaws.data.<account>.<dataset>`.
 ///
 /// Photos are NOT in here: binary portraits stay in [PhotoStore] (keyed by pet
@@ -29,6 +29,7 @@ class DatasetStore {
   static const notifications = 'notifications';
   static const prescriptions = 'prescriptions';
   static const cart = 'cart';
+  static const healthChecks = 'healthChecks';
 
   static String _key(String account, String dataset) =>
       '$_prefix.$account.$dataset';
@@ -595,4 +596,94 @@ class DatasetStore {
 
   static Future<void> writeCart(String account, List<CartLine> items) =>
       write(account, cart, encodeCart(items));
+
+  // ---------------------------------------------------------- health checks
+  static Map<String, Object?> _healthResultJson(HealthCheckResult r) => {
+    'id': r.id,
+    'petId': r.petId,
+    'summary': r.summary,
+    'urgency': r.urgency.name,
+    'recommendation': r.recommendation,
+    'route': r.route.name,
+    'sections': [
+      for (final s in r.sections) {'title': s.title, 'body': s.body},
+    ],
+    'answers': [
+      for (final a in r.answers)
+        {
+          'questionId': a.questionId,
+          'question': a.question,
+          'answer': a.answer,
+        },
+    ],
+    'createdAt': r.createdAt.toIso8601String(),
+  };
+
+  static HealthCheckResult _healthResultFromJson(Map<String, dynamic> m) {
+    final sections = <HealthSection>[];
+    for (final s in (m['sections'] as List? ?? const [])) {
+      if (s is Map<String, dynamic>) {
+        sections.add(
+          HealthSection(title: _str(s, 'title'), body: _str(s, 'body')),
+        );
+      }
+    }
+    final answers = <HealthAnswer>[];
+    for (final a in (m['answers'] as List? ?? const [])) {
+      if (a is Map<String, dynamic>) {
+        answers.add(
+          HealthAnswer(
+            questionId: _str(a, 'questionId'),
+            question: _str(a, 'question'),
+            answer: _str(a, 'answer'),
+          ),
+        );
+      }
+    }
+    return HealthCheckResult(
+      id: _str(m, 'id'),
+      petId: _str(m, 'petId'),
+      summary: _str(m, 'summary'),
+      urgency: _enumByName(
+        Urgency.values,
+        m['urgency'] as String?,
+        Urgency.low,
+      ),
+      recommendation: _str(m, 'recommendation'),
+      route: _enumByName(
+        TriageRoute.values,
+        m['route'] as String?,
+        TriageRoute.homeCare,
+      ),
+      sections: sections,
+      answers: answers,
+      createdAt: _date(m, 'createdAt'),
+    );
+  }
+
+  static String encodeHealthChecks(List<HealthCheckResult> items) =>
+      _envelope(items.map(_healthResultJson));
+
+  static List<HealthCheckResult>? decodeHealthChecks(String? raw) {
+    final items = _items(raw);
+    if (items == null) return null;
+    final out = <HealthCheckResult>[];
+    for (final m in items) {
+      try {
+        out.add(_healthResultFromJson(m));
+      } catch (_) {
+        // Corrupt entry — drop it, keep the rest.
+      }
+    }
+    return out;
+  }
+
+  static Future<List<HealthCheckResult>?> readHealthChecks(
+    String account,
+  ) async => decodeHealthChecks(await read(account, healthChecks));
+
+  static Future<void> writeHealthChecks(
+    String account,
+    List<HealthCheckResult> items,
+  ) => write(account, healthChecks, encodeHealthChecks(items));
 }
