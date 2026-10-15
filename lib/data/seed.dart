@@ -549,7 +549,7 @@ class Seed {
     Promo(
       id: 'promo-groom',
       title: 'Fresh cut season',
-      subtitle: 'Full grooms from ₱850 · baths, cuts, nails & ears',
+      subtitle: 'Full grooms from ₱850',
       art: 4,
       ctaLabel: 'Book grooming',
       route: 'book',
@@ -557,7 +557,7 @@ class Seed {
     Promo(
       id: 'promo-vax',
       title: 'Vaccination drive',
-      subtitle: 'Walk-in boosters every Saturday, 9 AM – 12 PM',
+      subtitle: 'Walk-in boosters on Saturdays',
       art: 5,
       ctaLabel: 'Learn more',
       route: 'book',
@@ -565,7 +565,7 @@ class Seed {
     Promo(
       id: 'promo-shop',
       title: 'New in the shop',
-      subtitle: 'Treats, toys & essentials — pickup at the clinic',
+      subtitle: 'Treats, toys & essentials',
       art: 6,
       ctaLabel: 'Browse shop',
       route: 'shop',
