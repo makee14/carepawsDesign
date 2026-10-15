@@ -76,6 +76,25 @@ Pet measuredPet(Pet p) => Pet(
   docs: p.docs,
 );
 
+/// A Biscuit with the optional measurements cleared (null = never recorded).
+Pet unmeasuredPet(Pet p) => Pet(
+  id: p.id,
+  name: p.name,
+  species: p.species,
+  breed: p.breed,
+  sex: p.sex,
+  birthDate: p.birthDate,
+  weightKg: p.weightKg,
+  heightCm: null,
+  lengthCm: null,
+  color: p.color,
+  microchip: p.microchip,
+  allergies: p.allergies,
+  vitals: p.vitals,
+  timeline: p.timeline,
+  docs: p.docs,
+);
+
 void main() {
   group('petCode', () {
     test('is a stable CP-XXXXXX code', () {
@@ -92,6 +111,9 @@ void main() {
       tester,
     ) async {
       final store = seedStore();
+      // Biscuit's seed data now includes measurements; use a cleared copy to
+      // exercise the null-hiding behavior.
+      store.pets = [unmeasuredPet(store.pet('p1')!)];
       await pumpProfile(tester, store);
       // Weight tile is in the banner (value also appears in the vitals
       // grid, so just require presence).
@@ -185,6 +207,9 @@ void main() {
 
     testWidgets('leaving them empty keeps null', (tester) async {
       final store = seedStore();
+      // Seed Biscuit now carries measurements; clear them to test the
+      // empty-means-null path.
+      store.pets = [unmeasuredPet(store.pet('p1')!)];
       await tester.binding.setSurfaceSize(const Size(390, 844));
       await tester.pumpWidget(
         AppScope(
