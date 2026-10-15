@@ -45,6 +45,18 @@ void main() {
     await tester.enterText(fields.at(2), 'password123');
     await tester.pump();
 
+    // Consent is required: check the box, then submit.
+    expect(
+      tester
+          .widget<PrimaryButton>(
+            find.widgetWithText(PrimaryButton, 'Create account'),
+          )
+          .onPressed,
+      isNull,
+    );
+    await tester.tap(find.byKey(const Key('consent-checkbox')));
+    await tester.pump();
+
     // Submit.
     final btn = find.widgetWithText(PrimaryButton, 'Create account');
     await tester.tap(btn);

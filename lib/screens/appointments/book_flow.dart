@@ -16,8 +16,23 @@ import '../../widgets/time_of_day.dart';
 import '../triage_screen.dart';
 import '../profile/settings_screens.dart';
 
-/// Six-step booking flow:
-/// 1 Pet → 2 AI Triage → 3 Service → 4 Date & time → 5 Review → 6 Confirm.
+/// Booking flow — each step does exactly one job:
+/// Pet → AI Triage → Service → Service details (grooming only) →
+/// Date & time → Review → Confirm.
+///
+/// The triage step is optional (Continue works without it); there is no skip
+/// button. The details step only exists for services with per-service
+/// questions (currently grooming: size, coat, notes), so step indices shift
+/// with the selected service — [_flow] is the single source of truth.
+enum _Step { pet, triage, service, questions, dateTime, review, confirm }
+
+/// One theoretical slot on a day, with its real availability.
+class _DaySlot {
+  const _DaySlot({required this.start, required this.available});
+  final DateTime start;
+  final bool available;
+}
+
 class BookFlow extends StatefulWidget {
   const BookFlow({
     super.key,
@@ -43,11 +58,12 @@ class BookFlow extends StatefulWidget {
 class _BookFlowState extends State<BookFlow> {
   int _step = 0;
   String? _petId;
+  String? _initialPetId;
   String? _serviceId;
   DateTime? _date;
   TimeOfDay? _time;
+  DateTime? _calMonth;
   TriageResult? _triage;
-  bool _skipTriage = false;
   String _intakeSize = 'Medium';
   String _intakeCoat = 'Short, dense, healthy';
   final _notes = TextEditingController();
@@ -55,11 +71,52 @@ class _BookFlowState extends State<BookFlow> {
 
   bool get _skipTriageStep => widget.rebookFrom != null;
 
+  /// The live step order. The questions step only exists for services with
+  /// per-service questions (grooming), so every index below must go through
+  /// this list — never a hardcoded step number.
+  List<_Step> get _flow => [
+    _Step.pet,
+    if (!_skipTriageStep) _Step.triage,
+    _Step.service,
+    if (_service?.grooming ?? false) _Step.questions,
+    _Step.dateTime,
+    _Step.review,
+    _Step.confirm,
+  ];
+
+  /// Confirm is always last; review always second-to-last.
+  int get _confirmIndex => _flow.length - 1;
+
+  /// Anything the user did beyond the pre-selected pet: leaving the flow at
+  /// step 0 with progress asks "Leave booking?" instead of popping silently.
+  bool get _hasProgress =>
+      _petId != _initialPetId ||
+      _serviceId != null ||
+      _date != null ||
+      _time != null ||
+      _triage != null ||
+      _notes.text.trim().isNotEmpty ||
+      _intakeSize != 'Medium' ||
+      _intakeCoat != 'Short, dense, healthy';
+
+  /// Nav-bar back / system back at step 0: leave only when clean or the user
+  /// confirms. Confirming lands back wherever the flow was opened from — the
+  /// booking itself is abandoned, not completed.
+  Future<void> _exitBooking() async {
+    if (await confirmDiscardIfDirty(
+      context,
+      isDirty: _hasProgress,
+      title: 'Leave booking?',
+      message: 'Your booking progress will be lost.',
+    )) {
+      if (mounted) dismissSheet(context);
+    }
+  }
+
   @override
   void initState() {
     super.initState();
     _triage = widget.triage;
-    _skipTriage = _triage == null;
     final r = widget.rebookFrom;
     if (r != null) {
       _petId = r.petId;
@@ -70,7 +127,11 @@ class _BookFlowState extends State<BookFlow> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _petId ??= widget.initialPetId ?? AppScope.of(context).pets.firstOrNull?.id;
+    final store = AppScope.of(context);
+    _petId ??= widget.initialPetId ?? store.pets.firstOrNull?.id;
+    _initialPetId ??= _petId;
+    final now = store.now;
+    _calMonth ??= DateTime(now.year, now.month);
   }
 
   @override
@@ -94,33 +155,113 @@ class _BookFlowState extends State<BookFlow> {
     return s.price;
   }
 
+  /// The chosen slot, or null when the chosen day/time is no longer actually
+  /// available (e.g. it was just booked). Availability is re-checked on
+  /// every build so a stale pick can never slip through to review.
   DateTime? get _slot {
     if (_date == null || _time == null) return null;
-    return DateTime(
+    final s = _service;
+    if (s == null) return null;
+    final start = DateTime(
       _date!.year,
       _date!.month,
       _date!.day,
       _time!.hour,
       _time!.minute,
     );
+    final ok = _daySlots(
+      _date!,
+      s,
+      _staff,
+      _store.now,
+    ).any((sl) => sl.start == start && sl.available);
+    return ok ? start : null;
   }
 
-  bool _canContinue() => switch (_step) {
-    0 => _petId != null,
-    1 => true, // triage is optional — result or explicit skip
-    2 => _serviceId != null,
-    3 => _slot != null,
-    4 => _slot != null && _serviceId != null,
-    _ => false,
+  bool _canContinue() => switch (_flow[_step]) {
+    _Step.pet => _petId != null,
+    _Step.triage => true, // triage is optional — Continue works without it
+    _Step.service => _serviceId != null,
+    _Step.questions => true, // every intake field is optional
+    _Step.dateTime => _slot != null,
+    _Step.review => _slot != null && _serviceId != null,
+    _Step.confirm => false,
   };
 
   Future<void> _next() async {
     HapticFeedback.selectionClick();
-    if (_step < 4) {
+    if (_flow[_step] != _Step.review) {
       setState(() => _step++);
       return;
     }
     await _confirm();
+  }
+
+  /// Every theoretical slot on [day] for [service] with [staff], flagged by
+  /// real availability. Clinic hours come from [Clinic] (Mon–Sat 9–18,
+  /// closed Sundays); a slot is unavailable when it overlaps one of the
+  /// staff member's active appointments that day. Past days and Sundays
+  /// return no slots at all.
+  List<_DaySlot> _daySlots(
+    DateTime day,
+    Service service,
+    Staff staff,
+    DateTime now,
+  ) {
+    final d = DateTime(day.year, day.month, day.day);
+    final today = DateTime(now.year, now.month, now.day);
+    if (d.weekday == DateTime.sunday || d.isBefore(today)) return const [];
+    // Slot spacing follows the service duration: grooming 1–2h, assistant
+    // 15–20m, vet consults 30m.
+    final floor = switch (service.role) {
+      StaffRole.groomer => const Duration(minutes: 60),
+      StaffRole.vet => const Duration(minutes: 30),
+      StaffRole.vetAssistant => const Duration(minutes: 15),
+    };
+    final len = Duration(minutes: service.durationMinutes);
+    final step = len > floor ? len : floor;
+    final open = DateTime(d.year, d.month, d.day, Clinic.openHour);
+    final close = DateTime(d.year, d.month, d.day, Clinic.closeHour);
+    final booked = _store.appointments
+        .where(
+          (a) =>
+              a.staffId == staff.id &&
+              a.status.isActive &&
+              a.start.year == d.year &&
+              a.start.month == d.month &&
+              a.start.day == d.day,
+        )
+        .toList();
+    final lead = now.add(const Duration(minutes: 30));
+    final out = <_DaySlot>[];
+    // A slot must END by closing time, and start at least 30 minutes out.
+    for (var t = open; !t.add(len).isAfter(close); t = t.add(step)) {
+      if (t.isBefore(lead)) continue;
+      final end = t.add(len);
+      final clash = booked.any(
+        (a) => t.isBefore(a.end) && a.start.isBefore(end),
+      );
+      out.add(_DaySlot(start: t, available: !clash));
+    }
+    return out;
+  }
+
+  /// The first day from [from] (inclusive) with at least one available slot,
+  /// or null when the whole booking window is full.
+  DateTime? _nextAvailableDay(
+    DateTime from,
+    Service service,
+    Staff staff,
+    DateTime now,
+    DateTime maxDay,
+  ) {
+    var d = DateTime(from.year, from.month, from.day);
+    final last = DateTime(maxDay.year, maxDay.month, maxDay.day);
+    while (!d.isAfter(last)) {
+      if (_daySlots(d, service, staff, now).any((s) => s.available)) return d;
+      d = d.add(const Duration(days: 1));
+    }
+    return null;
   }
 
   Future<void> _confirm() async {
@@ -169,94 +310,122 @@ class _BookFlowState extends State<BookFlow> {
 
     setState(() => _confirming = false);
     if (!mounted) return;
-    // Step 6: confirmation, then the success sheet.
-    setState(() => _step = 5);
+    // Last step: the confirmation.
+    setState(() => _step = _confirmIndex);
   }
 
   @override
   Widget build(BuildContext context) {
     final store = AppScope.of(context);
     final p = context.p;
-    final steps = _skipTriageStep ? 5 : 6;
+    final steps = _flow.length;
+    final atConfirm = _step >= _confirmIndex;
 
-    return CupertinoPageScaffold(
-      backgroundColor: p.background,
-      navigationBar: DetailNavBar(
-        title: _step >= 5 ? 'Confirmed' : 'Book · Step ${_step + 1} of $steps',
-        showBack: _step < 5,
-        actions: [
-          if (_step < 5)
-            Padding(
-              padding: const EdgeInsets.only(right: 12),
-              child: Center(
-                child: Text(
-                  _stepName(_step, _skipTriageStep),
-                  style: Type.caption(p),
+    // Android system back mirrors the nav-bar back exactly: step > 0 steps
+    // back inside the flow, step 0 asks "Leave booking?" when there is
+    // progress, and the confirmed screen blocks it entirely (Done lands on
+    // the Appointments tab instead). A direct dismissSheet pop bypasses
+    // PopScope, so the confirmed exit needs no flag dance.
+    return PopScope(
+      canPop: _step == 0 && !_hasProgress,
+      onPopInvokedWithResult: (didPop, _) async {
+        if (didPop) return;
+        if (_step >= _confirmIndex) return; // confirmed: swallow system back
+        if (_step > 0) {
+          setState(() => _step--);
+          return;
+        }
+        await _exitBooking();
+      },
+      child: CupertinoPageScaffold(
+        backgroundColor: p.background,
+        navigationBar: DetailNavBar(
+          title: atConfirm ? 'Confirmed' : 'Book · Step ${_step + 1} of $steps',
+          showBack: !atConfirm,
+          // Step > 0: nav-bar back steps back inside the flow (previously it
+          // maybePop'd and silently abandoned the booking). Step 0: the leave
+          // confirm when there is progress.
+          onBack: _step == 0
+              ? () => _exitBooking()
+              : !atConfirm
+              ? () => setState(() => _step--)
+              : null,
+          actions: [
+            if (!atConfirm)
+              Padding(
+                padding: const EdgeInsets.only(right: 12),
+                child: Center(
+                  child: Text(_stepName(_flow[_step]), style: Type.caption(p)),
                 ),
               ),
-            ),
-        ],
-      ),
-      child: SafeArea(
-        child: Column(
-          children: [
-            if (_step < 5) _ProgressBar(step: _step, total: steps),
-            // Keyed per step: otherwise the step ListViews share one
-            // ScrollableState and a new step would open scrolled down.
-            Expanded(
-              child: KeyedSubtree(key: ValueKey(_step), child: _body(store)),
-            ),
-            StickyCta(
-              extra: (_step > 0 && _step < 5)
-                  ? SecondaryButton(
-                      label: 'Back',
-                      icon: Ic.chevronLeft,
-                      onPressed: () => setState(() => _step--),
-                    )
-                  : null,
-              child: PrimaryButton(
-                label: switch (_step) {
-                  5 => 'Done',
-                  4 => 'Confirm booking',
-                  _ => 'Continue',
-                },
-                icon: switch (_step) {
-                  5 => Ic.check,
-                  4 => Ic.check,
-                  _ => Ic.arrowRight,
-                },
-                busy: _confirming,
-                // Step 6 (index 5) is the confirmation: Done lands on the
-                // Appointments tab, the section the booking belongs to —
-                // not wherever the flow was opened from.
-                onPressed: _step == 5
-                    ? () => doneToTab(context, 2)
-                    : (_canContinue() ? _next : null),
-              ),
-            ),
           ],
+        ),
+        child: SafeArea(
+          child: Column(
+            children: [
+              if (!atConfirm) _ProgressBar(step: _step, total: steps),
+              // Keyed per step identity: otherwise the step ListViews share
+              // one ScrollableState and a new step would open scrolled down.
+              Expanded(
+                child: KeyedSubtree(
+                  key: ValueKey(_flow[_step]),
+                  child: _body(store),
+                ),
+              ),
+              StickyCta(
+                extra: (_step > 0 && !atConfirm)
+                    ? SecondaryButton(
+                        label: 'Back',
+                        icon: Ic.chevronLeft,
+                        onPressed: () => setState(() => _step--),
+                      )
+                    : null,
+                child: PrimaryButton(
+                  label: switch (_flow[_step]) {
+                    _Step.confirm => 'Done',
+                    _Step.review => 'Confirm booking',
+                    _ => 'Continue',
+                  },
+                  icon: switch (_flow[_step]) {
+                    _Step.confirm => Ic.check,
+                    _Step.review => Ic.check,
+                    _ => Ic.arrowRight,
+                  },
+                  busy: _confirming,
+                  // The confirmation's Done lands on the Appointments tab,
+                  // the section the booking belongs to — not wherever the
+                  // flow was opened from.
+                  onPressed: _flow[_step] == _Step.confirm
+                      ? () => doneToTab(context, 2)
+                      : (_canContinue() ? _next : null),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  static String _stepName(int step, bool skip) {
-    final names = skip
-        ? ['Pet', 'Service', 'Date & time', 'Review', 'Confirm']
-        : ['Pet', 'Triage', 'Service', 'Date & time', 'Review', 'Confirm'];
-    return names[step];
-  }
+  static String _stepName(_Step step) => switch (step) {
+    _Step.pet => 'Pet',
+    _Step.triage => 'Triage',
+    _Step.service => 'Service',
+    _Step.questions => 'Details',
+    _Step.dateTime => 'Date & time',
+    _Step.review => 'Review',
+    _Step.confirm => 'Confirm',
+  };
 
-  Widget _body(AppStore store) {
-    return switch (_step) {
-      0 => _petStep(store),
-      1 => _triageStep(store),
-      2 => _serviceStep(store),
-      3 => _dateStep(store),
-      4 => _reviewStep(store),
-      _ => _doneStep(store),
-    };
-  }
+  Widget _body(AppStore store) => switch (_flow[_step]) {
+    _Step.pet => _petStep(store),
+    _Step.triage => _triageStep(store),
+    _Step.service => _serviceStep(store),
+    _Step.questions => _questionsStep(store),
+    _Step.dateTime => _dateTimeStep(store),
+    _Step.review => _reviewStep(store),
+    _Step.confirm => _doneStep(store),
+  };
 
   // ------------------------------------------------------------ step 1: pet
   Widget _petStep(AppStore store) {
@@ -334,102 +503,85 @@ class _BookFlowState extends State<BookFlow> {
   }
 
   // --------------------------------------------------------- step 2: triage
+  // --------------------------------------------------------- triage step
+  // The check is optional — Continue moves on without it, so there is no
+  // skip button. A completed check shows its summary inline.
   Widget _triageStep(AppStore store) {
     final p = context.p;
     final pet = store.pet(_petId ?? '');
-    if (_skipTriage) {
-      return ListView(
-        padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
-        children: [
-          Text('AI health check', style: Type.title1(p)),
-          const SizedBox(height: 6),
-          Text(
-            'Optional, and it changes nothing about your booking.',
-            style: Type.footnote(p),
-          ),
-          const SizedBox(height: T.s24),
-          SoftCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Ic.svg(Ic.sparkle, color: p.accent, size: 22),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        'Run a health check',
-                        style: Type.headline(p),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Describe the symptoms or attach a photo. CarePaws AI sorts ${pet?.name ?? 'your pet'} '
-                  'into booking, chat or home care — and flags anything urgent.',
-                  style: Type.body(p).copyWith(color: p.textSecondary),
-                ),
-                if (store.ai.status == AiStatus.unavailable) ...[
-                  const SizedBox(height: T.s16),
-                  AiUnavailableCard(
-                    failure: store.ai.failure ?? AiFailure.noKey,
-                    onOpenSettings: () =>
-                        Navigator.of(context)
-                            .push(appRoute(const AiSettingsScreen())),
-                    onCall: () => callPhoneNumber(
-                      context,
-                      number: Clinic.phone,
-                      name: Clinic.name,
-                    ),
-                  ),
-                ],
-                const SizedBox(height: T.s16),
-                PrimaryButton(
-                  label: 'Start health check',
-                  icon: Ic.sparkle,
-                  onPressed: () async {
-                    final result = await Navigator.of(context)
-                        .push<TriageResult>(
-                          CupertinoPageRoute<TriageResult>(
-                            builder: (_) => TriageScreen(
-                              entry: TriageEntry.booking,
-                              preselectedPetId: _petId,
-                              showSkip: true,
-                              onComplete: (r) => Navigator.of(context).pop(r),
-                            ),
-                          ),
-                        );
-                    if (result != null) setState(() => _triage = result);
-                  },
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: T.s12),
-          SecondaryButton(
-            label: 'Skip triage',
-            onPressed: () => setState(() => _skipTriage = true),
-          ),
-          if (_triage != null) ...[
-            const SizedBox(height: T.s20),
-            _TriageSummaryCard(result: _triage!),
-          ],
-        ],
-      );
-    }
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
       children: [
-        Text('AI health check complete', style: Type.title1(p)),
-        const SizedBox(height: 16),
-        _TriageSummaryCard(result: _triage!),
-        const SizedBox(height: T.s20),
-        SecondaryButton(
-          label: 'Run it again',
-          icon: Ic.refresh,
-          onPressed: () => setState(() => _triage = null),
+        Text('AI health check', style: Type.title1(p)),
+        const SizedBox(height: 6),
+        Text(
+          'Optional, and it changes nothing about your booking.',
+          style: Type.footnote(p),
         ),
+        const SizedBox(height: T.s24),
+        SoftCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Ic.svg(Ic.sparkle, color: p.accent, size: 22),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text('Run a health check', style: Type.headline(p)),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Describe the symptoms or attach a photo. CarePaws AI sorts ${pet?.name ?? 'your pet'} '
+                'into booking, chat or home care — and flags anything urgent.',
+                style: Type.body(p).copyWith(color: p.textSecondary),
+              ),
+              if (store.ai.status == AiStatus.unavailable) ...[
+                const SizedBox(height: T.s16),
+                AiUnavailableCard(
+                  failure: store.ai.failure ?? AiFailure.noKey,
+                  onOpenSettings: () =>
+                      Navigator.of(context)
+                          .push(appRoute(const AiSettingsScreen())),
+                  onCall: () => callPhoneNumber(
+                    context,
+                    number: Clinic.phone,
+                    name: Clinic.name,
+                  ),
+                ),
+              ],
+              const SizedBox(height: T.s16),
+              PrimaryButton(
+                label: 'Start health check',
+                icon: Ic.sparkle,
+                onPressed: () async {
+                  final result = await Navigator.of(context).push<TriageResult>(
+                    appRouteT<TriageResult>(
+                      TriageScreen(
+                        entry: TriageEntry.booking,
+                        preselectedPetId: _petId,
+                        onComplete: (r) => Navigator.of(context).pop(r),
+                      ),
+                    ),
+                  );
+                  if (result != null) setState(() => _triage = result);
+                },
+              ),
+            ],
+          ),
+        ),
+        if (_triage != null) ...[
+          const SizedBox(height: T.s20),
+          _TriageSummaryCard(result: _triage!),
+          const SizedBox(height: T.s12),
+          SecondaryButton(
+            label: 'Run it again',
+            icon: Ic.refresh,
+            onPressed: () => setState(() => _triage = null),
+          ),
+        ],
       ],
     );
   }
@@ -547,13 +699,119 @@ class _BookFlowState extends State<BookFlow> {
     );
   }
 
-  // ------------------------------------------------------ step 4: date & time
-  Widget _dateStep(AppStore store) {
+  // --------------------------------------------- service questions step
+  // One job: the per-service questions (the grooming intake today). This
+  // step only exists in the flow for services that have questions.
+  Widget _questionsStep(AppStore store) {
     final p = context.p;
     final s = _service;
     if (s == null) return const SizedBox.shrink();
-    final days = _next14Days(store.now);
-    final slots = _slotsFor(store.now, s);
+    final staff = _staff;
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
+      children: [
+        Text('Service details', style: Type.title1(p)),
+        const SizedBox(height: 6),
+        Text(
+          'So ${staff.firstName} can prepare — everything here is optional.',
+          style: Type.footnote(p),
+        ),
+        const SizedBox(height: T.s20),
+        if (s.grooming)
+          _GroomingIntake(
+            size: _intakeSize,
+            coat: _intakeCoat,
+            notes: _notes,
+            onSize: (v) => setState(() => _intakeSize = v),
+            onCoat: (v) => setState(() => _intakeCoat = v),
+            onNotesChanged: () => setState(() {}),
+          ),
+      ],
+    );
+  }
+
+  // ------------------------------------------------- date & time step
+  // One job: the calendar plus the assigned staff member's real
+  // availability. Nothing else lives here — the service questions moved to
+  // their own step.
+  Widget _dateTimeStep(AppStore store) {
+    final p = context.p;
+    final s = _service;
+    if (s == null) return const SizedBox.shrink();
+    final staff = _staff;
+    final now = store.now;
+    final today = DateTime(now.year, now.month, now.day);
+    // Booking opens two weeks out.
+    final maxDay = today.add(const Duration(days: 13));
+
+    // No availability anywhere in the window: the call card is the only
+    // action — never a dead end.
+    final firstAvailable = _nextAvailableDay(today, s, staff, now, maxDay);
+    if (firstAvailable == null) {
+      return ListView(
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
+        children: [
+          Text('Pick a date & time', style: Type.title1(p)),
+          const SizedBox(height: T.s20),
+          SoftCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Ic.svg(Ic.calendar, color: p.accent, size: 22),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'No availability right now',
+                        style: Type.headline(p),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'We couldn\'t find an open time for ${s.name.toLowerCase()} in the next two weeks.',
+                  style: Type.body(p).copyWith(color: p.textSecondary),
+                ),
+                const SizedBox(height: T.s16),
+                PrimaryButton(
+                  label: 'Call the clinic',
+                  icon: Ic.phone,
+                  onPressed: () => callPhoneNumber(
+                    context,
+                    number: Clinic.phone,
+                    name: Clinic.name,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      );
+    }
+
+    final day = _date;
+    final slots = day == null
+        ? const <_DaySlot>[]
+        : _daySlots(day, s, staff, now);
+    final anyAvailable = slots.any((sl) => sl.available);
+    // The suggestion after a full day: the next open day past the selection,
+    // falling back to the earliest open day in the window.
+    final nextPast = day == null
+        ? null
+        : _nextAvailableDay(
+            day.add(const Duration(days: 1)),
+            s,
+            staff,
+            now,
+            maxDay,
+          );
+    final suggestion = nextPast ?? firstAvailable;
+
+    final thisMonth = DateTime(now.year, now.month);
+    final maxMonth = DateTime(maxDay.year, maxDay.month);
+    final calMonth = _calMonth ?? thisMonth;
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
@@ -561,82 +819,49 @@ class _BookFlowState extends State<BookFlow> {
         Text('Pick a date & time', style: Type.title1(p)),
         const SizedBox(height: 6),
         Text(
-          '${s.name} takes ${s.durationLabel}, so slots are spaced accordingly.',
+          '${s.name} takes ${s.durationLabel}. Times shown are ${staff.name}\'s real availability.',
           style: Type.footnote(p),
         ),
         const SizedBox(height: T.s20),
-        SizedBox(
-          height: 84,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            itemCount: days.length,
-            separatorBuilder: (_, _) => const SizedBox(width: 10),
-            itemBuilder: (context, i) {
-              final d = days[i];
-              final selected = _date?.day == d.day && _date?.month == d.month;
-              return Semantics(
-                button: true,
-                selected: selected,
-                label:
-                    '${shortDate(d)}${isToday(d, store.now) ? ', today' : ''}',
-                child: ExcludeSemantics(
-                  child: PressScale(
-                    onTap: () => setState(() {
-                      _date = d;
-                      _time = null;
-                    }),
-                    child: Container(
-                      width: 68,
-                      padding: const EdgeInsets.symmetric(vertical: 10),
-                      decoration: BoxDecoration(
-                        color: selected ? p.primaryFill : p.surface,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(
-                          color: selected ? p.primaryFill : p.divider,
-                        ),
-                      ),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text(
-                            dayNames[d.weekday - 1],
-                            style: Type.caption(p).copyWith(
-                              color: selected
-                                  ? p.onPrimaryFill
-                                  : p.textSecondary,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            '${d.day}',
-                            style: Type.title2(p).copyWith(
-                              color: selected ? p.onPrimaryFill : p.text,
-                            ),
-                          ),
-                          Text(
-                            monthNames[d.month - 1],
-                            style: Type.caption(p).copyWith(
-                              color: selected
-                                  ? p.onPrimaryFill.withValues(alpha: 0.9)
-                                  : p.textSecondary,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              );
-            },
-          ),
+        _MonthCalendar(
+          month: calMonth,
+          selected: day,
+          now: now,
+          maxDay: maxDay,
+          onSelectDay: (d) => setState(() {
+            _date = d;
+            _time = null;
+          }),
+          onPrevMonth: calMonth.isAfter(thisMonth)
+              ? () => setState(
+                  () => _calMonth = DateTime(calMonth.year, calMonth.month - 1),
+                )
+              : null,
+          onNextMonth: calMonth.isBefore(maxMonth)
+              ? () => setState(
+                  () => _calMonth = DateTime(calMonth.year, calMonth.month + 1),
+                )
+              : null,
         ),
         const SizedBox(height: T.s20),
-        if (_date == null)
-          Text('Choose a date to see available times.', style: Type.footnote(p))
-        else if (slots.isEmpty)
+        if (day == null)
           Text(
-            'No slots left on this day — try the next one.',
+            'Choose a day to see ${staff.name}\'s available times.',
             style: Type.footnote(p),
+          )
+        else if (!anyAvailable)
+          _EmptyDayCard(
+            day: day,
+            staffName: staff.name,
+            suggestion: suggestion,
+            suggestionLabel: nextPast != null
+                ? 'Next available'
+                : 'Earliest available',
+            onJump: (d) => setState(() {
+              _calMonth = DateTime(d.year, d.month);
+              _date = d;
+              _time = null;
+            }),
           )
         else ...[
           Text('Available times', style: Type.headline(p)),
@@ -647,27 +872,27 @@ class _BookFlowState extends State<BookFlow> {
             children: [
               for (final slot in slots)
                 _TimePill(
-                  slot: slot,
+                  slot: slot.start,
                   selected:
-                      _time?.hour == slot.hour && _time?.minute == slot.minute,
+                      _time?.hour == slot.start.hour &&
+                      _time?.minute == slot.start.minute,
+                  enabled: slot.available,
                   onTap: () => setState(
-                    () =>
-                        _time = TimeOfDay(hour: slot.hour, minute: slot.minute),
+                    () => _time = TimeOfDay(
+                      hour: slot.start.hour,
+                      minute: slot.start.minute,
+                    ),
                   ),
                 ),
             ],
           ),
-        ],
-        if (s.grooming && _serviceId != null) ...[
-          const SizedBox(height: T.s24),
-          _GroomingIntake(
-            size: _intakeSize,
-            coat: _intakeCoat,
-            notes: _notes,
-            onSize: (v) => setState(() => _intakeSize = v),
-            onCoat: (v) => setState(() => _intakeCoat = v),
-            onNotesChanged: () => setState(() {}),
-          ),
+          if (slots.any((sl) => !sl.available)) ...[
+            const SizedBox(height: 8),
+            Text(
+              'Greyed-out times are already booked.',
+              style: Type.caption(p).copyWith(color: p.textSecondary),
+            ),
+          ],
         ],
       ],
     );
@@ -892,34 +1117,6 @@ class _BookFlowState extends State<BookFlow> {
       ],
     );
   }
-
-  // ------------------------------------------------------------------ slots
-  List<DateTime> _next14Days(DateTime from) => [
-    for (var i = 0; i < 14; i++) DateTime(from.year, from.month, from.day + i),
-  ];
-
-  /// Slot spacing follows the service duration: grooming 1–2h, assistant
-  /// 15–20m, vet consults 30m.
-  List<DateTime> _slotsFor(DateTime from, Service s) {
-    if (_date == null) return const [];
-    final day = _date!;
-    final floor = switch (s.role) {
-      StaffRole.groomer => const Duration(minutes: 60),
-      StaffRole.vet => const Duration(minutes: 30),
-      StaffRole.vetAssistant => const Duration(minutes: 15),
-    };
-    final len = Duration(minutes: s.durationMinutes);
-    final step = len > floor ? len : floor;
-    final open = day.weekday == DateTime.sunday ? 9 : 8;
-    final close = day.weekday == DateTime.sunday ? 16 : 19;
-    final out = <DateTime>[];
-    var t = DateTime(day.year, day.month, day.day, open);
-    while (t.hour < close) {
-      if (t.isAfter(from.add(const Duration(minutes: 30)))) out.add(t);
-      t = t.add(step);
-    }
-    return out;
-  }
 }
 
 class _ProgressBar extends StatelessWidget {
@@ -961,40 +1158,280 @@ class _TimePill extends StatelessWidget {
     required this.slot,
     required this.selected,
     required this.onTap,
+    this.enabled = true,
   });
   final DateTime slot;
   final bool selected;
   final VoidCallback onTap;
+
+  /// Booked slots stay visible but dimmed and untappable — the day's real
+  /// availability at a glance.
+  final bool enabled;
 
   @override
   Widget build(BuildContext context) {
     final p = context.p;
     return Semantics(
       button: true,
+      enabled: enabled,
       selected: selected,
       label: clockLabel(slot),
       child: ExcludeSemantics(
         child: PressScale(
-          onTap: onTap,
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: T.pressMs),
-            constraints: const BoxConstraints(minHeight: 44, minWidth: 88),
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: selected ? p.primaryFill : p.surface,
-              borderRadius: BorderRadius.circular(T.rControl),
-              border: Border.all(color: selected ? p.primaryFill : p.divider),
-            ),
-            child: Text(
-              clockLabel(slot),
-              style: Type.callout(p).copyWith(
-                color: selected ? p.onPrimaryFill : p.text,
-                fontWeight: FontWeight.w600,
+          onTap: enabled ? onTap : null,
+          child: Opacity(
+            opacity: enabled ? 1 : 0.38,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: T.pressMs),
+              constraints: const BoxConstraints(minHeight: 44, minWidth: 88),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: selected ? p.primaryFill : p.surface,
+                borderRadius: BorderRadius.circular(T.rControl),
+                border: Border.all(color: selected ? p.primaryFill : p.divider),
+              ),
+              child: Text(
+                clockLabel(slot),
+                style: Type.callout(p).copyWith(
+                  color: selected ? p.onPrimaryFill : p.text,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Month-grid calendar, Cupertino-consistent: abbreviated month + year,
+/// Monday-first weekday row, 44pt day targets. Past days, Sundays (clinic
+/// closed) and days past the booking window are dimmed and untappable.
+class _MonthCalendar extends StatelessWidget {
+  const _MonthCalendar({
+    required this.month,
+    required this.selected,
+    required this.now,
+    required this.maxDay,
+    required this.onSelectDay,
+    required this.onPrevMonth,
+    required this.onNextMonth,
+  });
+
+  /// Any day in the displayed month.
+  final DateTime month;
+
+  /// The selected day (date-only), or null.
+  final DateTime? selected;
+  final DateTime now;
+
+  /// Last selectable day (date-only).
+  final DateTime maxDay;
+  final ValueChanged<DateTime> onSelectDay;
+  final VoidCallback? onPrevMonth;
+  final VoidCallback? onNextMonth;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.p;
+    final first = DateTime(month.year, month.month, 1);
+    final daysInMonth = DateTime(month.year, month.month + 1, 0).day;
+    // Monday-first: Monday leaves no blanks.
+    final leadBlanks = first.weekday - 1;
+    final today = DateTime(now.year, now.month, now.day);
+    final last = DateTime(maxDay.year, maxDay.month, maxDay.day);
+
+    bool selectable(DateTime d) =>
+        !d.isBefore(today) && !d.isAfter(last) && d.weekday != DateTime.sunday;
+
+    return Column(
+      children: [
+        Row(
+          children: [
+            _MonthNavButton(
+              icon: Ic.chevronLeft,
+              label: 'Previous month',
+              onTap: onPrevMonth,
+            ),
+            Expanded(
+              child: Text(
+                '${monthNames[month.month - 1]} ${month.year}',
+                style: Type.title2(p),
+                textAlign: TextAlign.center,
+              ),
+            ),
+            _MonthNavButton(
+              icon: Ic.chevronRight,
+              label: 'Next month',
+              onTap: onNextMonth,
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            for (final w in dayNames)
+              Expanded(
+                child: Text(
+                  w,
+                  style: Type.caption(p).copyWith(color: p.textSecondary),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 7,
+            mainAxisExtent: 46,
+          ),
+          itemCount: leadBlanks + daysInMonth,
+          itemBuilder: (context, i) {
+            if (i < leadBlanks) return const SizedBox.shrink();
+            final d = DateTime(month.year, month.month, i - leadBlanks + 1);
+            final isSel = selected != null && isToday(d, selected!);
+            final isT = isToday(d, today);
+            final ok = selectable(d);
+            return Semantics(
+              button: true,
+              enabled: ok,
+              selected: isSel,
+              label:
+                  '${isT ? 'Today, ' : ''}${shortDate(d)}${d.weekday == DateTime.sunday ? ', clinic closed' : ''}',
+              child: ExcludeSemantics(
+                child: PressScale(
+                  onTap: ok ? () => onSelectDay(d) : null,
+                  child: Center(
+                    child: Opacity(
+                      opacity: ok ? 1 : 0.35,
+                      child: Container(
+                        width: 44,
+                        height: 44,
+                        alignment: Alignment.center,
+                        decoration: isSel
+                            ? BoxDecoration(
+                                color: p.primaryFill,
+                                shape: BoxShape.circle,
+                              )
+                            : isT
+                            ? BoxDecoration(
+                                border: Border.all(color: p.accent, width: 1.5),
+                                shape: BoxShape.circle,
+                              )
+                            : null,
+                        child: Text(
+                          '${d.day}',
+                          style: Type.body(p).copyWith(
+                            color: isSel
+                                ? p.onPrimaryFill
+                                : ok
+                                ? p.text
+                                : p.textSecondary,
+                            fontWeight: isSel || isT
+                                ? FontWeight.w700
+                                : FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+        const SizedBox(height: 6),
+        Text(
+          Clinic.hoursLabel,
+          style: Type.caption(p).copyWith(color: p.textSecondary),
+          textAlign: TextAlign.center,
+        ),
+      ],
+    );
+  }
+}
+
+class _MonthNavButton extends StatelessWidget {
+  const _MonthNavButton({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  final String icon;
+  final String label;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.p;
+    return Semantics(
+      button: true,
+      enabled: onTap != null,
+      label: label,
+      child: ExcludeSemantics(
+        child: PressScale(
+          onTap: onTap,
+          child: Opacity(
+            opacity: onTap == null ? 0.3 : 1,
+            child: SizedBox(
+              width: 44,
+              height: 44,
+              child: Center(
+                child: Ic.svg(icon, color: p.accentText, size: 20, stroke: 2.2),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// A selected day with zero availability: clear messaging plus a one-tap
+/// jump to the suggested open day — never a dead end.
+class _EmptyDayCard extends StatelessWidget {
+  const _EmptyDayCard({
+    required this.day,
+    required this.staffName,
+    required this.suggestion,
+    required this.suggestionLabel,
+    required this.onJump,
+  });
+
+  final DateTime day;
+  final String staffName;
+  final DateTime? suggestion;
+  final String suggestionLabel;
+  final ValueChanged<DateTime> onJump;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.p;
+    return SoftCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('No times left on ${dayMonth(day)}', style: Type.headline(p)),
+          const SizedBox(height: 6),
+          Text(
+            '$staffName is fully booked that day.',
+            style: Type.body(p).copyWith(color: p.textSecondary),
+          ),
+          if (suggestion != null) ...[
+            const SizedBox(height: T.s16),
+            PrimaryButton(
+              label: '$suggestionLabel: ${shortDate(suggestion!)}',
+              icon: Ic.arrowRight,
+              onPressed: () => onJump(suggestion!),
+            ),
+          ],
+        ],
       ),
     );
   }

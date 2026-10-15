@@ -1079,7 +1079,9 @@ void main() {
       await scrollAndTap(tester, find.text('Rebook').first);
       await tester.pumpAndSettle();
       expect(find.byType(BookFlow), findsOneWidget);
-      expect(find.textContaining('Step 1 of 5'), findsOneWidget);
+      // The rebooked visit is a grooming service, so the reworked flow is
+      // pet -> service -> questions -> date/time -> review -> confirmed.
+      expect(find.textContaining('Step 1 of 6'), findsOneWidget);
     });
   });
 
@@ -1107,9 +1109,8 @@ void main() {
         expect(find.text('Who is this visit for?'), findsOneWidget);
         await scrollAndTap(tester, find.text('Continue').first);
 
-        // Step 2 — triage is skippable.
+        // Step 2 — triage is skippable: Continue without running the check.
         expect(find.text('AI health check'), findsOneWidget);
-        await scrollAndTap(tester, find.text('Skip triage'));
         await scrollAndTap(tester, find.text('Continue').first);
 
         // Step 3 — service.
@@ -1119,10 +1120,11 @@ void main() {
         expect(find.textContaining('₱850'), findsWidgets);
         await scrollAndTap(tester, find.text('Continue').first);
 
-        // Step 4 — date & time, duration-aware slots.
+        // Step 4 — date & time: month calendar with validated slots.
         expect(find.textContaining('Step 4 of 6'), findsOneWidget);
         expect(find.textContaining('30 min'), findsWidgets);
-        await scrollAndTap(tester, find.text('14').first);
+        await scrollAndTap(tester, find.bySemanticsLabel('Wed, 14 Oct'));
+        await tester.pumpAndSettle();
         await scrollAndTap(tester, find.text('10:00 AM').first);
         await scrollAndTap(tester, find.text('Continue').first);
 
@@ -1212,7 +1214,7 @@ void main() {
     ) async {
       await startBooking(tester);
       await scrollAndTap(tester, find.text('Continue').first);
-      await scrollAndTap(tester, find.text('Skip triage'));
+      // Triage is skipped by continuing without running the check.
       await scrollAndTap(tester, find.text('Continue').first);
 
       // Estimated pricing is advertised on the service card before selection.
@@ -1236,17 +1238,22 @@ void main() {
       await tester.pumpAndSettle();
     });
 
-    testWidgets('grooming slots are spaced an hour apart', (tester) async {
+    testWidgets('grooming slots are spaced by service length', (tester) async {
       await startBooking(tester);
       await scrollAndTap(tester, find.text('Continue').first);
-      await scrollAndTap(tester, find.text('Skip triage'));
+      // Triage is skipped by continuing without running the check.
       await scrollAndTap(tester, find.text('Continue').first);
       await scrollAndTap(tester, find.text('Full Grooming'));
       await scrollAndTap(tester, find.text('Continue').first);
-      await tester.tap(find.text('14').first);
+      // Service-specific questions now live on their own step.
+      expect(find.text('Service details'), findsOneWidget);
+      await scrollAndTap(tester, find.text('Continue').first);
+      await scrollAndTap(tester, find.bySemanticsLabel('Wed, 14 Oct'));
       await tester.pumpAndSettle();
-      // Full grooming = 2h, so the next slot is 10:00 AM.
-      expect(find.text('10:00 AM'), findsWidgets);
+      // Full grooming = 2h from the 9:00 clinic open: 9:00, 11:00, ...
+      expect(find.text('9:00 AM'), findsWidgets);
+      expect(find.text('11:00 AM'), findsWidgets);
+      expect(find.text('10:00 AM'), findsNothing);
     });
   });
 
@@ -1374,8 +1381,12 @@ void main() {
         expect(find.text('Delete'), findsOneWidget);
 
         await tester.tap(find.text('Delete'));
-        await tester.pumpAndSettle();
-        expect(find.text('Account deleted'), findsOneWidget);
+        // Real deletion now lands on the splash (ambient animation loops, so
+        // pumpAndSettle would time out — pump fixed frames instead).
+        await tester.pump();
+        await tester.pump(const Duration(seconds: 1));
+        await tester.pump(const Duration(seconds: 1));
+        expect(find.text('Get started'), findsOneWidget);
         expect(store.petCount, 0);
       },
     );

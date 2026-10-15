@@ -62,6 +62,69 @@ Future<R?> showPopup<R>(
   );
 }
 
+/// Discard-dirty confirm shared by every flow screen (add/edit pet, booking,
+/// triage, chat, edit profile).
+///
+/// Returns `true` immediately when [isDirty] is false — no dialog, no await
+/// gap. Otherwise shows a centered alert via [showPopup] (so reduced motion
+/// is honored) and returns true only on the destructive "Discard" action.
+/// Barrier tap and "Keep editing" both return false.
+///
+/// PopScope recipe — paste into the flow's State.build:
+///
+/// ```dart
+/// PopScope(
+///   canPop: !_isDirty, // plus any step logic, e.g. the booking confirm step
+///   onPopInvokedWithResult: (didPop, _) async {
+///     if (didPop) return;
+///     // Step-aware flows handle their own step-back here first, e.g.
+///     // `if (_step > 0) { setState(() => _step--); return; }`
+///     if (await confirmDiscardIfDirty(context, isDirty: true, ...)) {
+///       // A direct pop bypasses PopScope's canPop, so no "confirmed" flag
+///       // dance is needed; dismissSheet's nav.pop() is such a direct pop.
+///       if (context.mounted) dismissSheet(context);
+///     }
+///   },
+///   child: ...,
+/// )
+/// ```
+///
+/// The nav-bar back button keeps its default `maybePop` — which honours
+/// PopScope — unless the flow overrides `onBack` for step-back behaviour, in
+/// which case the override must run the same confirm itself.
+Future<bool> confirmDiscardIfDirty(
+  BuildContext context, {
+  required bool isDirty,
+  String title = 'Discard changes?',
+  String message = 'Your unsaved changes will be lost.',
+}) async {
+  if (!isDirty) return true;
+  final discard = await showPopup<bool>(
+    context,
+    centered: true,
+    barrierDismissible: true,
+    builder: (ctx) => CupertinoAlertDialog(
+      title: Text(title),
+      content: Padding(
+        padding: const EdgeInsets.only(top: 8),
+        child: Text(message),
+      ),
+      actions: [
+        CupertinoDialogAction(
+          onPressed: () => Navigator.of(ctx).pop(false),
+          child: const Text('Keep editing'),
+        ),
+        CupertinoDialogAction(
+          isDestructiveAction: true,
+          onPressed: () => Navigator.of(ctx).pop(true),
+          child: const Text('Discard'),
+        ),
+      ],
+    ),
+  );
+  return discard ?? false;
+}
+
 /// Dials [number] via tel:. On devices with no dialer (desktop, simulators),
 /// shows the number in a sheet instead of a dead end.
 Future<void> callPhoneNumber(
@@ -1310,35 +1373,41 @@ class PrimaryButton extends StatelessWidget {
     // faded fill under a full-strength label script-measured 2.0:1 in light
     // mode and read as broken. Ghosting keeps the verified label/fill ratio
     // while still reading unmistakably disabled.
+    // IntrinsicHeight + minHeight (not a fixed height): at very large text
+    // scales the label wraps to two lines and the button grows so it is never
+    // clipped (AX5). At 1x the intrinsic height is the 54pt/46pt design
+    // height, so rendering is unchanged.
     final child = Opacity(
       opacity: enabled ? 1 : 0.45,
-      child: Container(
-        height: h,
-        padding: EdgeInsets.symmetric(horizontal: compact ? T.s16 : T.s20),
-        decoration: BoxDecoration(
-          color: fill,
-          borderRadius: BorderRadius.circular(T.rControl + 2),
-        ),
-        child: Row(
-          mainAxisSize: expand ? MainAxisSize.max : MainAxisSize.min,
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            if (busy)
-              CupertinoActivityIndicator(color: fg)
-            else if (icon != null) ...[
-              Ic.svg(icon!, color: fg, size: 19, stroke: 2.2),
-              const SizedBox(width: 9),
-            ],
-            Flexible(
-              child: Text(
-                label,
-                style: Type.button(p).copyWith(color: fg),
-                maxLines: 2,
-                textAlign: TextAlign.center,
-                overflow: TextOverflow.ellipsis,
+      child: IntrinsicHeight(
+        child: Container(
+          constraints: BoxConstraints(minHeight: h),
+          padding: EdgeInsets.symmetric(horizontal: compact ? T.s16 : T.s20),
+          decoration: BoxDecoration(
+            color: fill,
+            borderRadius: BorderRadius.circular(T.rControl + 2),
+          ),
+          child: Row(
+            mainAxisSize: expand ? MainAxisSize.max : MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              if (busy)
+                CupertinoActivityIndicator(color: fg)
+              else if (icon != null) ...[
+                Ic.svg(icon!, color: fg, size: 19, stroke: 2.2),
+                const SizedBox(width: 9),
+              ],
+              Flexible(
+                child: Text(
+                  label,
+                  style: Type.button(p).copyWith(color: fg),
+                  maxLines: 2,
+                  textAlign: TextAlign.center,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -1380,36 +1449,42 @@ class SecondaryButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final p = context.p;
     final fg = destructive ? p.destructive : p.accentText;
-    final child = Container(
-      height: 52,
-      padding: const EdgeInsets.symmetric(horizontal: T.s20),
-      decoration: BoxDecoration(
-        color: p.fieldBg,
-        borderRadius: BorderRadius.circular(T.rControl + 2),
-        border: Border.all(
-          color: destructive
-              ? p.destructive.withValues(alpha: 0.4)
-              : p.accent.withValues(alpha: 0.35),
-        ),
-      ),
-      child: Row(
-        mainAxisSize: expand ? MainAxisSize.max : MainAxisSize.min,
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          if (icon != null) ...[
-            Ic.svg(icon!, color: fg, size: 19, stroke: 2.1),
-            const SizedBox(width: 9),
-          ],
-          Flexible(
-            child: Text(
-              label,
-              style: Type.button(p).copyWith(color: fg),
-              maxLines: 2,
-              textAlign: TextAlign.center,
-              overflow: TextOverflow.ellipsis,
-            ),
+    // IntrinsicHeight + minHeight (not a fixed height): at very large text
+    // scales the label wraps to two lines and the button grows so it is never
+    // clipped (AX5). At 1x the intrinsic height is the 52pt design height,
+    // so rendering is unchanged.
+    final child = IntrinsicHeight(
+      child: Container(
+        constraints: const BoxConstraints(minHeight: 52),
+        padding: const EdgeInsets.symmetric(horizontal: T.s20),
+        decoration: BoxDecoration(
+          color: p.fieldBg,
+          borderRadius: BorderRadius.circular(T.rControl + 2),
+          border: Border.all(
+            color: destructive
+                ? p.destructive.withValues(alpha: 0.4)
+                : p.accent.withValues(alpha: 0.35),
           ),
-        ],
+        ),
+        child: Row(
+          mainAxisSize: expand ? MainAxisSize.max : MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            if (icon != null) ...[
+              Ic.svg(icon!, color: fg, size: 19, stroke: 2.1),
+              const SizedBox(width: 9),
+            ],
+            Flexible(
+              child: Text(
+                label,
+                style: Type.button(p).copyWith(color: fg),
+                maxLines: 2,
+                textAlign: TextAlign.center,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
       ),
     );
     return Semantics(

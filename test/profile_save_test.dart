@@ -286,6 +286,9 @@ void main() {
       await tester.enterText(fields.at(1), 'newuser@example.com');
       await tester.enterText(fields.at(2), 'secret123');
       await tester.pumpAndSettle();
+      // Consent gate (A1): registration requires the Terms/Privacy checkbox.
+      await tester.tap(find.byKey(const Key('consent-checkbox')));
+      await tester.pumpAndSettle();
       final createButton = find.widgetWithText(PrimaryButton, 'Create account');
       await tester.ensureVisible(createButton);
       await tester.pumpAndSettle();

@@ -30,6 +30,8 @@ class _EditPetScreenState extends State<EditPetScreen> {
   final _name = TextEditingController();
   final _breed = TextEditingController();
   final _weight = TextEditingController();
+  final _height = TextEditingController();
+  final _length = TextEditingController();
   final _allergies = TextEditingController();
   String? _sex;
   DateTime? _birthDate;
@@ -47,6 +49,8 @@ class _EditPetScreenState extends State<EditPetScreen> {
     _name.text = pet.name;
     _breed.text = pet.breed;
     _weight.text = pet.weightKg.toStringAsFixed(1);
+    _height.text = pet.heightCm?.toStringAsFixed(1) ?? '';
+    _length.text = pet.lengthCm?.toStringAsFixed(1) ?? '';
     _allergies.text = pet.allergies.join(', ');
     _sex = pet.sex;
     _birthDate = pet.birthDate;
@@ -58,6 +62,8 @@ class _EditPetScreenState extends State<EditPetScreen> {
     _name.dispose();
     _breed.dispose();
     _weight.dispose();
+    _height.dispose();
+    _length.dispose();
     _allergies.dispose();
     super.dispose();
   }
@@ -95,6 +101,49 @@ class _EditPetScreenState extends State<EditPetScreen> {
     }
     if (_parsedWeight == null) {
       return 'Use a number like 4.6 — between 0.2 and 120 kg.';
+    }
+    return null;
+  }
+
+  /// True when any field differs from the saved pet — what the discard
+  /// confirm protects. Controllers are seeded from the pet, so untouched
+  /// fields compare equal; `_birthDate`/`_photo` only diverge once the user
+  /// picks something (photo removal sets an empty sentinel, never null).
+  /// Height/length compare against the seeded text ('' when never recorded).
+  bool _dirtyFor(Pet pet) =>
+      _name.text != pet.name ||
+      _breed.text != pet.breed ||
+      _sex != pet.sex ||
+      (_birthDate != null && _birthDate != pet.birthDate) ||
+      _weight.text != pet.weightKg.toStringAsFixed(1) ||
+      _height.text != (pet.heightCm?.toStringAsFixed(1) ?? '') ||
+      _length.text != (pet.lengthCm?.toStringAsFixed(1) ?? '') ||
+      _allergies.text != pet.allergies.join(', ') ||
+      _photo != pet.photo;
+
+  /// Nav-bar back / system back with unsaved edits: leave only on confirm.
+  /// Saving pops directly (a direct pop bypasses PopScope), so this is only
+  /// the abandon path.
+  Future<void> _exit(Pet pet) async {
+    if (await confirmDiscardIfDirty(context, isDirty: _dirtyFor(pet))) {
+      if (mounted) dismissSheet(context);
+    }
+  }
+
+  /// Optional measurement: empty means "not recorded" (null); a non-empty
+  /// value must be a plausible number or the field explains why.
+  double? _parseMeasure(TextEditingController c) {
+    final t = c.text.trim().replaceAll(',', '.');
+    if (t.isEmpty) return null;
+    final v = double.tryParse(t);
+    if (v == null || !v.isFinite || v < 1 || v > 300) return null;
+    return v;
+  }
+
+  String? _measureError(TextEditingController c) {
+    if (c.text.trim().isEmpty) return null;
+    if (_parseMeasure(c) == null) {
+      return 'Use a number like 25 — between 1 and 300 cm, or leave empty.';
     }
     return null;
   }
@@ -144,6 +193,8 @@ class _EditPetScreenState extends State<EditPetScreen> {
         sex: _sex ?? pet.sex,
         birthDate: _birthDate ?? pet.birthDate,
         weightKg: w,
+        heightCm: _parseMeasure(_height),
+        lengthCm: _parseMeasure(_length),
         color: pet.color,
         microchip: pet.microchip,
         allergies: allergies,
@@ -175,203 +226,277 @@ class _EditPetScreenState extends State<EditPetScreen> {
       );
     }
 
-    final canSave = _name.text.trim().isNotEmpty && _parsedWeight != null;
+    final canSave =
+        _name.text.trim().isNotEmpty &&
+        _parsedWeight != null &&
+        _measureError(_height) == null &&
+        _measureError(_length) == null;
     final preview = _photo ?? pet.photo;
     final birthDate = _birthDate ?? pet.birthDate;
 
-    return CupertinoPageScaffold(
-      backgroundColor: p.background,
-      navigationBar: const DetailNavBar(title: 'Edit pet'),
-      child: SafeArea(
-        child: Column(
-          children: [
-            Expanded(
-              child: ListView(
-                padding: EdgeInsets.fromLTRB(
-                  20,
-                  16,
-                  20,
-                  24 + MediaQuery.paddingOf(context).bottom,
-                ),
-                children: [
-                  // ---------------------------------------------------- photo
-                  Center(
-                    child: Column(
-                      children: [
-                        SizedBox.square(
-                          dimension: 132,
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(T.rCard),
-                            child: preview != null && preview.isNotEmpty
-                                ? Image.memory(
-                                    preview,
-                                    fit: BoxFit.cover,
-                                    gaplessPlayback: true,
-                                  )
-                                : PetArt(
-                                    seed: pet.id.hashCode.abs() % 4,
-                                    species: pet.species,
-                                    iconSize: 76,
-                                  ),
+    // Android system back honours the same dirty guard as the nav-bar back.
+    return PopScope(
+      canPop: !_dirtyFor(pet),
+      onPopInvokedWithResult: (didPop, _) async {
+        if (didPop) return;
+        await _exit(pet);
+      },
+      child: CupertinoPageScaffold(
+        backgroundColor: p.background,
+        navigationBar: DetailNavBar(
+          title: 'Edit pet',
+          onBack: () => _exit(pet),
+        ),
+        child: SafeArea(
+          child: Column(
+            children: [
+              Expanded(
+                child: ListView(
+                  padding: EdgeInsets.fromLTRB(
+                    20,
+                    16,
+                    20,
+                    24 + MediaQuery.paddingOf(context).bottom,
+                  ),
+                  children: [
+                    // ---------------------------------------------------- photo
+                    Center(
+                      child: Column(
+                        children: [
+                          SizedBox.square(
+                            dimension: 132,
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(T.rCard),
+                              child: preview != null && preview.isNotEmpty
+                                  ? Image.memory(
+                                      preview,
+                                      fit: BoxFit.cover,
+                                      gaplessPlayback: true,
+                                    )
+                                  : PetArt(
+                                      seed: pet.id.hashCode.abs() % 4,
+                                      species: pet.species,
+                                      iconSize: 76,
+                                    ),
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 12),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            _PhotoAction(
-                              icon: Ic.camera,
-                              label: 'Take photo',
-                              onTap: _picking
-                                  ? null
-                                  : () => _pick(ImageSource.camera),
-                            ),
-                            const SizedBox(width: 10),
-                            _PhotoAction(
-                              icon: Ic.image,
-                              label: 'Choose photo',
-                              onTap: _picking
-                                  ? null
-                                  : () => _pick(ImageSource.gallery),
-                            ),
-                            if (preview != null && preview.isNotEmpty) ...[
-                              const SizedBox(width: 10),
+                          const SizedBox(height: 12),
+                          // Wrap, not a Row: at AX5 the pills don't fit side
+                          // by side — wrapping keeps every action reachable
+                          // instead of overflowing off the edge.
+                          Wrap(
+                            alignment: WrapAlignment.center,
+                            spacing: 10,
+                            runSpacing: 10,
+                            children: [
                               _PhotoAction(
-                                icon: Ic.trash,
-                                label: 'Remove photo',
+                                icon: Ic.camera,
+                                label: 'Take photo',
                                 onTap: _picking
                                     ? null
-                                    : () =>
-                                          setState(() => _photo = Uint8List(0)),
+                                    : () => _pick(ImageSource.camera),
+                              ),
+                              _PhotoAction(
+                                icon: Ic.image,
+                                label: 'Choose photo',
+                                onTap: _picking
+                                    ? null
+                                    : () => _pick(ImageSource.gallery),
+                              ),
+                              if (preview != null && preview.isNotEmpty)
+                                _PhotoAction(
+                                  icon: Ic.trash,
+                                  label: 'Remove photo',
+                                  onTap: _picking
+                                      ? null
+                                      : () => setState(
+                                          () => _photo = Uint8List(0),
+                                        ),
+                                ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: T.s24),
+
+                    // ---------------------------------------------------- fields
+                    _Labeled(
+                      label: 'Name',
+                      child: CupertinoTextField(
+                        controller: _name,
+                        onChanged: (_) => setState(() {}),
+                        placeholder: pet.name,
+                        textCapitalization: TextCapitalization.words,
+                        padding: const EdgeInsets.all(14),
+                        cursorColor: p.primaryFill,
+                        decoration: _dec(p),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    _Labeled(
+                      label: 'Breed',
+                      hint: 'Type any breed',
+                      child: CupertinoTextField(
+                        controller: _breed,
+                        placeholder: pet.breed,
+                        textCapitalization: TextCapitalization.words,
+                        padding: const EdgeInsets.all(14),
+                        cursorColor: p.primaryFill,
+                        decoration: _dec(p),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    _Labeled(
+                      label: 'Birthdate',
+                      hint: _ageLabel(birthDate),
+                      child: PressScale(
+                        onTap: () => _pickBirthDate(pet.birthDate),
+                        child: Container(
+                          padding: const EdgeInsets.all(14),
+                          decoration: _dec(p),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  '${birthDate.month}/${birthDate.day}/${birthDate.year}',
+                                  style: Type.body(p),
+                                ),
+                              ),
+                              Ic.svg(
+                                Ic.calendar,
+                                color: p.textSecondary,
+                                size: 18,
                               ),
                             ],
-                          ],
+                          ),
                         ),
-                      ],
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: T.s24),
-
-                  // ---------------------------------------------------- fields
-                  _Labeled(
-                    label: 'Name',
-                    child: CupertinoTextField(
-                      controller: _name,
-                      onChanged: (_) => setState(() {}),
-                      placeholder: pet.name,
-                      textCapitalization: TextCapitalization.words,
-                      padding: const EdgeInsets.all(14),
-                      cursorColor: p.primaryFill,
-                      decoration: _dec(p),
+                    const SizedBox(height: 14),
+                    _Labeled(
+                      label: 'Sex',
+                      child: _Segmented(
+                        value: _sex ?? pet.sex,
+                        options: const ['Male', 'Female'],
+                        onChanged: (v) => setState(() => _sex = v),
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 14),
-                  _Labeled(
-                    label: 'Breed',
-                    hint: 'Type any breed',
-                    child: CupertinoTextField(
-                      controller: _breed,
-                      placeholder: pet.breed,
-                      textCapitalization: TextCapitalization.words,
-                      padding: const EdgeInsets.all(14),
-                      cursorColor: p.primaryFill,
-                      decoration: _dec(p),
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  _Labeled(
-                    label: 'Birthdate',
-                    hint: _ageLabel(birthDate),
-                    child: PressScale(
-                      onTap: () => _pickBirthDate(pet.birthDate),
-                      child: Container(
+                    const SizedBox(height: 14),
+                    _Labeled(
+                      label: 'Weight (kg)',
+                      hint: '0.2 – 120 kg',
+                      child: CupertinoTextField(
+                        controller: _weight,
+                        onChanged: (_) => setState(() {}),
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true,
+                        ),
+                        placeholder: pet.weightKg.toStringAsFixed(1),
                         padding: const EdgeInsets.all(14),
+                        cursorColor: p.primaryFill,
+                        decoration: _dec(p).copyWith(
+                          border: Border.all(
+                            color: _weightError == null
+                                ? p.divider
+                                : p.destructive,
+                          ),
+                        ),
+                      ),
+                    ),
+                    if (_weightError != null) ...[
+                      const SizedBox(height: 6),
+                      Text(
+                        _weightError!,
+                        style: Type.footnote(p).copyWith(color: p.destructive),
+                      ),
+                    ],
+                    const SizedBox(height: 14),
+                    _Labeled(
+                      label: 'Height (cm)',
+                      hint: 'Optional — at the shoulder',
+                      child: CupertinoTextField(
+                        controller: _height,
+                        onChanged: (_) => setState(() {}),
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true,
+                        ),
+                        padding: const EdgeInsets.all(14),
+                        cursorColor: p.primaryFill,
+                        decoration: _dec(p).copyWith(
+                          border: Border.all(
+                            color: _measureError(_height) == null
+                                ? p.divider
+                                : p.destructive,
+                          ),
+                        ),
+                      ),
+                    ),
+                    if (_measureError(_height) != null) ...[
+                      const SizedBox(height: 6),
+                      Text(
+                        _measureError(_height)!,
+                        style: Type.footnote(p).copyWith(color: p.destructive),
+                      ),
+                    ],
+                    const SizedBox(height: 14),
+                    _Labeled(
+                      label: 'Length (cm)',
+                      hint: 'Optional — nose to tail base',
+                      child: CupertinoTextField(
+                        controller: _length,
+                        onChanged: (_) => setState(() {}),
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true,
+                        ),
+                        padding: const EdgeInsets.all(14),
+                        cursorColor: p.primaryFill,
+                        decoration: _dec(p).copyWith(
+                          border: Border.all(
+                            color: _measureError(_length) == null
+                                ? p.divider
+                                : p.destructive,
+                          ),
+                        ),
+                      ),
+                    ),
+                    if (_measureError(_length) != null) ...[
+                      const SizedBox(height: 6),
+                      Text(
+                        _measureError(_length)!,
+                        style: Type.footnote(p).copyWith(color: p.destructive),
+                      ),
+                    ],
+                    const SizedBox(height: 14),
+                    _Labeled(
+                      label: 'Allergies',
+                      hint: 'Separate with commas',
+                      child: CupertinoTextField(
+                        controller: _allergies,
+                        placeholder: 'None known',
+                        padding: const EdgeInsets.all(14),
+                        cursorColor: p.primaryFill,
                         decoration: _dec(p),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                '${birthDate.month}/${birthDate.day}/${birthDate.year}',
-                                style: Type.body(p),
-                              ),
-                            ),
-                            Ic.svg(
-                              Ic.calendar,
-                              color: p.textSecondary,
-                              size: 18,
-                            ),
-                          ],
-                        ),
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 14),
-                  _Labeled(
-                    label: 'Sex',
-                    child: _Segmented(
-                      value: _sex ?? pet.sex,
-                      options: const ['Male', 'Female'],
-                      onChanged: (v) => setState(() => _sex = v),
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  _Labeled(
-                    label: 'Weight (kg)',
-                    hint: '0.2 – 120 kg',
-                    child: CupertinoTextField(
-                      controller: _weight,
-                      onChanged: (_) => setState(() {}),
-                      keyboardType: const TextInputType.numberWithOptions(
-                        decimal: true,
-                      ),
-                      placeholder: pet.weightKg.toStringAsFixed(1),
-                      padding: const EdgeInsets.all(14),
-                      cursorColor: p.primaryFill,
-                      decoration: _dec(p).copyWith(
-                        border: Border.all(
-                          color: _weightError == null
-                              ? p.divider
-                              : p.destructive,
-                        ),
-                      ),
-                    ),
-                  ),
-                  if (_weightError != null) ...[
-                    const SizedBox(height: 6),
+                    const SizedBox(height: 12),
                     Text(
-                      _weightError!,
-                      style: Type.footnote(p).copyWith(color: p.destructive),
+                      'Vitals, visits and documents belong to the clinic record and are '
+                      'not changed here.',
+                      style: Type.footnote(p).copyWith(color: p.textSecondary),
                     ),
                   ],
-                  const SizedBox(height: 14),
-                  _Labeled(
-                    label: 'Allergies',
-                    hint: 'Separate with commas',
-                    child: CupertinoTextField(
-                      controller: _allergies,
-                      placeholder: 'None known',
-                      padding: const EdgeInsets.all(14),
-                      cursorColor: p.primaryFill,
-                      decoration: _dec(p),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    'Vitals, visits and documents belong to the clinic record and are '
-                    'not changed here.',
-                    style: Type.footnote(p).copyWith(color: p.textSecondary),
-                  ),
-                ],
+                ),
               ),
-            ),
-            StickyCta(
-              child: PrimaryButton(
-                label: 'Save changes',
-                icon: Ic.check,
-                onPressed: canSave ? () => _save(pet) : null,
+              StickyCta(
+                child: PrimaryButton(
+                  label: 'Save changes',
+                  icon: Ic.check,
+                  onPressed: canSave ? () => _save(pet) : null,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -410,15 +535,24 @@ class _Labeled extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: [
-            Expanded(child: Text(label, style: Type.footnoteEmph(p))),
-            if (hint != null)
-              Text(
-                hint!,
-                style: Type.caption(p).copyWith(color: p.textSecondary),
-              ),
-          ],
+        // Wrap, not Row: at very large text scales the hint drops below the
+        // label instead of squeezing it into a mid-word wrap (AX5). The
+        // SizedBox keeps the full width so spaceBetween still pushes the
+        // hint right at 1x (a bare Wrap would shrink-wrap and jam them).
+        SizedBox(
+          width: double.infinity,
+          child: Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              Text(label, style: Type.footnoteEmph(p)),
+              if (hint != null)
+                Text(
+                  hint!,
+                  style: Type.caption(p).copyWith(color: p.textSecondary),
+                ),
+            ],
+          ),
         ),
         const SizedBox(height: 6),
         child,
@@ -462,7 +596,9 @@ class _PhotoAction extends StatelessWidget {
                 children: [
                   Ic.svg(icon, color: p.accent, size: 16),
                   const SizedBox(width: 7),
-                  Text(label, style: Type.footnoteEmph(p)),
+                  // Flexible so an overlong label wraps instead of overflowing
+                  // the row at very large text scales.
+                  Flexible(child: Text(label, style: Type.footnoteEmph(p))),
                 ],
               ),
             ),

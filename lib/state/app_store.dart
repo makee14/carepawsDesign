@@ -299,6 +299,8 @@ class AppStore extends ChangeNotifier {
     sex: p.sex,
     birthDate: p.birthDate,
     weightKg: p.weightKg,
+    heightCm: p.heightCm,
+    lengthCm: p.lengthCm,
     color: p.color,
     microchip: p.microchip,
     allergies: p.allergies,
@@ -592,7 +594,12 @@ class AppStore extends ChangeNotifier {
   ///
   /// Registration never signs in: the login screen takes the user back to
   /// sign-in so they enter the credentials they just created.
-  Future<bool> register(String name, String email, String password) async {
+  Future<bool> register(
+    String name,
+    String email,
+    String password, {
+    DateTime? agreedToTermsAt,
+  }) async {
     signingIn = true;
     signInError = null;
     notifyListeners();
@@ -604,6 +611,7 @@ class AppStore extends ChangeNotifier {
       name: name,
       email: email,
       password: password,
+      agreedToTermsAt: agreedToTermsAt,
     );
 
     signingIn = false;
