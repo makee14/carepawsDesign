@@ -331,6 +331,22 @@ class _PetProfileScreenState extends State<PetProfileScreen> {
                         ],
                       ),
                     ),
+
+                  const SizedBox(height: T.s20),
+                  Text('Danger zone', style: Type.headline(p)),
+                  const SizedBox(height: 10),
+                  SoftCard(
+                    padding: EdgeInsets.zero,
+                    borderColor: p.destructive.withValues(alpha: 0.3),
+                    child: RowTile(
+                      title: 'Delete ${pet.name}',
+                      subtitle:
+                          'Removes their profile, records and appointments',
+                      leadingPath: Ic.trash,
+                      destructive: true,
+                      onTap: () => _deletePet(context, pet),
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -338,6 +354,36 @@ class _PetProfileScreenState extends State<PetProfileScreen> {
         ),
       ),
     );
+  }
+
+  /// Delete pet (S5): the confirm states the full blast radius, including how
+  /// many upcoming appointments go with the pet. Active appointments are
+  /// cancelled through the store's existing per-appointment path (no new
+  /// backend semantics), then the pet is removed; the profile pops back to
+  /// wherever it was opened from — never a dead end.
+  Future<void> _deletePet(BuildContext context, Pet pet) async {
+    final store = AppScope.read(context);
+    final active = store.appointments
+        .where((a) => a.petId == pet.id && a.status.isActive)
+        .toList();
+    final ok = await confirmDestructive(
+      context,
+      title: 'Delete ${pet.name}?',
+      message: active.isEmpty
+          ? 'This permanently removes ${pet.name}\u2019s profile, vitals, '
+                'timeline and documents. This cannot be undone.'
+          : 'This permanently removes ${pet.name}\u2019s profile, vitals, '
+                'timeline and documents, and cancels ${active.length == 1 ? 'their upcoming appointment' : 'their ${active.length} upcoming appointments'}. '
+                'This cannot be undone.',
+      confirmLabel: 'Delete ${pet.name}',
+    );
+    if (!ok || !context.mounted) return;
+    for (final a in active) {
+      store.cancelAppointment(a.id);
+    }
+    store.removePet(pet.id);
+    if (!context.mounted) return;
+    Navigator.of(context).pop();
   }
 
   void _openDoc(BuildContext context, PetDoc d) {
