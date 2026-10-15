@@ -1217,7 +1217,6 @@ class HelpScreen extends StatelessWidget {
                 subtitle: 'Replay the 5-page introduction',
                 leadingPath: Ic.sparkle,
                 onTap: () {
-                  AppScope.read(context).replayOnboarding();
                   Navigator.of(context).push(
                     appRoute(
                       OnboardingScreen(onDone: () => dismissSheet(context)),

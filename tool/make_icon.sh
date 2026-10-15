@@ -14,6 +14,14 @@ LEGACY=tool/icon/app_icon.svg
 FOREGROUND=tool/icon/app_icon_foreground.svg
 RES=android/app/src/main/res
 
+# rsvg-convert cannot resolve CSS var(): stamp the master's :root values to
+# literals in a temp copy first (tool/sync_icons_dart.py owns the mapping).
+# The foreground file is already stamped (generated), so it is used as-is.
+STAMP_TMP="$(mktemp -d)"
+trap 'rm -rf "$STAMP_TMP"' EXIT
+python3 tool/sync_icons_dart.py --stamp "$STAMP_TMP/app_icon.svg" >/dev/null
+LEGACY="$STAMP_TMP/app_icon.svg"
+
 command -v rsvg-convert >/dev/null || {
   echo "rsvg-convert is required (package: librsvg)." >&2
   exit 1
@@ -53,8 +61,8 @@ mkdir -p "$RES/values"
 cat >"$RES/values/ic_launcher_background.xml" <<'XML'
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- T.terracotta #D4621A, from lib/design/tokens.dart -->
-    <color name="ic_launcher_background">#D4621A</color>
+    <!-- T.cream #FEFBF4, from lib/design/tokens.dart — matches the legacy tile -->
+    <color name="ic_launcher_background">#FEFBF4</color>
 </resources>
 XML
 

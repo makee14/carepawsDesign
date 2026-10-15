@@ -78,8 +78,11 @@ class AppStore extends ChangeNotifier {
 
   bool reduceMotionOverride = false;
 
-  /// HIG ▸ Onboarding runs once. Replayable from Settings → Help.
-  bool onboardingSeen = false;
+  /// The first-launch flow (splash → onboarding → register → Home) has
+  /// completed. The single source of truth for launch routing; persisted.
+  /// Replayable from Settings → Help, which shows the tour on demand without
+  /// touching this flag.
+  bool onboardingCompleted = false;
 
   List<Pet> pets = Seed.pets;
   List<Appointment> appointments = Seed.appointments;
@@ -521,20 +524,14 @@ class AppStore extends ChangeNotifier {
   /// Appearance toggle (explicit override + persist + notify).
   set darkMode(bool v) => setDarkMode(v);
 
-  /// Marks the onboarding flow as done. Called for both finishing and skipping,
-  /// so the flow is never re-presented on a later launch.
-  void completeOnboarding() {
-    if (onboardingSeen) return;
-    onboardingSeen = true;
+  /// Marks the first-launch flow done. Called once the user reaches Home
+  /// through splash → onboarding → register, so every later launch goes
+  /// straight from the splash into the app and the flow never repeats.
+  void completeFirstLaunch() {
+    if (onboardingCompleted) return;
+    onboardingCompleted = true;
     notifyListeners();
-    unawaited(SettingsStore.writeOnboarded(true));
-  }
-
-  /// Reopens the flow from Settings. Deliberately does not clear the stored
-  /// flag — the user is simply being shown it again on purpose.
-  void replayOnboarding() {
-    onboardingSeen = false;
-    notifyListeners();
+    unawaited(SettingsStore.writeOnboardingCompleted(true));
   }
 
   /// Restores the persisted preferences. Safe to call in tests and on desktop:
@@ -550,12 +547,19 @@ class AppStore extends ChangeNotifier {
     final mode = await SettingsStore.readThemeMode();
     final reduce = await SettingsStore.readReduceMotion();
     final lang = await SettingsStore.readLanguage();
-    final onboarded = await SettingsStore.readOnboarded();
+    final completed = await SettingsStore.readOnboardingCompleted();
 
     themeMode = ThemeMode.fromName(mode);
     reduceMotionOverride = reduce ?? false;
     language = lang ?? language;
-    onboardingSeen = onboarded;
+    if (completed != null) {
+      onboardingCompleted = completed;
+    } else {
+      // One-time migration: anyone who already used the app (legacy flag)
+      // counts as having completed the first-launch flow.
+      onboardingCompleted = await SettingsStore.readOnboarded();
+      await SettingsStore.writeOnboardingCompleted(onboardingCompleted);
+    }
 
     final sessionEmail = await SettingsStore.readSessionEmail();
     if (sessionEmail != null && sessionEmail.isNotEmpty) {

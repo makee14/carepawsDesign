@@ -28,8 +28,8 @@ class _FailFast extends http.BaseClient {
 
 AppStore _store() {
   final s = AppStore(ai: AiService(client: _FailFast()));
-  // The splash loop animation repeats forever; stillness keeps pumpAndSettle
-  // (and teardown) from hanging.
+  // Reduced motion parks the splash morph at a finite 600ms timeline, so
+  // pumpAndSettle (and teardown) always terminates.
   s.reduceMotionOverride = true;
   addTearDown(s.dispose);
   return s;
@@ -245,11 +245,13 @@ void main() {
   });
 
   group('A2 — real logout everywhere', () {
-    testWidgets('signOutAndExit clears the session and lands on the splash', (
+    testWidgets('signOutAndExit clears the session and lands on login', (
       tester,
     ) async {
       final store = _store();
       await _registerAndSignIn(tester, store);
+      // Logout only happens post-first-launch; the completed flag is set.
+      store.completeFirstLaunch();
       expect(await SettingsStore.readSessionEmail(), 'mark@example.com');
 
       await tester.binding.setSurfaceSize(const Size(390, 844));
@@ -283,17 +285,20 @@ void main() {
       expect(store.signedIn, isFalse);
       expect(store.accountEmail, isNull);
       expect(await SettingsStore.readSessionEmail(), isNull);
-      expect(find.byType(SplashScreen), findsOneWidget);
+      // The splash morph plays, then routes to login (first launch already
+      // completed, session signed out).
+      expect(find.byType(LoginScreen), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
   });
 
   group('A3 — real delete account', () {
     testWidgets(
-      'delete account removes credentials, clears data, signs out, lands on splash',
+      'delete account removes credentials, clears data, signs out, lands on login',
       (tester) async {
         final store = _store();
         await _registerAndSignIn(tester, store);
+        store.completeFirstLaunch();
 
         await tester.binding.setSurfaceSize(const Size(390, 844));
         await tester.pumpWidget(
@@ -317,7 +322,8 @@ void main() {
         expect(await AuthStore.exists('mark@example.com'), isFalse);
         expect(store.signedIn, isFalse);
         expect(await SettingsStore.readSessionEmail(), isNull);
-        expect(find.byType(SplashScreen), findsOneWidget);
+        // The splash morph plays, then routes to login.
+        expect(find.byType(LoginScreen), findsOneWidget);
         expect(tester.takeException(), isNull);
       },
     );

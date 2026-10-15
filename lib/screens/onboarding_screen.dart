@@ -4,7 +4,6 @@ import '../design/icons.dart';
 import '../design/motion.dart';
 import '../design/theme.dart';
 import '../design/tokens.dart';
-import '../state/app_store.dart';
 import '../widgets/common.dart';
 import 'onboarding_illustrations.dart';
 
@@ -51,7 +50,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   }
 
   void _finish() {
-    AppScope.read(context).completeOnboarding();
+    // Finishing (or skipping) the tour does NOT complete the first-launch
+    // flow — registration is still pending. The completed flag is written
+    // only once the user reaches Home.
     widget.onDone();
   }
 
