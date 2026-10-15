@@ -16,9 +16,15 @@ import '../widgets/common.dart';
 /// Returns the cropped PNG bytes via [Navigator.pop], or null on Cancel.
 /// Cropping uses `dart:ui` only — no new packages.
 class PhotoCropScreen extends StatefulWidget {
-  const PhotoCropScreen({super.key, required this.bytes});
+  const PhotoCropScreen({super.key, required this.bytes, this.debugImageSize});
 
   final Uint8List bytes;
+
+  /// Test seam: when non-null, skips the async engine decode (which stalls
+  /// under the testWidgets fake clock) and uses these dimensions instead.
+  /// Null in production.
+  @visibleForTesting
+  final Size? debugImageSize;
 
   @override
   State<PhotoCropScreen> createState() => _PhotoCropScreenState();
@@ -42,7 +48,13 @@ class _PhotoCropScreenState extends State<PhotoCropScreen> {
   @override
   void initState() {
     super.initState();
-    _decode();
+    final debugSize = widget.debugImageSize;
+    if (debugSize != null) {
+      _imgW = debugSize.width.round();
+      _imgH = debugSize.height.round();
+    } else {
+      _decode();
+    }
   }
 
   @override
@@ -76,6 +88,16 @@ class _PhotoCropScreenState extends State<PhotoCropScreen> {
       // would fling the image somewhere unpredictable.
       _viewer.value = Matrix4.identity();
     });
+  }
+
+  /// After a pan/zoom gesture, snap back to the fitted view when the photo
+  /// no longer covers the crop window: otherwise the window would show the
+  /// dimmed surround and the export would silently re-centre somewhere the
+  /// user did not frame.
+  void _onInteractionEnd(ScaleEndDetails _) {
+    final geom = _geom;
+    if (geom == null || geom.windowCoveredByPhoto(_viewer.value)) return;
+    setState(() => _viewer.value = Matrix4.identity());
   }
 
   Future<void> _confirm() async {
@@ -174,8 +196,11 @@ class _PhotoCropScreenState extends State<PhotoCropScreen> {
         final fit = math.min(availW / pw, availH / ph);
         final childW = pw * fit;
         final childH = ph * fit;
-        // Fixed square window, centred; the surround is dimmed.
-        final side = math.min(availW, availH) * 0.86;
+        // Fixed square window, centred on the photo and sized from the
+        // PHOTO (not the full area): the window never covers the dimmed
+        // surround, so the crop always applies to the photo only. The photo
+        // is centred in the area by the Center widget below.
+        final side = math.min(childW, childH) * 0.86;
         final window = Rect.fromCenter(
           center: Offset(availW / 2, availH / 2),
           width: side,
@@ -197,11 +222,14 @@ class _PhotoCropScreenState extends State<PhotoCropScreen> {
             // child points (== viewer points at identity) to screen points.
             InteractiveViewer(
               transformationController: _viewer,
-              minScale: 0.6,
+              // Zooming out below the fitted size can only expose the dimmed
+              // surround inside the crop window, so it is not allowed.
+              minScale: 1.0,
               maxScale: 6.0,
               boundaryMargin: const EdgeInsets.all(double.infinity),
               panEnabled: true,
               scaleEnabled: true,
+              onInteractionEnd: _onInteractionEnd,
               child: Center(
                 child: SizedBox(
                   width: childW,
@@ -266,6 +294,26 @@ class _CropGeometry {
   final double pixelW;
   final double pixelH;
   final Rect window;
+
+  /// Whether the fixed crop window shows photo only (no dimmed surround)
+  /// under [transform]: every window corner must land inside the displayed
+  /// photo rect. The photo is centred in the child area by the Center
+  /// widget, so the photo rect is known from the layout facts.
+  @visibleForTesting
+  bool windowCoveredByPhoto(Matrix4 transform) {
+    final photo = Rect.fromCenter(
+      center: Offset(availW / 2, availH / 2),
+      width: childW,
+      height: childH,
+    );
+    final inverse = Matrix4.inverted(transform);
+    bool inside(Offset corner) =>
+        photo.contains(MatrixUtils.transformPoint(inverse, corner));
+    return inside(window.topLeft) &&
+        inside(window.topRight) &&
+        inside(window.bottomLeft) &&
+        inside(window.bottomRight);
+  }
 
   /// The window rect in displayed-image pixel space, via the inverse of the
   /// viewer's current transform. The image is centred in the child area.
