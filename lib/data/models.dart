@@ -4,9 +4,6 @@ import 'package:flutter/foundation.dart';
 
 enum Species { dog, cat }
 
-Species speciesFrom(String s) =>
-    s.toLowerCase() == 'cat' ? Species.cat : Species.dog;
-
 @immutable
 class Vital {
   const Vital({
@@ -107,9 +104,6 @@ class Pet {
   final Uint8List? photo;
 
   bool get hasPhoto => photo != null && photo!.isNotEmpty;
-
-  /// Deterministic portrait palette so pet cards read instantly.
-  Color get tint => color;
 
   /// Stable, human-readable patient ID derived from the record id
   /// (e.g. CP-0002PT). A manual digit fold, not hashCode — String.hashCode

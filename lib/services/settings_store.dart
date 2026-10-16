@@ -1,4 +1,4 @@
-import 'package:shared_preferences/shared_preferences.dart';
+import 'prefs.dart';
 
 import '../design/theme.dart' show ThemeMode;
 
@@ -17,46 +17,35 @@ class SettingsStore {
   static const _kOnboardingCompleted = 'carepaws.onboarding.completed';
   static const _kSessionEmail = 'carepaws.settings.sessionEmail';
 
-  /// SharedPreferences throws in unit tests and on desktop without the plugin.
-  /// A failure here must never stop the app from launching, so every call is
-  /// wrapped and simply reports "nothing stored".
-  static Future<SharedPreferences?> _prefs() async {
-    try {
-      return await SharedPreferences.getInstance();
-    } catch (_) {
-      return null;
-    }
-  }
-
   /// Reads the stored appearance choice. Returns null when nothing has been
   /// stored yet, which the caller treats as [ThemeMode.system].
   static Future<String?> readThemeMode() async {
-    final p = await _prefs();
+    final p = await openPrefs();
     return p?.getString(_kThemeMode);
   }
 
   static Future<void> writeThemeMode(ThemeMode mode) async {
-    final p = await _prefs();
+    final p = await openPrefs();
     await p?.setString(_kThemeMode, mode.name);
   }
 
   static Future<bool?> readReduceMotion() async {
-    final p = await _prefs();
+    final p = await openPrefs();
     return p?.getBool(_kReduceMotion);
   }
 
   static Future<void> writeReduceMotion(bool value) async {
-    final p = await _prefs();
+    final p = await openPrefs();
     await p?.setBool(_kReduceMotion, value);
   }
 
   static Future<String?> readLanguage() async {
-    final p = await _prefs();
+    final p = await openPrefs();
     return p?.getString(_kLanguage);
   }
 
   static Future<void> writeLanguage(String value) async {
-    final p = await _prefs();
+    final p = await openPrefs();
     await p?.setString(_kLanguage, value);
   }
 
@@ -66,7 +55,7 @@ class SettingsStore {
   /// LEGACY — kept only for the one-time migration in [readOnboardingCompleted].
   /// New code must use [readOnboardingCompleted]/[writeOnboardingCompleted].
   static Future<bool> readOnboarded() async {
-    final p = await _prefs();
+    final p = await openPrefs();
     return p?.getBool(_kOnboarded) ?? false;
   }
 
@@ -74,29 +63,29 @@ class SettingsStore {
   /// has completed. Null when never set. The single source of truth for
   /// launch routing; a completed flow never repeats.
   static Future<bool?> readOnboardingCompleted() async {
-    final p = await _prefs();
+    final p = await openPrefs();
     return p?.getBool(_kOnboardingCompleted);
   }
 
   static Future<void> writeOnboardingCompleted(bool value) async {
-    final p = await _prefs();
+    final p = await openPrefs();
     await p?.setBool(_kOnboardingCompleted, value);
   }
 
   /// Email of the last successfully signed-in account, so the session
   /// survives the OS killing the app in the background. Cleared on sign-out.
   static Future<String?> readSessionEmail() async {
-    final p = await _prefs();
+    final p = await openPrefs();
     return p?.getString(_kSessionEmail);
   }
 
   static Future<void> writeSessionEmail(String email) async {
-    final p = await _prefs();
+    final p = await openPrefs();
     await p?.setString(_kSessionEmail, email);
   }
 
   static Future<void> clearSessionEmail() async {
-    final p = await _prefs();
+    final p = await openPrefs();
     await p?.remove(_kSessionEmail);
   }
 }

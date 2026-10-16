@@ -1,4 +1,4 @@
-import 'package:shared_preferences/shared_preferences.dart';
+import '../services/prefs.dart';
 
 /// Which editable owner-profile field a validation error belongs to.
 enum ProfileField { name, phone }
@@ -14,20 +14,9 @@ class ProfileStore {
   static String _key(String email, String field) =>
       'carepaws.profile.$email.$field';
 
-  /// SharedPreferences throws in unit tests and on desktop without the plugin.
-  /// A failure here must never stop the app, so every call is wrapped and
-  /// simply reports "nothing stored".
-  static Future<SharedPreferences?> _prefs() async {
-    try {
-      return await SharedPreferences.getInstance();
-    } catch (_) {
-      return null;
-    }
-  }
-
   /// Returns the stored name/phone for [email]; missing values come back ''.
   static Future<({String name, String phone})> read(String email) async {
-    final p = await _prefs();
+    final p = await openPrefs();
     if (p == null) return (name: '', phone: '');
     return (
       name: p.getString(_key(email, 'name')) ?? '',
@@ -41,7 +30,7 @@ class ProfileStore {
     required String name,
     required String phone,
   }) async {
-    final p = await _prefs();
+    final p = await openPrefs();
     await p?.setString(_key(email, 'name'), name);
     await p?.setString(_key(email, 'phone'), phone);
   }
