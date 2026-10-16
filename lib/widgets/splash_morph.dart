@@ -3,8 +3,8 @@ import 'package:flutter_svg/flutter_svg.dart';
 
 import '../design/icons.dart';
 
-/// The launch morph: the four logo groups (circle, dog, cat, heart) assemble
-/// into the final emblem, then the splash routes on.
+/// The launch morph: the paw assembles — the pad lands first, then the four
+/// toe beans pop in one by one — then the splash routes on.
 ///
 /// Driven by ONE [AnimationController] owned by the splash screen, with eased
 /// sub-intervals and zero timers — completion is observed through a status
@@ -12,11 +12,12 @@ import '../design/icons.dart';
 /// Under reduced motion this widget is not used at all: the splash renders
 /// the static final emblem instead.
 ///
-/// Keyframes (design contracts, Stream E) — fractions of the 2000ms timeline:
-///   0.00–0.15  circle scales 0.6→1.0 and fades in      (easeOutCubic)
-///   0.125–0.45 dog/cat slide in from ∓24pt and fade in (easeInOutCubic)
-///   0.40–0.65  heart pops 0→1                          (spring, overshoot 1.15)
-///   0.65–1.00  settle — every interval is already at 1, so the hold is free.
+/// Keyframes — fractions of the 2000ms timeline:
+///   0.00–0.25  pad scales 0.6→1.0 and fades in       (easeOutCubic)
+///   0.20–0.575 toes pop in staggered, spring overshoot (1.15 peak)
+///     toe1: 0.200–0.350, toe2: 0.275–0.425,
+///     toe3: 0.350–0.500, toe4: 0.425–0.575
+///   0.60–1.00  settle — every interval is already at 1, so the hold is free.
 class SplashMorph extends AnimatedWidget {
   const SplashMorph({
     super.key,
@@ -24,7 +25,7 @@ class SplashMorph extends AnimatedWidget {
     this.size = 160,
   }) : super(listenable: progress);
 
-  /// Emblem size in pt; the ±24pt slides scale with it.
+  /// Emblem size in pt.
   final double size;
 
   Animation<double> get _t => listenable as Animation<double>;
@@ -36,41 +37,41 @@ class SplashMorph extends AnimatedWidget {
   @override
   Widget build(BuildContext context) {
     final t = _t.value;
-    final circleT = Curves.easeOutCubic.transform(_slice(t, 0.00, 0.15));
-    final petsT = Curves.easeInOutCubic.transform(_slice(t, 0.125, 0.45));
-    final heartT = const _HeartPop().transform(_slice(t, 0.40, 0.65));
-    final slide = 24 * size / 160;
+    final padT = Curves.easeOutCubic.transform(_slice(t, 0.00, 0.25));
+    const pop = _Pop();
+    final toeT = [
+      pop.transform(_slice(t, 0.200, 0.350)),
+      pop.transform(_slice(t, 0.275, 0.425)),
+      pop.transform(_slice(t, 0.350, 0.500)),
+      pop.transform(_slice(t, 0.425, 0.575)),
+    ];
+    final toeLayers = [
+      Ic.splashLayerToe1,
+      Ic.splashLayerToe2,
+      Ic.splashLayerToe3,
+      Ic.splashLayerToe4,
+    ];
     return SizedBox.square(
       dimension: size,
       child: Stack(
         children: [
           Opacity(
-            opacity: circleT,
+            opacity: padT,
             child: Transform.scale(
-              scale: 0.6 + 0.4 * circleT,
+              scale: 0.6 + 0.4 * padT,
               alignment: Alignment.center,
-              child: _layer(Ic.splashLayerCircle),
+              child: _layer(Ic.splashLayerPad),
             ),
           ),
-          Opacity(
-            opacity: petsT,
-            child: Transform.translate(
-              offset: Offset(-slide * (1 - petsT), 0),
-              child: _layer(Ic.splashLayerDog),
+          for (var i = 0; i < 4; i++)
+            Opacity(
+              opacity: toeT[i].clamp(0.0, 1.0),
+              child: Transform.scale(
+                scale: toeT[i].clamp(0.0, 1.2),
+                alignment: Alignment.center,
+                child: _layer(toeLayers[i]),
+              ),
             ),
-          ),
-          Opacity(
-            opacity: petsT,
-            child: Transform.translate(
-              offset: Offset(slide * (1 - petsT), 0),
-              child: _layer(Ic.splashLayerCat),
-            ),
-          ),
-          Transform.scale(
-            scale: heartT.clamp(0.0, 1.2),
-            alignment: Alignment.center,
-            child: _layer(Ic.splashLayerHeart),
-          ),
         ],
       ),
     );
@@ -80,9 +81,9 @@ class SplashMorph extends AnimatedWidget {
       SvgPicture.string(svg, width: size, height: size);
 }
 
-/// easeOutBack tuned for a 1.15 peak — the heart pop.
-class _HeartPop extends Curve {
-  const _HeartPop();
+/// easeOutBack tuned for a 1.15 peak — the toe pop.
+class _Pop extends Curve {
+  const _Pop();
 
   @override
   double transformInternal(double t) {

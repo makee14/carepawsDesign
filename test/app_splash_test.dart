@@ -103,34 +103,36 @@ void main() {
 
       List<Opacity> opacities() =>
           tester.widgetList<Opacity>(find.byType(Opacity)).toList();
-      double heartScale() => tester
+      double toeScale(int i) => tester
           .widgetList<Transform>(find.byType(Transform))
-          .last
+          .elementAt(i + 1) // [0] is the pad
           .transform
           .entry(0, 0);
 
-      // 150ms: circle nearly in (0–0.3s); pets and heart not started.
-      controller.value = 0.075;
+      // 200ms: pad mid-fade (0–0.5s); toes not started.
+      controller.value = 0.1;
       await tester.pump();
-      expect(opacities()[0].opacity, greaterThan(0.8)); // circle
-      expect(opacities()[1].opacity, 0.0); // dog
-      expect(opacities()[2].opacity, 0.0); // cat
-      expect(heartScale(), 0.0);
+      expect(opacities()[0].opacity, greaterThan(0.5)); // pad
+      for (var i = 1; i <= 4; i++) {
+        expect(opacities()[i].opacity, 0.0); // toes
+      }
 
-      // 1000ms: pets done (0.25–0.9s); heart mid-pop, overshooting 1.15.
-      controller.value = 0.5;
+      // 600ms: pad done; toe1 mid-pop overshooting, toe4 not started.
+      controller.value = 0.3;
       await tester.pump();
-      expect(opacities()[1].opacity, 1.0);
-      expect(opacities()[2].opacity, 1.0);
-      expect(heartScale(), greaterThan(1.0));
+      expect(opacities()[0].opacity, 1.0);
+      expect(toeScale(0), greaterThan(1.0)); // toe1 spring overshoot
+      expect(opacities()[4].opacity, 0.0); // toe4
 
-      // End of timeline: everything at rest, heart fully popped.
+      // End of timeline: everything at rest.
       controller.value = 1.0;
       await tester.pump();
       for (final o in opacities()) {
         expect(o.opacity, 1.0);
       }
-      expect(heartScale(), 1.0);
+      for (var i = 0; i < 4; i++) {
+        expect(toeScale(i), 1.0);
+      }
     });
   });
 

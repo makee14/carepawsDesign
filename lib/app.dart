@@ -174,10 +174,10 @@ class _SplashScreenState extends State<SplashScreen>
   }
 }
 
-/// The CarePaws logo mark — the badge alone (dog + cat heads, heart in
-/// negative space), rendered from [Ic.badgeArtwork]. Per the one-mark rule
-/// the mark appears alone: no tile, no wordmark. It is the same badge as
-/// the launcher icon's, so in-app logo and app icon stay one mark.
+/// The CarePaws logo mark — the paw alone (embrace-paw, no tile),
+/// rendered from [Ic.badgeArtwork]. Per the one-mark rule the mark appears
+/// alone: no tile, no wordmark. It is the same paw as the launcher icon's,
+/// so in-app logo and app icon stay one mark.
 /// Used on splash and auth only.
 class LogoMark extends StatelessWidget {
   const LogoMark({super.key, this.size = 120});
