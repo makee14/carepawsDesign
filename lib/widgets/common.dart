@@ -713,6 +713,10 @@ class StatusChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final p = context.p;
+    // AX5: the label wraps to 2 lines instead of hiding behind an ellipsis
+    // ("Mon, 19 Oct ·…", "AI · Always …"). Scale-gated so the 1x path is
+    // byte-identical (golden block fonts have different metrics).
+    final big = MediaQuery.textScalerOf(context).scale(1) > 1.0;
     return Container(
       padding: EdgeInsets.symmetric(
         horizontal: compact ? 8 : 10,
@@ -741,10 +745,7 @@ class StatusChip extends StatelessWidget {
                 color: fg ?? p.chipText,
                 fontWeight: bold ? FontWeight.w700 : FontWeight.w500,
               ),
-              // Two lines at large Dynamic Type so chip labels ("Mon, 19 Oct
-              // · 9:00 AM", "AI · Always available") wrap instead of hiding
-              // behind an ellipsis. One line at 1x — every label fits.
-              maxLines: 2,
+              maxLines: big ? 2 : 1,
               overflow: TextOverflow.ellipsis,
             ),
           ),

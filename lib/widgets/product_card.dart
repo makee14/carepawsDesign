@@ -26,6 +26,10 @@ class ProductCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final p = context.p;
+    // AX5: name/tagline/price reflow instead of hiding behind an ellipsis.
+    // Scale-gated so 1x is byte-identical under any font metrics; the 1.3
+    // threshold matches the promo card's stacked layout.
+    final big = MediaQuery.textScalerOf(context).scale(1) > 1.3;
 
     final card = Container(
       decoration: BoxDecoration(
@@ -65,9 +69,7 @@ class ProductCard extends StatelessWidget {
                       fontWeight: FontWeight.w600,
                       color: p.text,
                     ),
-                    // Three lines at large Dynamic Type so the name reflows
-                    // instead of hiding behind "Grass-fed L…". Two lines at 1x.
-                    maxLines: 3,
+                    maxLines: big ? 3 : 2,
                     overflow: TextOverflow.ellipsis,
                   ),
                   const SizedBox(height: 2),
@@ -75,8 +77,7 @@ class ProductCard extends StatelessWidget {
                     product.tagline,
                     style: Type.footnote(p)
                         .copyWith(fontSize: 12, color: p.textSecondary),
-                    // Two lines at large Dynamic Type; one line at 1x.
-                    maxLines: 2,
+                    maxLines: big ? 2 : 1,
                     overflow: TextOverflow.ellipsis,
                   ),
                   const SizedBox(height: T.s8),
@@ -90,9 +91,7 @@ class ProductCard extends StatelessWidget {
                             fontWeight: FontWeight.w600,
                             color: p.text,
                           ),
-                          // Two lines at large Dynamic Type so the price is
-                          // never hidden ("₱1,2…"). One line at 1x.
-                          maxLines: 2,
+                          maxLines: big ? 2 : 1,
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),

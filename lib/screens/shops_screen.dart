@@ -192,10 +192,14 @@ class _ShopsScreenState extends State<ShopsScreen> {
                 // block scales with Dynamic Type so the card grows at AX5
                 // instead of clipping (sweep gate); Stream A re-tunes this
                 // against its measured card at merge if needed.
+                // AX5: ProductCard lets name/tagline/price wrap to extra lines
+                // above 1.3x — the budget grows by ~52pt (one extra line each)
+                // so the fixed grid cells fit the reflowed text.
                 final textScale = MediaQuery.textScalerOf(context)
                     .scale(1)
                     .clamp(1.0, 3.2);
-                final cellH = cardW * 3 / 4 + 106 * textScale;
+                final textBlock = (textScale > 1.3 ? 158 : 106) * textScale;
+                final cellH = cardW * 3 / 4 + textBlock;
                 return SliverPadding(
                   padding: EdgeInsets.fromLTRB(
                     T.s16,

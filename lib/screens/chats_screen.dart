@@ -176,6 +176,8 @@ class _TeamCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final p = context.p;
+    // AX5: name/role wrap to 2 lines instead of hiding. Scale-gated for 1x.
+    final big = MediaQuery.textScalerOf(context).scale(1) > 1.0;
     return Semantics(
       button: true,
       label: '${member.name}, ${member.role.label}',
@@ -210,8 +212,7 @@ class _TeamCard extends StatelessWidget {
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
                   ).copyWith(color: p.text),
-                  // Two lines at large Dynamic Type; one line at 1x.
-                  maxLines: 2,
+                  maxLines: big ? 2 : 1,
                   overflow: TextOverflow.ellipsis,
                   textAlign: TextAlign.center,
                 ),
@@ -220,8 +221,7 @@ class _TeamCard extends StatelessWidget {
                   member.role.label,
                   style: const TextStyle(fontSize: 12)
                       .copyWith(color: p.textSecondary),
-                  // Two lines at large Dynamic Type; one line at 1x.
-                  maxLines: 2,
+                  maxLines: big ? 2 : 1,
                   overflow: TextOverflow.ellipsis,
                   textAlign: TextAlign.center,
                 ),
@@ -433,6 +433,9 @@ class _ThreadRow extends StatelessWidget {
         ? 'Answers feeding, grooming, vaccines and general care.'
         : (store.offlineNote ??
               'Replies in about 10 minutes during clinic hours.');
+    // AX5: thread titles wrap to 2 lines and the preview/badge reflow instead
+    // of hiding behind "CarePa…". Scale-gated so 1x is byte-identical.
+    final big = MediaQuery.textScalerOf(context).scale(1) > 1.0;
 
     return Semantics(
       button: true,
@@ -478,10 +481,7 @@ class _ThreadRow extends StatelessWidget {
                             child: Text(
                               thread.title,
                               style: Type.headline(p),
-                              // Two lines at large Dynamic Type so the title
-                              // wraps instead of hiding behind "CarePa…".
-                              // One line at 1x — every title fits.
-                              maxLines: 2,
+                              maxLines: big ? 2 : 1,
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
@@ -500,9 +500,8 @@ class _ThreadRow extends StatelessWidget {
                       Text(
                         preview,
                         style: Type.footnote(p),
-                        // Unbounded: the preview is short (≤2 lines at 1x),
-                        // so 1x is untouched and AX5 reflows instead of
-                        // hiding the reply promise behind an ellipsis.
+                        maxLines: big ? null : 2,
+                        overflow: big ? null : TextOverflow.ellipsis,
                       ),
                       if (thread.isAi || thread.badge != null) ...[
                         const SizedBox(height: 6),
@@ -521,12 +520,13 @@ class _ThreadRow extends StatelessWidget {
                                   ),
                                   const SizedBox(width: 4),
                                   Flexible(
-                                    // Unbounded: one line at 1x, so 1x is
-                                    // untouched and AX5 reflows instead of
-                                    // hiding the badge behind an ellipsis.
                                     child: Text(
                                       thread.badge!,
                                       style: Type.caption(p),
+                                      maxLines: big ? null : 2,
+                                      overflow: big
+                                          ? null
+                                          : TextOverflow.ellipsis,
                                     ),
                                   ),
                                 ],
