@@ -16,6 +16,18 @@ import '../services/settings_store.dart';
 import '../services/staff_replies.dart';
 import 'profile_store.dart';
 
+/// Which shell the signed-in account gets after auth.
+///
+/// Exactly two roles exist — customer and vet. No staff sub-roles in the
+/// portal (the `StaffRole` enum stays in the data model for service
+/// assignment only; it is never used for portal gating). Sourced from the
+/// login: the local [AuthStore] role field now, `profiles.role` when the
+/// backend lands.
+///
+/// Invariant: [AppStore.shell] is `vet` only while a vet is signed in — a
+/// fresh store and a signed-out store always read `customer`.
+enum AppShell { customer, vet }
+
 /// Single source of truth for the whole app. A lightweight ChangeNotifier is
 /// enough here — the prototype has no need for a heavier state package.
 class AppStore extends ChangeNotifier {
@@ -564,6 +576,7 @@ class AppStore extends ChangeNotifier {
       signedIn = true;
       accountEmail = sessionEmail;
       accountName = await AuthStore.displayName(sessionEmail);
+      _shell = _shellForRole(await AuthStore.roleFor(sessionEmail));
       // A restored session rehydrates its own persisted datasets — the seeds
       // are only the first-launch fallback, never an overwrite.
       await _rehydrate(accountEmail!, registered: accountName != null);
@@ -581,6 +594,18 @@ class AppStore extends ChangeNotifier {
   static const demoPassword = 'carepawscustomer1';
 
   bool signedIn = false;
+
+  /// The post-auth shell for the signed-in account. `customer` until a vet
+  /// signs in; reset to `customer` on sign-out. The root router reads this to
+  /// pick the shell, and the vet route guard reads it to deny cross-role
+  /// navigation.
+  AppShell get shell => _shell;
+  AppShell _shell = AppShell.customer;
+
+  /// Maps a stored role string onto a shell. Only 'vet' is privileged —
+  /// anything else (null, unknown, demo) is customer-side.
+  static AppShell _shellForRole(String? role) =>
+      role == 'vet' ? AppShell.vet : AppShell.customer;
 
   /// Set while a sign-in attempt is in flight, so the button can show a spinner.
   bool signingIn = false;
@@ -653,6 +678,9 @@ class AppStore extends ChangeNotifier {
       accountName = registeredName; // null for the demo account
       accountEmail = email.trim().toLowerCase();
       signInError = null;
+      // The demo account is never stored in AuthStore, so roleFor falls back
+      // to 'customer' for it — the demo stays customer-side by construction.
+      _shell = _shellForRole(await AuthStore.roleFor(accountEmail!));
       // Rehydrate this account's persisted datasets. The fallback keeps the
       // old semantics: a registered account starts with a clean slate (B15),
       // the demo account with its seed dataset.
@@ -683,6 +711,7 @@ class AppStore extends ChangeNotifier {
     accountEmail = null;
     _profileName = null;
     _profilePhone = '';
+    _shell = AppShell.customer;
     unawaited(SettingsStore.clearSessionEmail());
     notifyListeners();
   }

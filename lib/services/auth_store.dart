@@ -57,11 +57,19 @@ class AuthStore {
   /// [agreedToTermsAt] records when the user accepted the Terms of Service
   /// and Privacy Policy; it is persisted as `agreedToTermsAt` (ISO 8601) in
   /// the account JSON so consent is auditable later.
+  ///
+  /// [role] is the portal role for the account ('customer' | 'vet'). Only
+  /// 'vet' is privileged — anything else normalizes to 'customer', so a
+  /// crafted value can never escalate an account into the vet portal.
+  /// Registration UI never passes this (staff login is dev-only); it exists
+  /// so tests and dev builds can exercise the vet shell before the backend
+  /// lands with `profiles.role`.
   static Future<String?> register({
     required String name,
     required String email,
     required String password,
     DateTime? agreedToTermsAt,
+    String role = 'customer',
   }) async {
     final cleanName = name.trim();
     final cleanEmail = _norm(email);
@@ -82,6 +90,7 @@ class AuthStore {
       'name': cleanName,
       'password': password,
       'createdAt': DateTime.now().toIso8601String(),
+      'role': role == 'vet' ? 'vet' : 'customer',
       if (agreedToTermsAt != null)
         'agreedToTermsAt': agreedToTermsAt.toIso8601String(),
     };
@@ -116,6 +125,14 @@ class AuthStore {
   static Future<String?> displayName(String email) async {
     final users = await _readUsers();
     return users[_norm(email)]?['name'];
+  }
+
+  /// The stored portal role for [email]: 'vet' for staff, 'customer' for
+  /// everyone else. Unknown emails (including the demo account, which is
+  /// never stored here) are customer-side.
+  static Future<String> roleFor(String email) async {
+    final users = await _readUsers();
+    return users[_norm(email)]?['role'] == 'vet' ? 'vet' : 'customer';
   }
 
   /// Password rule, shared by the create-account form and [register]:

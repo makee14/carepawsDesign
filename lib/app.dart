@@ -86,7 +86,7 @@ class _SplashScreenState extends State<SplashScreen>
       } else {
         unawaited(
           navigator.pushAndRemoveUntil(
-            appRoute(const RootShell()),
+            appRoute(postAuthShell(store)),
             (_) => false,
           ),
         );
@@ -130,7 +130,7 @@ class _SplashScreenState extends State<SplashScreen>
                 done();
               } else {
                 navigator.pushAndRemoveUntil(
-                  appRoute(const RootShell()),
+                  appRoute(postAuthShell(store)),
                   (_) => false,
                 );
               }
@@ -192,6 +192,41 @@ class LogoMark extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Builds the vet portal shell.
+///
+/// Registered once by the vet entry point (`lib/main_vet.dart`). Null in the
+/// customer build — this file must stay vet-free so the customer APK/IPA
+/// tree-shakes the portal out (see `lib/flavor.dart`).
+typedef VetShellFactory = Widget Function();
+
+VetShellFactory? vetShellFactory;
+
+/// Picks the post-auth shell for [store]: the vet shell for a signed-in vet
+/// (once the vet entry point registers its factory), the customer shell
+/// otherwise. The customer binary never registers the factory, so a vet
+/// credential there still signs in but lands on the customer shell — vet UI
+/// simply does not exist in that binary.
+Widget postAuthShell(AppStore store) {
+  if (store.shell == AppShell.vet) {
+    final build = vetShellFactory;
+    if (build != null) return build();
+  }
+  return const RootShell();
+}
+
+/// Route guard for vet-only destinations.
+///
+/// Every navigation to a vet screen — tab taps, buttons, deep links, crafted
+/// pushes — resolves its page through here. A signed-in vet gets the vet
+/// page; anyone else is redirected to the customer home (tab reset to Home).
+/// UI hiding is not the boundary; this function is. Call it from event
+/// handlers, not during build: the tab reset notifies listeners.
+Widget guardVetRoute(AppStore store, Widget vetPage) {
+  if (store.signedIn && store.shell == AppShell.vet) return vetPage;
+  store.tab = 0;
+  return const RootShell();
 }
 
 /// Bottom tab scaffold: HOME · CHATS · APPOINTMENTS · SHOPS · PROFILE.
