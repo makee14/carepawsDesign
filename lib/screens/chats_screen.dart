@@ -176,6 +176,8 @@ class _TeamCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final p = context.p;
+    // AX5: name/role wrap to 2 lines instead of hiding. Scale-gated for 1x.
+    final big = MediaQuery.textScalerOf(context).scale(1) > 1.0;
     return Semantics(
       button: true,
       label: '${member.name}, ${member.role.label}',
@@ -210,7 +212,7 @@ class _TeamCard extends StatelessWidget {
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
                   ).copyWith(color: p.text),
-                  maxLines: 1,
+                  maxLines: big ? 2 : 1,
                   overflow: TextOverflow.ellipsis,
                   textAlign: TextAlign.center,
                 ),
@@ -219,7 +221,7 @@ class _TeamCard extends StatelessWidget {
                   member.role.label,
                   style: const TextStyle(fontSize: 12)
                       .copyWith(color: p.textSecondary),
-                  maxLines: 1,
+                  maxLines: big ? 2 : 1,
                   overflow: TextOverflow.ellipsis,
                   textAlign: TextAlign.center,
                 ),
@@ -431,6 +433,9 @@ class _ThreadRow extends StatelessWidget {
         ? 'Answers feeding, grooming, vaccines and general care.'
         : (store.offlineNote ??
               'Replies in about 10 minutes during clinic hours.');
+    // AX5: thread titles wrap to 2 lines and the preview/badge reflow instead
+    // of hiding behind "CarePa…". Scale-gated so 1x is byte-identical.
+    final big = MediaQuery.textScalerOf(context).scale(1) > 1.0;
 
     return Semantics(
       button: true,
@@ -476,7 +481,7 @@ class _ThreadRow extends StatelessWidget {
                             child: Text(
                               thread.title,
                               style: Type.headline(p),
-                              maxLines: 1,
+                              maxLines: big ? 2 : 1,
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
@@ -495,8 +500,8 @@ class _ThreadRow extends StatelessWidget {
                       Text(
                         preview,
                         style: Type.footnote(p),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
+                        maxLines: big ? null : 2,
+                        overflow: big ? null : TextOverflow.ellipsis,
                       ),
                       if (thread.isAi || thread.badge != null) ...[
                         const SizedBox(height: 6),
@@ -518,8 +523,10 @@ class _ThreadRow extends StatelessWidget {
                                     child: Text(
                                       thread.badge!,
                                       style: Type.caption(p),
-                                      maxLines: 2,
-                                      overflow: TextOverflow.ellipsis,
+                                      maxLines: big ? null : 2,
+                                      overflow: big
+                                          ? null
+                                          : TextOverflow.ellipsis,
                                     ),
                                   ),
                                 ],

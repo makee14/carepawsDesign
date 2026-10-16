@@ -91,7 +91,7 @@ class _PromoCarouselState extends State<PromoCarousel> {
     // AX5: the card grows with Dynamic Type instead of clipping — 140pt
     // cannot fit 3.2x title/subtitle/CTA text.
     final scale = MediaQuery.textScalerOf(context).scale(1);
-    final cardH = 140.0 * scale.clamp(1.0, 1.8);
+    final cardH = 140.0 * scale.clamp(1.0, 2.6);
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -184,9 +184,43 @@ class _PromoCard extends StatelessWidget {
                 // always keeps the majority of the width. At normal sizes the
                 // pill hugs its content on one line.
                 final scale = MediaQuery.textScalerOf(context).scale(1);
-                final maxPillW = scale > 1.3
-                    ? c.maxWidth * 0.42
-                    : double.infinity;
+                // AX5: side-by-side cannot fit 3.2x title + CTA — stack the
+                // pill under the text so every label renders whole instead of
+                // "Boo/k …". The Row path below is pixel-identical at 1x.
+                final big = scale > 1.3;
+                final title = Text(
+                  promo.title,
+                  style: Type.title3(p).copyWith(color: CupertinoColors.white),
+                  maxLines: big ? 3 : 2,
+                  overflow: TextOverflow.ellipsis,
+                );
+                final subtitle = Text(
+                  promo.subtitle,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: Color(0xE6FFFFFF),
+                  ),
+                  maxLines: big ? 3 : 2,
+                  overflow: TextOverflow.ellipsis,
+                );
+                final pill = _CtaPill(
+                  label: promo.ctaLabel,
+                  onTap: onCta == null ? null : () => onCta!(promo),
+                );
+                if (big) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      title,
+                      const SizedBox(height: 2),
+                      subtitle,
+                      const SizedBox(height: 12),
+                      pill,
+                    ],
+                  );
+                }
+                final maxPillW = double.infinity;
                 return Row(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
@@ -194,34 +228,13 @@ class _PromoCard extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            promo.title,
-                            style: Type.title3(p)
-                                .copyWith(color: CupertinoColors.white),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            promo.subtitle,
-                            style: const TextStyle(
-                              fontSize: 13,
-                              color: Color(0xE6FFFFFF),
-                            ),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ],
+                        children: [title, const SizedBox(height: 2), subtitle],
                       ),
                     ),
                     const SizedBox(width: 12),
                     ConstrainedBox(
                       constraints: BoxConstraints(maxWidth: maxPillW),
-                      child: _CtaPill(
-                        label: promo.ctaLabel,
-                        onTap: onCta == null ? null : () => onCta!(promo),
-                      ),
+                      child: pill,
                     ),
                   ],
                 );

@@ -60,7 +60,9 @@ class _ShopsScreenState extends State<ShopsScreen> {
                     children: [
                       Expanded(
                         child: CupertinoSearchTextField(
-                          placeholder: 'Search food, medicine, grooming',
+                          // Short enough to render whole in the field: the
+                          // longer hint truncated mid-phrase ("…medicine,").
+                          placeholder: 'Search food, medicine',
                           style: Type.body(p),
                           placeholderStyle: Type.body(p)
                               .copyWith(color: p.textSecondary),
@@ -91,8 +93,14 @@ class _ShopsScreenState extends State<ShopsScreen> {
                     ],
                   ),
                   const SizedBox(height: 12),
+                  // AX5: the filter row grows with Dynamic Type so the pill
+                  // labels never paint outside their pills. 1x is untouched.
                   SizedBox(
-                    height: 38,
+                    height:
+                        38 *
+                        MediaQuery.textScalerOf(context)
+                            .scale(1)
+                            .clamp(1.0, 1.6),
                     child: ListView(
                       scrollDirection: Axis.horizontal,
                       children: [
@@ -184,10 +192,14 @@ class _ShopsScreenState extends State<ShopsScreen> {
                 // block scales with Dynamic Type so the card grows at AX5
                 // instead of clipping (sweep gate); Stream A re-tunes this
                 // against its measured card at merge if needed.
+                // AX5: ProductCard lets name/tagline/price wrap to extra lines
+                // above 1.3x — the budget grows by ~52pt (one extra line each)
+                // so the fixed grid cells fit the reflowed text.
                 final textScale = MediaQuery.textScalerOf(context)
                     .scale(1)
                     .clamp(1.0, 3.2);
-                final cellH = cardW * 3 / 4 + 106 * textScale;
+                final textBlock = (textScale > 1.3 ? 158 : 106) * textScale;
+                final cellH = cardW * 3 / 4 + textBlock;
                 return SliverPadding(
                   padding: EdgeInsets.fromLTRB(
                     T.s16,
