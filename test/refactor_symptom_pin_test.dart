@@ -33,80 +33,83 @@ void main() {
     expect(r, contains(escalation), reason: trigger);
   }
 
-  test('every symptom row answers with its own label, follow-up, escalation', () {
-    pinsSymptom(
-      'there is blood on his paw',
-      'bleeding',
-      'where it',
-      'more than a few drops',
-    );
-    pinsSymptom(
-      'panting a lot',
-      'breathing changes',
-      'gums look their normal colour',
-      'struggling to breathe',
-    );
-    pinsSymptom(
-      'vomiting twice today',
-      'vomiting',
-      'how often it',
-      'keep water down',
-    );
-    pinsSymptom(
-      'diarrhea since morning',
-      'diarrhea',
-      'still drinking',
-      'blood in it',
-    );
-    pinsSymptom(
-      'limping on his leg',
-      'limping',
-      'which leg it is',
-      'bear weight at all',
-    );
-    pinsSymptom(
-      'scratching nonstop',
-      'scratching',
-      'redness or hair loss',
-      'If it spreads',
-    );
-    pinsSymptom(
-      'not eating today',
-      'appetite change',
-      'water intake is normal',
-      'two meals',
-    );
-    pinsSymptom(
-      'lethargic all day',
-      'low energy',
-      'eating and drinking normally',
-      'limp or unresponsive',
-    );
-    pinsSymptom(
-      'coughing at night',
-      'coughing',
-      'nasal discharge',
-      'have a listen soon',
-    );
-    pinsSymptom(
-      'eye is red',
-      'eye irritation',
-      'discharge or swelling',
-      'Eyes can turn quickly',
-    );
-    pinsSymptom(
-      'ear smells bad',
-      'ear bother',
-      'odour or discharge',
-      'shaking their head a lot',
-    );
-    pinsSymptom(
-      'lump on his side',
-      'swelling',
-      'how quickly it appeared',
-      'growing fast',
-    );
-  });
+  test(
+    'every symptom row answers with its own label, follow-up, escalation',
+    () {
+      pinsSymptom(
+        'there is blood on his paw',
+        'bleeding',
+        'where it',
+        'more than a few drops',
+      );
+      pinsSymptom(
+        'panting a lot',
+        'breathing changes',
+        'gums look their normal colour',
+        'struggling to breathe',
+      );
+      pinsSymptom(
+        'vomiting twice today',
+        'vomiting',
+        'how often it',
+        'keep water down',
+      );
+      pinsSymptom(
+        'diarrhea since morning',
+        'diarrhea',
+        'still drinking',
+        'blood in it',
+      );
+      pinsSymptom(
+        'limping on his leg',
+        'limping',
+        'which leg it is',
+        'bear weight at all',
+      );
+      pinsSymptom(
+        'scratching nonstop',
+        'scratching',
+        'redness or hair loss',
+        'If it spreads',
+      );
+      pinsSymptom(
+        'not eating today',
+        'appetite change',
+        'water intake is normal',
+        'two meals',
+      );
+      pinsSymptom(
+        'lethargic all day',
+        'low energy',
+        'eating and drinking normally',
+        'limp or unresponsive',
+      );
+      pinsSymptom(
+        'coughing at night',
+        'coughing',
+        'nasal discharge',
+        'have a listen soon',
+      );
+      pinsSymptom(
+        'eye is red',
+        'eye irritation',
+        'discharge or swelling',
+        'Eyes can turn quickly',
+      );
+      pinsSymptom(
+        'ear smells bad',
+        'ear bother',
+        'odour or discharge',
+        'shaking their head a lot',
+      );
+      pinsSymptom(
+        'lump on his side',
+        'swelling',
+        'how quickly it appeared',
+        'growing fast',
+      );
+    },
+  );
 
   test('first matching row wins when keywords overlap', () {
     // 'bleed' (row 0) beats 'paw' (limping's row).

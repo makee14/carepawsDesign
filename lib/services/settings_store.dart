@@ -1,4 +1,3 @@
-
 import 'prefs.dart';
 
 import '../design/theme.dart' show ThemeMode;
