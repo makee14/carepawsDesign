@@ -190,7 +190,7 @@ void main() {
       final s = AppStore(now: fixedNow());
       final first = s.upcomingAppointments.first;
       // Jump past the first visit's end: it leaves the upcoming list.
-      s.advanceClock(
+      s.now = s.now.add(
         first.end.difference(fixedNow()) + const Duration(minutes: 1),
       );
       expect(s.upcomingAppointments.any((a) => a.id == first.id), isFalse);

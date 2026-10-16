@@ -495,7 +495,7 @@ void main() {
       await pumpShell(tester, store: s);
       expect(find.text('in 59m'), findsWidgets);
 
-      s.advanceClock(const Duration(minutes: 2));
+      s.now = s.now.add(const Duration(minutes: 2));
       await tester.pump();
       expect(find.text('in 57m'), findsWidgets);
       expect(find.text('in 59m'), findsNothing);

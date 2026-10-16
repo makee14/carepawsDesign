@@ -31,15 +31,12 @@ class AppStore extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Test/demo hook for deterministic screenshots.
-  void advanceClock(Duration d) => now = _now.add(d);
-
   Timer? _clock;
 
   /// Starts the wall clock: `now` re-reads the device time every 30s so live
   /// countdowns, open/closed state and the upcoming/past partition stay
   /// current without user interaction. Called once from `main()`; tests drive
-  /// time with [advanceClock] instead, so the timer never leaks into the test
+  /// time with the [now] setter instead, so the timer never leaks into the test
   /// harness (a pending periodic timer fails `testWidgets` teardown).
   void startClock() {
     _clock ??= Timer.periodic(const Duration(seconds: 30), (_) {
@@ -337,7 +334,8 @@ class AppStore extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Used by the zero-pet empty state / demo reset.
+  /// Empties the pet list — used by the zero-pet empty state and by account
+  /// data deletion on the privacy screen.
   void clearPets() {
     pets = const [];
     _savePets();
@@ -896,29 +894,6 @@ class AppStore extends ChangeNotifier {
     healthResults =
         await DatasetStore.readHealthChecks(account) ??
         const <HealthCheckResult>[];
-  }
-
-  /// Demo reset path: restores the seed dataset, but ONLY for the demo
-  /// account. A registered account keeps its own data — the seeds are
-  /// demo-only and must never resurrect under a real account.
-  void reset() {
-    cart = const [];
-    if (signedIn && accountName == null) {
-      pets = Seed.pets;
-      appointments = Seed.appointments;
-      orders = Seed.orders;
-      messages = Seed.messages;
-      reminders = Seed.reminders;
-      // Persist the reset state too: without this a cold start after a demo
-      // reset would resurrect the pre-reset data from disk.
-      _savePets();
-      _saveAppointments();
-      _saveOrders();
-      _saveMessages();
-      _saveReminders();
-    }
-    _saveCart();
-    notifyListeners();
   }
 }
 

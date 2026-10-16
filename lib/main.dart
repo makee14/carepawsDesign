@@ -161,9 +161,6 @@ class _CarePawsAppState extends State<CarePawsApp> with WidgetsBindingObserver {
   }
 }
 
-/// Test helper: a store with a deterministic clock.
-AppStore demoStore({DateTime? now}) => AppStore(now: now);
-
 /// Routes to a single screen for visual review / screenshots.
 class _ShotHost extends StatefulWidget {
   const _ShotHost();

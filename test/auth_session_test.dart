@@ -92,29 +92,6 @@ void main() {
         expect(store.pets, isNotEmpty);
       },
     );
-
-    test('reset() on a registered account does not resurrect seeds', () async {
-      final store = _store();
-      await _registerAndSignIn(store);
-      store.reset();
-
-      expect(store.pets, isEmpty);
-      expect(store.appointments, isEmpty);
-      expect(store.orders, isEmpty);
-      expect(store.messages, isEmpty);
-    });
-
-    test('reset() on the demo account restores the seeds', () async {
-      final store = _store();
-      expect(
-        await store.signIn(AppStore.demoEmail, AppStore.demoPassword),
-        isTrue,
-      );
-      store.reset();
-
-      expect(store.pets, isNotEmpty);
-      expect(store.messages, isNotEmpty);
-    });
   });
 
   group('B16 — auth session persists', () {
