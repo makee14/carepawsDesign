@@ -14,6 +14,7 @@ import '../services/dataset_store.dart';
 import '../services/photo_store.dart';
 import '../services/settings_store.dart';
 import '../services/staff_replies.dart';
+import '../services/vet_push_service.dart';
 import 'profile_store.dart';
 
 /// Which shell the signed-in account gets after auth.
@@ -31,11 +32,23 @@ enum AppShell { customer, vet }
 /// Single source of truth for the whole app. A lightweight ChangeNotifier is
 /// enough here — the prototype has no need for a heavier state package.
 class AppStore extends ChangeNotifier {
-  AppStore({AiService? ai, DateTime? now})
+  AppStore({AiService? ai, DateTime? now, VetPushDelivery? pushDelivery})
     : ai = ai ?? AiService(),
-      _now = now ?? DateTime.now();
+      _now = now ?? DateTime.now() {
+    vetPush = VetPushService(
+      clock: () => _now,
+      isVetDevice: () => shell == AppShell.vet,
+      delivery: pushDelivery,
+    );
+  }
 
   final AiService ai;
+
+  /// Staff push alerts (Task 8): trigger + quiet-hours digest logic with a
+  /// stubbed delivery seam. The service reads [shell] for its role gate, so
+  /// alerts only ever target vet-role devices.
+  late final VetPushService vetPush;
+
   DateTime _now;
   DateTime get now => _now;
   set now(DateTime v) {
@@ -53,6 +66,8 @@ class AppStore extends ChangeNotifier {
   void startClock() {
     _clock ??= Timer.periodic(const Duration(seconds: 30), (_) {
       _now = DateTime.now();
+      // Overnight digest flushes once the clinic is open again.
+      vetPush.checkDigestDue();
       notifyListeners();
     });
   }
@@ -66,6 +81,7 @@ class AppStore extends ChangeNotifier {
   @override
   void dispose() {
     stopClock();
+    vetPush.dispose();
     super.dispose();
   }
 
@@ -388,6 +404,19 @@ class AppStore extends ChangeNotifier {
   void addAppointment(Appointment a) {
     appointments = [a, ...appointments];
     _saveAppointments();
+    // New demand for the vet queue → staff push alert (role-gated, with the
+    // quiet-hours digest rule, inside the service).
+    if (a.status == ApptStatus.requestPending) {
+      vetPush.raise(
+        VetAlert.appointmentRequest(
+          appointmentId: a.id,
+          petName: pet(a.petId)?.name ?? 'A pet',
+          serviceName: serviceOf(a.serviceId).name,
+          customerName: ownerFirstName,
+          at: now,
+        ),
+      );
+    }
     notifyListeners();
   }
 
@@ -736,6 +765,18 @@ class AppStore extends ChangeNotifier {
   void addOrder(Order o) {
     orders = [o, ...orders];
     _saveOrders();
+    // A paid order waits on prep — staff push alert, same rules as above.
+    if (o.status == OrderStatus.paid) {
+      vetPush.raise(
+        VetAlert.orderPlaced(
+          orderId: o.id,
+          pickupCode: o.pickupCode,
+          itemCount: o.lines.fold(0, (n, l) => n + l.qty),
+          customerName: ownerFirstName,
+          at: o.placedAt,
+        ),
+      );
+    }
     notifyListeners();
   }
 
@@ -749,7 +790,43 @@ class AppStore extends ChangeNotifier {
   void pushMessage(ChatMessage m) {
     messages = [...messages, m];
     _saveMessages();
+    _raiseVetAlertFor(m);
     notifyListeners();
+  }
+
+  /// Vet push trigger (Task 8): alerts fire where queue items are created,
+  /// never by polling the queue.
+  ///
+  /// - A customer-shared triage handoff → one urgent alert. The message IS
+  ///   the sharing record (see the queue contract), and [handOffToClinic] is
+  ///   its only creator — an unshared triage result can never alert.
+  /// - A customer reply in a non-AI thread → one normal alert (a chat waiting
+  ///   on staff). AI-thread traffic, staff/AI replies and system messages
+  ///   never alert — they are not new demand for the vet queue.
+  void _raiseVetAlertFor(ChatMessage m) {
+    if (m.kind == ChatKind.triageHandoff) {
+      vetPush.raise(
+        VetAlert.triageHandoff(
+          messageId: m.id,
+          petName: m.petId == null ? 'A pet' : (pet(m.petId!)?.name ?? 'A pet'),
+          summary: m.triageSummary ?? m.text,
+          at: m.at,
+        ),
+      );
+      return;
+    }
+    if (!m.sentByMe || m.kind == ChatKind.system) return;
+    final isAi = Seed.threads.any((t) => t.id == m.threadId && t.isAi);
+    if (isAi) return;
+    vetPush.raise(
+      VetAlert.chatReply(
+        messageId: m.id,
+        threadId: m.threadId,
+        customerName: ownerFirstName,
+        snippet: m.text.isEmpty ? 'Photo' : m.text,
+        at: m.at,
+      ),
+    );
   }
 
   List<ChatMessage> thread(String id) =>
@@ -965,6 +1042,8 @@ class AppStore extends ChangeNotifier {
       await _rehydrate(accountEmail!, registered: registeredName != null);
       await SettingsStore.writeSessionEmail(accountEmail!);
       await _loadOwnerProfile();
+      // A vet signing in after open picks up anything batched overnight.
+      vetPush.checkDigestDue();
     } else {
       accountName = null;
       accountEmail = null;
