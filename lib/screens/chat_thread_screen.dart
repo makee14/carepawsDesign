@@ -163,6 +163,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
         petId: pet?.id,
       ),
     );
+    // The vet has seen their own reply — move the vet inbox's read marker so
+    // it never counts as unread.
+    if (store.shell == AppShell.vet) {
+      store.markVetThreadRead(widget.threadId);
+    }
     _scrollToEnd();
 
     final reply = _isAi
@@ -298,6 +303,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
         petId: pet?.id,
       ),
     );
+    if (store.shell == AppShell.vet) {
+      store.markVetThreadRead(widget.threadId);
+    }
     _scrollToEnd();
     final reply =
         '${_thanks(store)}! ${composeStaffReply(role: widget.replyRole, userText: '', petName: pet?.name ?? 'your pet', clinicOpen: store.staffOnline(), photoSent: true)}';

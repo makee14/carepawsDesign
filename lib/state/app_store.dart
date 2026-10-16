@@ -582,6 +582,33 @@ class AppStore extends ChangeNotifier {
   List<ChatMessage> thread(String id) =>
       messages.where((m) => m.threadId == id).toList();
 
+  /// Per-thread read marker for the vet inbox: the [now] of the newest
+  /// message the vet has seen in each thread. Unset means never opened — every
+  /// incoming message counts as unread. Kept in memory (like the vet shell
+  /// itself): it tracks a viewing session, not account data.
+  final Map<String, DateTime> _vetReadAt = {};
+
+  /// Unread count for the vet inbox in [threadId]: customer-side messages —
+  /// customer-sent, or the customer-shared triage handoff (the sharing record
+  /// itself, per the queue's contract) — newer than the vet's last read
+  /// marker. System messages and staff replies never count.
+  int vetUnread(String threadId) {
+    final readAt = _vetReadAt[threadId];
+    return thread(threadId).where((m) {
+      if (m.kind == ChatKind.system) return false;
+      if (!m.sentByMe && m.kind != ChatKind.triageHandoff) return false;
+      return readAt == null || m.at.isAfter(readAt);
+    }).length;
+  }
+
+  /// Marks [threadId] as read by the vet up to [now]. Called when the vet
+  /// opens a thread, and when the vet sends in one (the vet has obviously
+  /// seen their own reply, so it must not inflate the badge).
+  void markVetThreadRead(String threadId) {
+    _vetReadAt[threadId] = now;
+    notifyListeners();
+  }
+
   // ------------------------------------------------------------- settings
   void setLanguage(String l) {
     language = l;
