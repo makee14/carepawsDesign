@@ -161,7 +161,8 @@ class _Segmented extends StatelessWidget {
                     onTap: () => onChanged(i),
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: T.pressMs),
-                      height: 34,
+                      // HIG 44pt minimum tap target per segment.
+                      height: 44,
                       alignment: Alignment.center,
                       decoration: BoxDecoration(
                         color: i == index ? p.surface : const Color(0x00000000),
@@ -178,6 +179,8 @@ class _Segmented extends StatelessWidget {
                       ),
                       child: Text(
                         labels[i],
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: Type.footnoteEmph(p).copyWith(
                           color: i == index ? p.text : p.textSecondary,
                         ),

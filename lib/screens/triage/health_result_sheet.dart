@@ -144,6 +144,20 @@ class _SectionTileState extends State<_SectionTile> {
   Widget build(BuildContext context) {
     final p = context.p;
     final reduce = reduceMotionOf(context);
+    // The expandable body, shared by the animated and reduced-motion paths.
+    // Under reduced motion the AnimatedSize is skipped entirely — a
+    // zero-duration AnimatedSize completes its controller inside
+    // performLayout and throws ("mutated in its own performLayout").
+    final body = _open
+        ? Container(
+            width: double.infinity,
+            padding: const EdgeInsets.fromLTRB(T.s16, 0, T.s16, T.s16),
+            child: Text(
+              widget.section.body,
+              style: Type.callout(p).copyWith(color: p.textSecondary),
+            ),
+          )
+        : const SizedBox(width: double.infinity, height: 0);
     return Container(
       margin: const EdgeInsets.only(top: T.s8),
       decoration: BoxDecoration(
@@ -175,27 +189,13 @@ class _SectionTileState extends State<_SectionTile> {
             ),
           ),
           ClipRect(
-            child: AnimatedSize(
-              duration: reduce
-                  ? Duration.zero
-                  : const Duration(milliseconds: 200),
-              curve: Curves.easeInOut,
-              child: _open
-                  ? Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.fromLTRB(
-                        T.s16,
-                        0,
-                        T.s16,
-                        T.s16,
-                      ),
-                      child: Text(
-                        widget.section.body,
-                        style: Type.callout(p).copyWith(color: p.textSecondary),
-                      ),
-                    )
-                  : const SizedBox(width: double.infinity, height: 0),
-            ),
+            child: reduce
+                ? body
+                : AnimatedSize(
+                    duration: const Duration(milliseconds: 200),
+                    curve: Curves.easeInOut,
+                    child: body,
+                  ),
           ),
         ],
       ),

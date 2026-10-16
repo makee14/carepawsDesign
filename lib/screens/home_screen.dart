@@ -113,6 +113,10 @@ String _greetingTitle(AppStore store) {
 
 /// Greeting row: greeting left, notification + search icons right — one
 /// vertically-centered 48pt row. The "Biscuit's visit…" subtitle is gone.
+///
+/// The height is a *minimum*, not a fixed box: at AX5 (3.2x) the title2
+/// greeting needs ~84pt, and a fixed 48pt row would clip it. At 1x this is
+/// pixel-identical to the old fixed height.
 class _GreetingRow extends StatelessWidget {
   const _GreetingRow({required this.store});
   final AppStore store;
@@ -120,8 +124,8 @@ class _GreetingRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final p = context.p;
-    return SizedBox(
-      height: T.tap,
+    return ConstrainedBox(
+      constraints: const BoxConstraints(minHeight: T.tap),
       child: Row(
         children: [
           Expanded(

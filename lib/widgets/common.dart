@@ -819,7 +819,9 @@ class FilterPill extends StatelessWidget {
           scale: 0.95,
           child: AnimatedContainer(
             duration: const Duration(milliseconds: T.pressMs),
-            constraints: const BoxConstraints(minHeight: 36),
+            // HIG 44pt minimum tap target, shared by Shop / Add pet /
+            // Book flow / Pet profile filter rows.
+            constraints: const BoxConstraints(minHeight: 44),
             padding: const EdgeInsets.symmetric(horizontal: 14),
             decoration: BoxDecoration(
               color: selected ? p.primaryFill : p.surface,
@@ -1220,7 +1222,13 @@ class OwnerAvatar extends StatelessWidget {
       shape: BoxShape.circle,
       border: Border.all(color: p.accent.withValues(alpha: 0.35), width: 1.5),
     ),
-    child: Text(text, style: Type.title2(p).copyWith(color: p.primaryFill)),
+    // A monogram is a graphic, not content text (the semantics label carries
+    // the meaning): like an icon it keeps its drawn size at any Dynamic Type.
+    child: Text(
+      text,
+      textScaler: TextScaler.noScaling,
+      style: Type.title2(p).copyWith(color: p.primaryFill),
+    ),
   );
 }
 
@@ -1408,6 +1416,8 @@ class StaffAvatar extends StatelessWidget {
         ),
         child: Text(
           initials,
+          // Monogram as graphic: fixed drawn size at any Dynamic Type.
+          textScaler: TextScaler.noScaling,
           style: TextStyle(
             fontSize: size * 0.34,
             fontWeight: FontWeight.w700,

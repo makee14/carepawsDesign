@@ -410,15 +410,14 @@ class LargeTitleBar extends StatelessWidget {
   final String title;
   final bool automaticallyImplyLeading;
 
-  /// Height of the collapsed bar, matching [DetailNavBar].
-  static const collapsedHeight = 44.0;
-
-  /// Extra room the large title needs beyond the collapsed bar.
-  static const expandedExtra = 20.0;
-
   @override
   Widget build(BuildContext context) {
     final p = context.p;
+    // AX5: the 34pt large title renders ~131pt tall at 3.2x — the fixed
+    // 64pt header would clip it. The delegate's extents grow with Dynamic
+    // Type so the title always fits; at 1x this is pixel-identical.
+    final textScale =
+        MediaQuery.textScalerOf(context).scale(1).clamp(1.0, 3.2);
     return SliverPersistentHeader(
       pinned: true,
       delegate: _LargeTitleDelegate(
@@ -427,6 +426,7 @@ class LargeTitleBar extends StatelessWidget {
         divider: p.divider,
         textStyle: Type.largeTitle(p),
         topPadding: MediaQuery.paddingOf(context).top,
+        textScale: textScale,
       ),
     );
   }
@@ -439,6 +439,7 @@ class _LargeTitleDelegate extends SliverPersistentHeaderDelegate {
     required this.divider,
     required this.textStyle,
     required this.topPadding,
+    required this.textScale,
   });
 
   final String title;
@@ -449,15 +450,35 @@ class _LargeTitleDelegate extends SliverPersistentHeaderDelegate {
   /// Passed in by the widget — a delegate has no [BuildContext] to read this.
   final double topPadding;
 
+  /// Effective Dynamic Type scale (1.0–3.2), passed in like [topPadding].
+  final double textScale;
+
   static const _large = 34.0;
   static const _small = 17.0;
 
-  @override
-  double get minExtent => topPadding + LargeTitleBar.collapsedHeight;
+  /// Scaled line heights — the Text widget applies [textScale] to the
+  /// fontSize, so the extents must fit the scaled text, not the 1x metrics.
+  double get _largeH => _large * textScale * 1.2;
+  double get _smallH => _small * textScale * 1.2;
+
+  /// Collapsed bar fits the small title with 8pt breathing room each side;
+  /// never smaller than the 1x 44pt bar.
+  double get _barH => math.max(44.0, _smallH + 16);
+
+  /// The original 64pt header's rhythm: 12pt above the 40.8pt title,
+  /// 11.2pt below. The scaled header keeps that rhythm at any size and is
+  /// exactly 64pt at 1x.
+  static const _titlePadTop = 12.0;
+  static const _titlePadBottom = 11.2;
 
   @override
+  double get minExtent => topPadding + _barH;
+
+  /// Expanded header fits the large title, never smaller than the 1x 64pt
+  /// header (pixel-identical at 1x).
+  @override
   double get maxExtent =>
-      topPadding + LargeTitleBar.collapsedHeight + LargeTitleBar.expandedExtra;
+      topPadding + math.max(64.0, _titlePadTop + _largeH + _titlePadBottom);
 
   @override
   Widget build(
@@ -466,15 +487,16 @@ class _LargeTitleDelegate extends SliverPersistentHeaderDelegate {
     bool overlapsContent,
   ) {
     final top = topPadding;
-    final delta = LargeTitleBar.expandedExtra;
+    final delta = maxExtent - minExtent;
     final t = delta <= 0 ? 1.0 : (shrinkOffset / delta).clamp(0.0, 1.0);
 
     final size = _large + (_small - _large) * t;
     // Expanded: the title sits one 8pt grid step below the status bar (was 4pt,
-    // which read as crowded). Collapsed: it is centred in the 44pt bar, the
-    // way a normal nav bar title is.
+    // which read as crowded). Collapsed: it is centred in the bar, the way a
+    // normal nav bar title is. The centering uses the font size (not the line
+    // height) to stay pixel-identical with the original at 1x.
     final yExpanded = top + 12;
-    final yCollapsed = top + (LargeTitleBar.collapsedHeight - _small) / 2 - 3;
+    final yCollapsed = top + (_barH - _small * textScale) / 2 - 3;
     final y = yExpanded + (yCollapsed - yExpanded) * t;
 
     return Container(
@@ -513,7 +535,8 @@ class _LargeTitleDelegate extends SliverPersistentHeaderDelegate {
       old.background != background ||
       old.divider != divider ||
       old.textStyle != textStyle ||
-      old.topPadding != topPadding;
+      old.topPadding != topPadding ||
+      old.textScale != textScale;
 }
 
 /// Shared route helper so every push feels the same — Apple-style.

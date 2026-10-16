@@ -92,7 +92,7 @@ class _ShopsScreenState extends State<ShopsScreen> {
                   ),
                   const SizedBox(height: 12),
                   SizedBox(
-                    height: 38,
+                    height: 44,
                     child: ListView(
                       scrollDirection: Axis.horizontal,
                       children: [
