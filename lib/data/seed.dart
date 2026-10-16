@@ -561,7 +561,7 @@ class Seed {
     Promo(
       id: 'promo-groom',
       title: 'Fresh cut season',
-      subtitle: 'Full grooms from ₱850',
+      subtitle: 'Full grooms from ₱1450',
       art: 4,
       ctaLabel: 'Book grooming',
       route: 'book',
