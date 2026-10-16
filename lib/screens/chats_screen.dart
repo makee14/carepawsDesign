@@ -210,7 +210,8 @@ class _TeamCard extends StatelessWidget {
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
                   ).copyWith(color: p.text),
-                  maxLines: 1,
+                  // Two lines at large Dynamic Type; one line at 1x.
+                  maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   textAlign: TextAlign.center,
                 ),
@@ -219,7 +220,8 @@ class _TeamCard extends StatelessWidget {
                   member.role.label,
                   style: const TextStyle(fontSize: 12)
                       .copyWith(color: p.textSecondary),
-                  maxLines: 1,
+                  // Two lines at large Dynamic Type; one line at 1x.
+                  maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   textAlign: TextAlign.center,
                 ),
@@ -476,7 +478,10 @@ class _ThreadRow extends StatelessWidget {
                             child: Text(
                               thread.title,
                               style: Type.headline(p),
-                              maxLines: 1,
+                              // Two lines at large Dynamic Type so the title
+                              // wraps instead of hiding behind "CarePa…".
+                              // One line at 1x — every title fits.
+                              maxLines: 2,
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
@@ -495,8 +500,9 @@ class _ThreadRow extends StatelessWidget {
                       Text(
                         preview,
                         style: Type.footnote(p),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
+                        // Unbounded: the preview is short (≤2 lines at 1x),
+                        // so 1x is untouched and AX5 reflows instead of
+                        // hiding the reply promise behind an ellipsis.
                       ),
                       if (thread.isAi || thread.badge != null) ...[
                         const SizedBox(height: 6),
@@ -515,11 +521,12 @@ class _ThreadRow extends StatelessWidget {
                                   ),
                                   const SizedBox(width: 4),
                                   Flexible(
+                                    // Unbounded: one line at 1x, so 1x is
+                                    // untouched and AX5 reflows instead of
+                                    // hiding the badge behind an ellipsis.
                                     child: Text(
                                       thread.badge!,
                                       style: Type.caption(p),
-                                      maxLines: 2,
-                                      overflow: TextOverflow.ellipsis,
                                     ),
                                   ),
                                 ],

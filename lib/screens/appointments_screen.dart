@@ -40,41 +40,41 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
               bottom: 56 + T.s16 + TabBarClearance.of(context),
             ),
             child: CustomScrollView(
-            slivers: [
-              const LargeTitleBar(title: 'Appointments'),
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(T.s16, 4, T.s16, 8),
-                  child: _Segmented(
-                    index: _seg,
-                    labels: const ['Upcoming', 'Past'],
-                    onChanged: (i) {
-                      HapticFeedback.selectionClick();
-                      setState(() => _seg = i);
-                    },
+              slivers: [
+                const LargeTitleBar(title: 'Appointments'),
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(T.s16, 4, T.s16, 8),
+                    child: _Segmented(
+                      index: _seg,
+                      labels: const ['Upcoming', 'Past'],
+                      onChanged: (i) {
+                        HapticFeedback.selectionClick();
+                        setState(() => _seg = i);
+                      },
+                    ),
                   ),
                 ),
-              ),
-              SliverPadding(
-                padding: const EdgeInsets.fromLTRB(
-                  T.s16,
-                  8,
-                  T.s16,
-                  // Content spacing only — FAB clearance is owned by the
-                  // viewport Padding above.
-                  T.s16,
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(
+                    T.s16,
+                    8,
+                    T.s16,
+                    // Content spacing only — FAB clearance is owned by the
+                    // viewport Padding above.
+                    T.s16,
+                  ),
+                  sliver: _seg == 0
+                      ? _UpcomingList(
+                          store: store,
+                          onBook: () => _book(context, store),
+                        )
+                      : _PastList(
+                          store: store,
+                          onBook: () => _book(context, store),
+                        ),
                 ),
-                sliver: _seg == 0
-                    ? _UpcomingList(
-                        store: store,
-                        onBook: () => _book(context, store),
-                      )
-                    : _PastList(
-                        store: store,
-                        onBook: () => _book(context, store),
-                      ),
-              ),
-            ],
+              ],
             ),
           ),
           // Circular booking FAB: bottom-right, floating above the tab bar.
@@ -161,7 +161,14 @@ class _Segmented extends StatelessWidget {
                     onTap: () => onChanged(i),
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: T.pressMs),
-                      height: 34,
+                      // AX5: the segment grows with Dynamic Type instead of
+                      // letting the label paint outside the 34pt box. 1x is
+                      // untouched.
+                      height:
+                          34 *
+                          MediaQuery.textScalerOf(context)
+                              .scale(1)
+                              .clamp(1.0, 1.6),
                       alignment: Alignment.center,
                       decoration: BoxDecoration(
                         color: i == index ? p.surface : const Color(0x00000000),

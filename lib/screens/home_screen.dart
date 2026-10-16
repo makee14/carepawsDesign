@@ -120,15 +120,18 @@ class _GreetingRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final p = context.p;
-    return SizedBox(
-      height: T.tap,
+    // AX5: the row grows with Dynamic Type instead of clipping the greeting
+    // mid-glyph, and the greeting may wrap to 2 lines instead of hiding the
+    // name behind an ellipsis. At 1x the 48pt minimum keeps it pixel-identical.
+    return ConstrainedBox(
+      constraints: const BoxConstraints(minHeight: T.tap),
       child: Row(
         children: [
           Expanded(
             child: Text(
               _greetingTitle(store),
               style: Type.title2(p),
-              maxLines: 1,
+              maxLines: 2,
               overflow: TextOverflow.ellipsis,
             ),
           ),

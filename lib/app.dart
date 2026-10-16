@@ -427,6 +427,9 @@ class LargeTitleBar extends StatelessWidget {
         divider: p.divider,
         textStyle: Type.largeTitle(p),
         topPadding: MediaQuery.paddingOf(context).top,
+        // AX5: the header's slot grows with Dynamic Type instead of clipping
+        // the large title mid-glyph. Clamped like the app-wide text scaler.
+        textScale: MediaQuery.textScalerOf(context).scale(1).clamp(1.0, 3.2),
       ),
     );
   }
@@ -439,6 +442,7 @@ class _LargeTitleDelegate extends SliverPersistentHeaderDelegate {
     required this.divider,
     required this.textStyle,
     required this.topPadding,
+    required this.textScale,
   });
 
   final String title;
@@ -449,15 +453,34 @@ class _LargeTitleDelegate extends SliverPersistentHeaderDelegate {
   /// Passed in by the widget — a delegate has no [BuildContext] to read this.
   final double topPadding;
 
+  /// Dynamic Type scale (1.0–3.2). The header's slot grows with it so the
+  /// large title is never clipped mid-glyph at AX5. At 1.0 every extent is
+  /// exactly the old constant, so 1x rendering is pixel-identical.
+  final double textScale;
+
   static const _large = 34.0;
   static const _small = 17.0;
 
   @override
-  double get minExtent => topPadding + LargeTitleBar.collapsedHeight;
+  double get minExtent {
+    // The collapsed bar grows when the scaled small title needs more room.
+    final need = topPadding + _small * textScale * 1.2 + 12;
+    return math.max(topPadding + LargeTitleBar.collapsedHeight, need);
+  }
 
   @override
-  double get maxExtent =>
-      topPadding + LargeTitleBar.collapsedHeight + LargeTitleBar.expandedExtra;
+  double get maxExtent {
+    final base =
+        topPadding +
+        LargeTitleBar.collapsedHeight +
+        LargeTitleBar.expandedExtra * textScale;
+    // At 1x the title is one line and `base` already fits it, exactly as
+    // before. Above 1x, reserve two scaled lines so a wrapping title
+    // ("Appoint/ments") is never clipped mid-glyph.
+    if (textScale <= 1.0) return base;
+    final need = topPadding + 12 + _large * textScale * 1.2 * 2 + 8;
+    return math.max(base, need);
+  }
 
   @override
   Widget build(
@@ -466,15 +489,18 @@ class _LargeTitleDelegate extends SliverPersistentHeaderDelegate {
     bool overlapsContent,
   ) {
     final top = topPadding;
-    final delta = LargeTitleBar.expandedExtra;
+    final delta = maxExtent - minExtent;
     final t = delta <= 0 ? 1.0 : (shrinkOffset / delta).clamp(0.0, 1.0);
 
-    final size = _large + (_small - _large) * t;
+    final large = _large * textScale;
+    final small = _small * textScale;
+    final size = large + (small - large) * t;
     // Expanded: the title sits one 8pt grid step below the status bar (was 4pt,
-    // which read as crowded). Collapsed: it is centred in the 44pt bar, the
-    // way a normal nav bar title is.
+    // which read as crowded). Collapsed: it is centred in the bar, the
+    // way a normal nav bar title is. Both track the scaled slot.
     final yExpanded = top + 12;
-    final yCollapsed = top + (LargeTitleBar.collapsedHeight - _small) / 2 - 3;
+    final barH = minExtent - top;
+    final yCollapsed = top + (barH - small) / 2 - 3;
     final y = yExpanded + (yCollapsed - yExpanded) * t;
 
     return Container(
@@ -487,7 +513,9 @@ class _LargeTitleDelegate extends SliverPersistentHeaderDelegate {
             top: y,
             child: Text(
               title,
-              maxLines: 1,
+              // Two lines at large Dynamic Type so "Appointments" wraps
+              // instead of hiding behind an ellipsis; one line at 1x.
+              maxLines: textScale > 1.0 ? 2 : 1,
               overflow: TextOverflow.ellipsis,
               style: textStyle.copyWith(fontSize: size, height: 1.2),
             ),
@@ -513,7 +541,8 @@ class _LargeTitleDelegate extends SliverPersistentHeaderDelegate {
       old.background != background ||
       old.divider != divider ||
       old.textStyle != textStyle ||
-      old.topPadding != topPadding;
+      old.topPadding != topPadding ||
+      old.textScale != textScale;
 }
 
 /// Shared route helper so every push feels the same — Apple-style.
@@ -959,7 +988,9 @@ bool isToday(DateTime a, DateTime b) =>
 bool clinicOpenAt(DateTime t) => Clinic.isOpenNow(t);
 
 String clinicStatusLine(DateTime t) {
-  if (Clinic.isOpenNow(t)) return 'Open now · until ${Clinic.closeTimeLabel} today';
+  if (Clinic.isOpenNow(t)) {
+    return 'Open now · until ${Clinic.closeTimeLabel} today';
+  }
   final o = Clinic.nextOpening(t);
   final today = DateTime(t.year, t.month, t.day);
   final sameDay =
@@ -969,4 +1000,3 @@ String clinicStatusLine(DateTime t) {
       : 'at ${Clinic.openTimeLabel} ${Clinic.weekdayName(o.weekday)}';
   return 'Closed now · opens $label';
 }
-

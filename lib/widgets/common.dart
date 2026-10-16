@@ -741,7 +741,10 @@ class StatusChip extends StatelessWidget {
                 color: fg ?? p.chipText,
                 fontWeight: bold ? FontWeight.w700 : FontWeight.w500,
               ),
-              maxLines: 1,
+              // Two lines at large Dynamic Type so chip labels ("Mon, 19 Oct
+              // · 9:00 AM", "AI · Always available") wrap instead of hiding
+              // behind an ellipsis. One line at 1x — every label fits.
+              maxLines: 2,
               overflow: TextOverflow.ellipsis,
             ),
           ),

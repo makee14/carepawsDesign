@@ -65,7 +65,9 @@ class ProductCard extends StatelessWidget {
                       fontWeight: FontWeight.w600,
                       color: p.text,
                     ),
-                    maxLines: 2,
+                    // Three lines at large Dynamic Type so the name reflows
+                    // instead of hiding behind "Grass-fed L…". Two lines at 1x.
+                    maxLines: 3,
                     overflow: TextOverflow.ellipsis,
                   ),
                   const SizedBox(height: 2),
@@ -73,7 +75,8 @@ class ProductCard extends StatelessWidget {
                     product.tagline,
                     style: Type.footnote(p)
                         .copyWith(fontSize: 12, color: p.textSecondary),
-                    maxLines: 1,
+                    // Two lines at large Dynamic Type; one line at 1x.
+                    maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
                   const SizedBox(height: T.s8),
@@ -87,7 +90,9 @@ class ProductCard extends StatelessWidget {
                             fontWeight: FontWeight.w600,
                             color: p.text,
                           ),
-                          maxLines: 1,
+                          // Two lines at large Dynamic Type so the price is
+                          // never hidden ("₱1,2…"). One line at 1x.
+                          maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),

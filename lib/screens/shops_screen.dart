@@ -60,7 +60,9 @@ class _ShopsScreenState extends State<ShopsScreen> {
                     children: [
                       Expanded(
                         child: CupertinoSearchTextField(
-                          placeholder: 'Search food, medicine, grooming',
+                          // Short enough to render whole in the field: the
+                          // longer hint truncated mid-phrase ("…medicine,").
+                          placeholder: 'Search food, medicine',
                           style: Type.body(p),
                           placeholderStyle: Type.body(p)
                               .copyWith(color: p.textSecondary),
@@ -91,8 +93,14 @@ class _ShopsScreenState extends State<ShopsScreen> {
                     ],
                   ),
                   const SizedBox(height: 12),
+                  // AX5: the filter row grows with Dynamic Type so the pill
+                  // labels never paint outside their pills. 1x is untouched.
                   SizedBox(
-                    height: 38,
+                    height:
+                        38 *
+                        MediaQuery.textScalerOf(context)
+                            .scale(1)
+                            .clamp(1.0, 1.6),
                     child: ListView(
                       scrollDirection: Axis.horizontal,
                       children: [
