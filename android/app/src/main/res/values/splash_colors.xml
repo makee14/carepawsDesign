@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- T.cream #FEFBF4, from lib/design/tokens.dart — splash background -->
+    <color name="splash_background">#FEFBF4</color>
+</resources>
