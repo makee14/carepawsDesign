@@ -115,6 +115,26 @@ class DatasetStore {
     return fallback;
   }
 
+  /// Decodes one dataset document into models, dropping the individual
+  /// entries that fail to parse. The nine public decode* wrappers keep
+  /// their names and signatures — only the identical loops collapse here.
+  static List<T>? _decode<T>(
+    String? raw,
+    T Function(Map<String, dynamic>) fromJson,
+  ) {
+    final items = _items(raw);
+    if (items == null) return null;
+    final out = <T>[];
+    for (final m in items) {
+      try {
+        out.add(fromJson(m));
+      } catch (_) {
+        // Corrupt entry — drop it, keep the rest.
+      }
+    }
+    return out;
+  }
+
   // ------------------------------------------------------------------ pets
   static Map<String, Object?> _petJson(Pet p) => {
     'id': p.id,
@@ -215,19 +235,7 @@ class DatasetStore {
 
   static String encodePets(List<Pet> items) => _envelope(items.map(_petJson));
 
-  static List<Pet>? decodePets(String? raw) {
-    final items = _items(raw);
-    if (items == null) return null;
-    final out = <Pet>[];
-    for (final m in items) {
-      try {
-        out.add(_petFromJson(m));
-      } catch (_) {
-        // Corrupt entry — drop it, keep the rest.
-      }
-    }
-    return out;
-  }
+  static List<Pet>? decodePets(String? raw) => _decode(raw, _petFromJson);
 
   static Future<List<Pet>?> readPets(String account) async =>
       decodePets(await read(account, pets));
@@ -286,19 +294,8 @@ class DatasetStore {
   static String encodeAppointments(List<Appointment> items) =>
       _envelope(items.map(_apptJson));
 
-  static List<Appointment>? decodeAppointments(String? raw) {
-    final items = _items(raw);
-    if (items == null) return null;
-    final out = <Appointment>[];
-    for (final m in items) {
-      try {
-        out.add(_apptFromJson(m));
-      } catch (_) {
-        // Corrupt entry — drop it, keep the rest.
-      }
-    }
-    return out;
-  }
+  static List<Appointment>? decodeAppointments(String? raw) =>
+      _decode(raw, _apptFromJson);
 
   static Future<List<Appointment>?> readAppointments(String account) async =>
       decodeAppointments(await read(account, appointments));
@@ -334,19 +331,8 @@ class DatasetStore {
   static String encodeReminders(List<Reminder> items) =>
       _envelope(items.map(_reminderJson));
 
-  static List<Reminder>? decodeReminders(String? raw) {
-    final items = _items(raw);
-    if (items == null) return null;
-    final out = <Reminder>[];
-    for (final m in items) {
-      try {
-        out.add(_reminderFromJson(m));
-      } catch (_) {
-        // Corrupt entry — drop it, keep the rest.
-      }
-    }
-    return out;
-  }
+  static List<Reminder>? decodeReminders(String? raw) =>
+      _decode(raw, _reminderFromJson);
 
   static Future<List<Reminder>?> readReminders(String account) async =>
       decodeReminders(await read(account, reminders));
@@ -389,19 +375,7 @@ class DatasetStore {
   static String encodeOrders(List<Order> items) =>
       _envelope(items.map(_orderJson));
 
-  static List<Order>? decodeOrders(String? raw) {
-    final items = _items(raw);
-    if (items == null) return null;
-    final out = <Order>[];
-    for (final m in items) {
-      try {
-        out.add(_orderFromJson(m));
-      } catch (_) {
-        // Corrupt entry — drop it, keep the rest.
-      }
-    }
-    return out;
-  }
+  static List<Order>? decodeOrders(String? raw) => _decode(raw, _orderFromJson);
 
   static Future<List<Order>?> readOrders(String account) async =>
       decodeOrders(await read(account, orders));
@@ -454,19 +428,8 @@ class DatasetStore {
   static String encodeMessages(List<ChatMessage> items) =>
       _envelope(items.map(_messageJson));
 
-  static List<ChatMessage>? decodeMessages(String? raw) {
-    final items = _items(raw);
-    if (items == null) return null;
-    final out = <ChatMessage>[];
-    for (final m in items) {
-      try {
-        out.add(_messageFromJson(m));
-      } catch (_) {
-        // Corrupt entry — drop it, keep the rest.
-      }
-    }
-    return out;
-  }
+  static List<ChatMessage>? decodeMessages(String? raw) =>
+      _decode(raw, _messageFromJson);
 
   static Future<List<ChatMessage>?> readMessages(String account) async =>
       decodeMessages(await read(account, messages));
@@ -497,19 +460,8 @@ class DatasetStore {
   static String encodeNotifications(List<AppNotification> items) =>
       _envelope(items.map(_notificationJson));
 
-  static List<AppNotification>? decodeNotifications(String? raw) {
-    final items = _items(raw);
-    if (items == null) return null;
-    final out = <AppNotification>[];
-    for (final m in items) {
-      try {
-        out.add(_notificationFromJson(m));
-      } catch (_) {
-        // Corrupt entry — drop it, keep the rest.
-      }
-    }
-    return out;
-  }
+  static List<AppNotification>? decodeNotifications(String? raw) =>
+      _decode(raw, _notificationFromJson);
 
   static Future<List<AppNotification>?> readNotifications(
     String account,
@@ -543,19 +495,8 @@ class DatasetStore {
   static String encodePrescriptions(List<Prescription> items) =>
       _envelope(items.map(_prescriptionJson));
 
-  static List<Prescription>? decodePrescriptions(String? raw) {
-    final items = _items(raw);
-    if (items == null) return null;
-    final out = <Prescription>[];
-    for (final m in items) {
-      try {
-        out.add(_prescriptionFromJson(m));
-      } catch (_) {
-        // Corrupt entry — drop it, keep the rest.
-      }
-    }
-    return out;
-  }
+  static List<Prescription>? decodePrescriptions(String? raw) =>
+      _decode(raw, _prescriptionFromJson);
 
   static Future<List<Prescription>?> readPrescriptions(String account) async =>
       decodePrescriptions(await read(account, prescriptions));
@@ -577,19 +518,7 @@ class DatasetStore {
   static String encodeCart(List<CartLine> items) =>
       _envelope(items.map(_cartJson));
 
-  static List<CartLine>? decodeCart(String? raw) {
-    final items = _items(raw);
-    if (items == null) return null;
-    final out = <CartLine>[];
-    for (final m in items) {
-      try {
-        out.add(_cartFromJson(m));
-      } catch (_) {
-        // Corrupt entry — drop it, keep the rest.
-      }
-    }
-    return out;
-  }
+  static List<CartLine>? decodeCart(String? raw) => _decode(raw, _cartFromJson);
 
   static Future<List<CartLine>?> readCart(String account) async =>
       decodeCart(await read(account, cart));
@@ -664,19 +593,8 @@ class DatasetStore {
   static String encodeHealthChecks(List<HealthCheckResult> items) =>
       _envelope(items.map(_healthResultJson));
 
-  static List<HealthCheckResult>? decodeHealthChecks(String? raw) {
-    final items = _items(raw);
-    if (items == null) return null;
-    final out = <HealthCheckResult>[];
-    for (final m in items) {
-      try {
-        out.add(_healthResultFromJson(m));
-      } catch (_) {
-        // Corrupt entry — drop it, keep the rest.
-      }
-    }
-    return out;
-  }
+  static List<HealthCheckResult>? decodeHealthChecks(String? raw) =>
+      _decode(raw, _healthResultFromJson);
 
   static Future<List<HealthCheckResult>?> readHealthChecks(
     String account,
