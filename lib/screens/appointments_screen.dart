@@ -32,7 +32,14 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
       backgroundColor: p.background,
       child: Stack(
         children: [
-          CustomScrollView(
+          // Viewport bottom inset: the positioned FAB floats over the Stack,
+          // so the scrollable area must end above it — sliver padding alone
+          // scrolls away and doesn't protect the default (unscrolled) view.
+          Padding(
+            padding: EdgeInsets.only(
+              bottom: 56 + T.s16 + TabBarClearance.of(context),
+            ),
+            child: CustomScrollView(
             slivers: [
               const LargeTitleBar(title: 'Appointments'),
               SliverToBoxAdapter(
@@ -69,6 +76,7 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
                       ),
               ),
             ],
+            ),
           ),
           // Circular booking FAB: bottom-right, floating above the tab bar.
           // Tab-bar height is read from the shell at build time — never
