@@ -1579,21 +1579,13 @@ class AiService {
   /// Reads the `{"inScope":…,"reply":…}` envelope. Returns null when the model
   /// did not produce usable JSON, so the caller can fall back gracefully.
   static ({bool inScope, String reply})? _parseChat(String raw) {
-    var s = raw.trim();
-    final start = s.indexOf('{');
-    final end = s.lastIndexOf('}');
-    if (start == -1 || end <= start) return null;
-    s = s.substring(start, end + 1);
-    try {
-      final j = jsonDecode(s) as Map<String, dynamic>;
-      final reply = (j['reply'] as String? ?? '').trim();
-      // Absent flag defaults to in-scope: an unlabelled but sensible answer
-      // should not be thrown away.
-      final inScope = (j['inScope'] as bool?) ?? true;
-      return (inScope: inScope, reply: reply);
-    } catch (_) {
-      return null;
-    }
+    final j = _extractJson(raw);
+    if (j == null) return null;
+    final reply = (j['reply'] as String? ?? '').trim();
+    // Absent flag defaults to in-scope: an unlabelled but sensible answer
+    // should not be thrown away.
+    final inScope = (j['inScope'] as bool?) ?? true;
+    return (inScope: inScope, reply: reply);
   }
 
   void dispose() => _client.close();
