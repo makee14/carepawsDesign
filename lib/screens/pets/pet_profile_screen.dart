@@ -254,7 +254,7 @@ class _PetProfileScreenState extends State<PetProfileScreen> {
                   ),
                   const SizedBox(height: 8),
                   SizedBox(
-                    height: 38,
+                    height: 44,
                     child: ListView(
                       scrollDirection: Axis.horizontal,
                       children: [

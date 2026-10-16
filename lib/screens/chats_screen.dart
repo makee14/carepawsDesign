@@ -31,6 +31,23 @@ class _ChatsScreenState extends State<ChatsScreen> {
     final offline = store.offlineNote;
     final reduce = reduceMotionOf(context);
 
+    // The how-it-works explainer body, shared by the animated and
+    // reduced-motion paths. Under reduced motion the AnimatedSize is skipped
+    // entirely — a zero-duration AnimatedSize completes its controller
+    // inside performLayout and throws ("mutated in its own performLayout").
+    final howItWorks = _howItWorksOpen
+        ? Padding(
+            padding: const EdgeInsets.only(top: 4, bottom: 4),
+            child: Text(
+              'Message the clinic team directly. A vet, vet '
+              'assistant, or groomer replies during clinic hours '
+              '(${Clinic.hoursRangeLabel}). For emergencies after hours, call '
+              'the clinic number.',
+              style: Type.footnote(p).copyWith(color: p.textSecondary),
+            ),
+          )
+        : const SizedBox.shrink();
+
     return CupertinoPageScaffold(
       backgroundColor: p.background,
       child: CustomScrollView(
@@ -96,25 +113,13 @@ class _ChatsScreenState extends State<ChatsScreen> {
                     ),
                   ],
                 ),
-                AnimatedSize(
-                  duration: reduce
-                      ? Duration.zero
-                      : const Duration(milliseconds: 200),
-                  alignment: Alignment.topCenter,
-                  child: _howItWorksOpen
-                      ? Padding(
-                          padding: const EdgeInsets.only(top: 4, bottom: 4),
-                          child: Text(
-                            'Message the clinic team directly. A vet, vet '
-                            'assistant, or groomer replies during clinic hours '
-                            '(${Clinic.hoursRangeLabel}). For emergencies after hours, call '
-                            'the clinic number.',
-                            style: Type.footnote(p)
-                                .copyWith(color: p.textSecondary),
-                          ),
-                        )
-                      : const SizedBox.shrink(),
-                ),
+                reduce
+                    ? howItWorks
+                    : AnimatedSize(
+                        duration: const Duration(milliseconds: 200),
+                        alignment: Alignment.topCenter,
+                        child: howItWorks,
+                      ),
                 const SizedBox(height: 12),
                 const _TeamCarousel(),
               ],
@@ -257,6 +262,8 @@ class _TeamAvatar extends StatelessWidget {
       ),
       child: Text(
         initials,
+        // Monogram as graphic: fixed drawn size at any Dynamic Type.
+        textScaler: TextScaler.noScaling,
         style: TextStyle(
           fontSize: size * 0.375,
           fontWeight: FontWeight.w600,

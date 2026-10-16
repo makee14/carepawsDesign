@@ -161,11 +161,9 @@ class _Segmented extends StatelessWidget {
                     onTap: () => onChanged(i),
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: T.pressMs),
-                      // AX5: the segment grows with Dynamic Type instead of
-                      // letting the label paint outside the 34pt box. 1x is
-                      // untouched.
-                      height:
-                          34 *
+                      // HIG 44pt minimum tap target; grows with Dynamic
+                      // Type at AX5 instead of clipping the label.
+                      height: 44 *
                           MediaQuery.textScalerOf(context)
                               .scale(1)
                               .clamp(1.0, 1.6),
@@ -185,6 +183,8 @@ class _Segmented extends StatelessWidget {
                       ),
                       child: Text(
                         labels[i],
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: Type.footnoteEmph(p).copyWith(
                           color: i == index ? p.text : p.textSecondary,
                         ),
