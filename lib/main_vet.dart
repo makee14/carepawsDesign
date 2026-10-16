@@ -2,8 +2,10 @@ import 'package:flutter/cupertino.dart';
 
 import 'app.dart';
 import 'design/theme.dart';
+import 'flavor.dart';
 import 'screens/login_screen.dart';
 import 'screens/vet/vet_shell.dart';
+import 'services/vet_push_service.dart';
 import 'state/app_store.dart';
 
 /// Vet flavor entry point.
@@ -27,7 +29,18 @@ import 'state/app_store.dart';
 /// access; the role does.
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  final store = AppStore();
+  final store = AppStore(
+    // Vet-only: the real push service is instantiated behind kVetFlavor, so
+    // the customer entry chain (lib/main.dart) never imports
+    // vet_push_service.dart and tree-shaking drops it from the customer APK.
+    vetPushFactory: kVetFlavor
+        ? (store, delivery) => VetPushService(
+            () => store.now,
+            () => store.shell == AppShell.vet,
+            delivery: delivery,
+          )
+        : null,
+  );
   // Awaited before the first frame so the app never flashes the warm light
   // palette at someone whose saved choice is dark.
   await store.loadSettings();

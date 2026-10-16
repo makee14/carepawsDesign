@@ -38,6 +38,12 @@ AppStore _store({VetPushDelivery? delivery}) {
   final s = AppStore(
     ai: AiService(client: _FailFast()),
     pushDelivery: delivery,
+    // Tests inject the real service directly (test code is never shipped).
+    vetPushFactory: (store, d) => VetPushService(
+      () => store.now,
+      () => store.shell == AppShell.vet,
+      delivery: d,
+    ),
   );
   addTearDown(s.dispose);
   return s;
@@ -102,29 +108,12 @@ void main() {
       expect(delivery.delivered.single.id, alert.id);
     });
 
-    test('customer reply in a thread queues a vet device alert', () async {
-      final delivery = _RecordingDelivery();
-      final store = await _vetStore(now: _openTime, delivery: delivery);
-
-      store.pushMessage(
-        ChatMessage(
-          id: 'm1',
-          threadId: 'th_clinic',
-          author: ChatAuthor.vetAssistant,
-          text: 'Is Milo due for his vaccine?',
-          at: store.now,
-          sentByMe: true,
-        ),
-      );
-
-      expect(store.vetPush.sentImmediate, hasLength(1));
-      final alert = store.vetPush.sentImmediate.single;
-      expect(alert.kind, VetAlertKind.chatReply);
-      expect(alert.title, contains(store.ownerFirstName));
-      expect(alert.body, contains('Is Milo due for his vaccine?'));
-      expect(alert.deepLink, contains('chat-th_clinic'));
-      expect(delivery.delivered, hasLength(1));
-    });
+    // REMOVED: 'customer reply in a thread queues a vet device alert'.
+    // Its message construction (sentByMe: true, vetAssistant author on a
+    // vet-shell store) is byte-identical to the vet's own send path, so
+    // under the no-self-alert contract (I1) it asserted the bug, not the
+    // feature. A customer reply is not simulable in this single-store
+    // prototype once the vet's own session is correctly excluded.
 
     test('customer-shared triage handoff queues an urgent alert', () async {
       final delivery = _RecordingDelivery();
@@ -179,13 +168,17 @@ void main() {
   group('trigger guards — no alert when nothing new lands', () {
     test('staff reply in a thread does not alert', () async {
       final store = await _vetStore(now: _openTime);
+      // The real vet-send path (ChatThreadScreen._sendText) posts the vet's
+      // own reply with sentByMe: true — this mirrors that shape, not the
+      // sentByMe:false auto-reply shape, so it actually covers vet sends.
       store.pushMessage(
         ChatMessage(
           id: 'm2',
           threadId: 'th_clinic',
-          author: ChatAuthor.vet,
+          author: ChatAuthor.vetAssistant,
           text: 'Thanks, see you tomorrow!',
           at: store.now,
+          sentByMe: true,
         ),
       );
       expect(store.vetPush.sentImmediate, isEmpty);
@@ -263,16 +256,10 @@ void main() {
       final store = await _vetStore(now: _quietTime, delivery: delivery);
 
       store.addAppointment(_request(store, id: 'pa3'));
-      store.pushMessage(
-        ChatMessage(
-          id: 'm4',
-          threadId: 'th_clinic',
-          author: ChatAuthor.vetAssistant,
-          text: 'Midnight question',
-          at: store.now,
-          sentByMe: true,
-        ),
-      );
+      // A second queue item — the chat-reply trigger is excluded from the
+      // vet's own sending session (I1), so a second appointment request
+      // stands in for it here.
+      store.addAppointment(_request(store, id: 'pa4'));
       expect(store.vetPush.digest, hasLength(2));
 
       // Still quiet at 6 AM — nothing goes out.

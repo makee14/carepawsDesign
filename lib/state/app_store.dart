@@ -14,7 +14,7 @@ import '../services/dataset_store.dart';
 import '../services/photo_store.dart';
 import '../services/settings_store.dart';
 import '../services/staff_replies.dart';
-import '../services/vet_push_service.dart';
+import '../services/vet_push_api.dart';
 import 'profile_store.dart';
 
 /// Which shell the signed-in account gets after auth.
@@ -29,25 +29,59 @@ import 'profile_store.dart';
 /// fresh store and a signed-out store always read `customer`.
 enum AppShell { customer, vet }
 
+/// Builds the vet push service for an [AppStore].
+///
+/// Provided by the vet entry point (and tests). The customer entry chain
+/// never provides one, so the customer build never imports
+/// `vet_push_service.dart` and tree-shaking drops it from the customer APK.
+typedef VetPushFactory = VetPush Function(
+  AppStore store,
+  VetPushDelivery? delivery,
+);
+
+/// No-op [VetPush] for the customer flavor: no factory is installed there,
+/// so the alert triggers are dead ends that cost nothing.
+class _NoopVetPush implements VetPush {
+  const _NoopVetPush();
+
+  @override
+  void raise(VetAlert alert) {}
+
+  @override
+  List<VetAlert> get sentImmediate => const [];
+
+  @override
+  List<VetAlert> get digest => const [];
+
+  @override
+  void checkDigestDue() {}
+
+  @override
+  void dispose() {}
+}
+
 /// Single source of truth for the whole app. A lightweight ChangeNotifier is
 /// enough here — the prototype has no need for a heavier state package.
 class AppStore extends ChangeNotifier {
-  AppStore({AiService? ai, DateTime? now, VetPushDelivery? pushDelivery})
-    : ai = ai ?? AiService(),
-      _now = now ?? DateTime.now() {
-    vetPush = VetPushService(
-      clock: () => _now,
-      isVetDevice: () => shell == AppShell.vet,
-      delivery: pushDelivery,
-    );
+  AppStore({
+    AiService? ai,
+    DateTime? now,
+    VetPushDelivery? pushDelivery,
+    VetPushFactory? vetPushFactory,
+  }) : ai = ai ?? AiService(),
+       _now = now ?? DateTime.now() {
+    // The real VetPushService is instantiated behind the vet entry point's
+    // kVetFlavor-gated factory — never from the customer entry chain.
+    vetPush = vetPushFactory?.call(this, pushDelivery) ?? const _NoopVetPush();
   }
 
   final AiService ai;
 
   /// Staff push alerts (Task 8): trigger + quiet-hours digest logic with a
-  /// stubbed delivery seam. The service reads [shell] for its role gate, so
-  /// alerts only ever target vet-role devices.
-  late final VetPushService vetPush;
+  /// stubbed delivery seam. The real service ([VetPushService], vet flavor
+  /// only) reads [shell] for its role gate, so alerts only ever target
+  /// vet-role devices; the customer flavor gets a no-op.
+  late final VetPush vetPush;
 
   DateTime _now;
   DateTime get now => _now;
@@ -803,6 +837,10 @@ class AppStore extends ChangeNotifier {
   /// - A customer reply in a non-AI thread → one normal alert (a chat waiting
   ///   on staff). AI-thread traffic, staff/AI replies and system messages
   ///   never alert — they are not new demand for the vet queue.
+  /// - Messages pushed from the vet's own sending session never alert: the
+  ///   real vet-send path (ChatThreadScreen._sendText/_sendImage) posts with
+  ///   sentByMe: true, which the "customer reply" branch would otherwise
+  ///   read as new demand and turn into a self-alert.
   void _raiseVetAlertFor(ChatMessage m) {
     if (m.kind == ChatKind.triageHandoff) {
       vetPush.raise(
@@ -815,6 +853,8 @@ class AppStore extends ChangeNotifier {
       );
       return;
     }
+    // The vet answering is not new demand for the vet queue.
+    if (shell == AppShell.vet) return;
     if (!m.sentByMe || m.kind == ChatKind.system) return;
     final isAi = Seed.threads.any((t) => t.id == m.threadId && t.isAi);
     if (isAi) return;

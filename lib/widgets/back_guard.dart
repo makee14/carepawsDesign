@@ -74,10 +74,12 @@ Future<bool> showExitConfirmDialog(BuildContext context) async {
 /// Wraps the app shell: the system back button at the tab roots (nothing
 /// left to pop) shows [showExitConfirmDialog] instead of closing the app.
 ///
-/// Pushed screens are unaffected: their tab's own Navigator pops first via
-/// its ChildBackButtonDispatcher — which also runs the existing
-/// [confirmDiscardIfDirty] PopScope guards — and this guard only fires when
-/// there is nothing left to pop anywhere.
+/// System-back double-handling quirk (verified; shared with the vet shell):
+/// on system back, the tab's own Navigator pops the pushed screen AND this
+/// guard's [PopScope] callback fires — so the exit dialog can appear
+/// alongside the pop. This guard does NOT only fire "when there is nothing
+/// left to pop anywhere". The fix belongs in the shared shell recipe later;
+/// do not diverge one shell to work around it here.
 ///
 /// [onExit] is injectable so widget tests can assert the wiring without
 /// touching the platform channel; production passes [SystemNavigator.pop].
