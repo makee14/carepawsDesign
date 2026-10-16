@@ -793,7 +793,7 @@ void main() {
       expect(ai.statusFor(AiProvider.gemini).keyFromDevice, isTrue);
 
       final prefs = await SharedPreferences.getInstance();
-      expect(prefs.getString(AiProvider.gemini.keyPref), key);
+      expect(prefs.getString(AiProvider.gemini.keysPref), '["$key"]');
     });
 
     test(
@@ -828,7 +828,7 @@ void main() {
         expect(ai.failure, AiFailure.noKey);
 
         final prefs = await SharedPreferences.getInstance();
-        expect(prefs.getString(AiProvider.gemini.keyPref), isNull);
+        expect(prefs.getString(AiProvider.gemini.keysPref), isNull);
       },
     );
 
@@ -842,7 +842,7 @@ void main() {
         expect(ai.statusFor(AiProvider.gemini).keyFromDevice, isFalse);
       }
       final prefs = await SharedPreferences.getInstance();
-      expect(prefs.getString(AiProvider.gemini.keyPref), isNull);
+      expect(prefs.getString(AiProvider.gemini.keysPref), isNull);
     });
 
     test('surrounding whitespace in a pasted key is trimmed', () async {
@@ -853,7 +853,7 @@ void main() {
       expect(ai.keyConfigured, isTrue);
 
       final prefs = await SharedPreferences.getInstance();
-      expect(prefs.getString(AiProvider.gemini.keyPref), key);
+      expect(prefs.getString(AiProvider.gemini.keysPref), '["$key"]');
     });
   });
 
@@ -878,14 +878,14 @@ void main() {
 
       final prefs = await SharedPreferences.getInstance();
       expect(
-        prefs.getString(AiProvider.gemini.keyPref),
-        'gemini-key-00000000000000001',
+        prefs.getString(AiProvider.gemini.keysPref),
+        '["gemini-key-00000000000000001"]',
       );
       expect(
-        prefs.getString(AiProvider.openai.keyPref),
-        'openai-key-00000000000000001',
+        prefs.getString(AiProvider.openai.keysPref),
+        '["openai-key-00000000000000001"]',
       );
-      expect(prefs.getString(AiProvider.openrouter.keyPref), isNull);
+      expect(prefs.getString(AiProvider.openrouter.keysPref), isNull);
 
       expect(ai.statusFor(AiProvider.gemini).keyFromDevice, isTrue);
       expect(ai.statusFor(AiProvider.openai).keyFromDevice, isTrue);
@@ -910,6 +910,62 @@ void main() {
       expect(result.title, 'Test');
       expect(ai.modelLabel, startsWith('OpenAI'));
       expect(ai.isLive, isTrue);
+    });
+
+    test('a rejected key falls over to the next key in the pool', () async {
+      SharedPreferences.setMockInitialValues({});
+      final ai = AiService(client: _KeyRotationFake(triageJson));
+      addTearDown(ai.dispose);
+      // Two keys: the first is rejected (401), the second answers.
+      await ai.setKeysFor(AiProvider.gemini, [
+        'gemini-key-00000000000000001',
+        'gemini-key-00000000000000002',
+      ]);
+      expect(ai.keyConfigured, isTrue);
+
+      final result = await ai.triage(
+        petName: 'Biscuit',
+        species: 'dog',
+        text: 'coughing',
+      );
+      expect(result.title, 'Test');
+      // The second key answered, so it is the active one.
+      expect(ai.statusFor(AiProvider.gemini).activeKeyLabel, isNotNull);
+    });
+
+    test('a failing model falls back to the next model', () async {
+      SharedPreferences.setMockInitialValues({});
+      final ai = AiService(client: _ModelFallbackFake(triageJson));
+      addTearDown(ai.dispose);
+      await ai.useKeyFor(AiProvider.gemini, 'gemini-key-00000000000000001');
+
+      final result = await ai.triage(
+        petName: 'Biscuit',
+        species: 'dog',
+        text: 'coughing',
+      );
+      expect(result.title, 'Test');
+    });
+
+    test('key pool add/remove persists and re-probes', () async {
+      final ai = failoverService();
+      await ai.addKeyFor(AiProvider.gemini, 'gemini-key-00000000000000001');
+      await ai.addKeyFor(AiProvider.gemini, 'gemini-key-00000000000000002');
+      // Dupes are ignored.
+      await ai.addKeyFor(AiProvider.gemini, 'gemini-key-00000000000000001');
+
+      var pool = ai.statusFor(AiProvider.gemini).keyPool;
+      expect(pool.length, 2);
+
+      await ai.removeKeyFor(AiProvider.gemini, 'gemini-key-00000000000000001');
+      pool = ai.statusFor(AiProvider.gemini).keyPool;
+      expect(pool.length, 1);
+
+      // The pool survives a restart.
+      final next = AiService(client: _FailoverFake(triageJson));
+      addTearDown(next.dispose);
+      await next.bootstrap();
+      expect(next.statusFor(AiProvider.gemini).keyPool.length, 1);
     });
 
     test('a disabled provider is skipped by routing', () async {
@@ -1006,7 +1062,7 @@ void main() {
         // The key is picked up under the new per-provider name...
         expect(ai.statusFor(AiProvider.gemini).keyFromDevice, isTrue);
         final prefs = await SharedPreferences.getInstance();
-        expect(prefs.getString(AiProvider.gemini.keyPref), migrated);
+        expect(prefs.getString(AiProvider.gemini.keysPref), '["$migrated"]');
         // ...and the legacy entry is gone so the migration runs once.
         expect(prefs.getString(legacyKey), isNull);
       },
@@ -1016,7 +1072,7 @@ void main() {
       const legacyKey = 'carepaws.gemini_api_key';
       SharedPreferences.setMockInitialValues({
         legacyKey: 'AIza-legacy-key-00000000000000000001',
-        AiProvider.gemini.keyPref: 'AIza-new-key-0000000000000000000001',
+        AiProvider.gemini.keysPref: '["AIza-new-key-0000000000000000000001"]',
       });
 
       final ai = AiService(client: _FailoverFake(triageJson));
@@ -1025,8 +1081,8 @@ void main() {
 
       final prefs = await SharedPreferences.getInstance();
       expect(
-        prefs.getString(AiProvider.gemini.keyPref),
-        'AIza-new-key-0000000000000000000001',
+        prefs.getString(AiProvider.gemini.keysPref),
+        '["AIza-new-key-0000000000000000000001"]',
       );
       expect(prefs.getString(legacyKey), isNull);
     });
@@ -1374,6 +1430,166 @@ class _FailoverFake extends http.BaseClient {
           ],
         };
       }
+    }
+    final bytes = utf8.encode(jsonEncode(body));
+    return http.StreamedResponse(
+      Stream.value(bytes),
+      code,
+      request: request,
+      headers: {'content-type': 'application/json'},
+    );
+  }
+}
+
+/// The first Gemini key is rejected (401); the second answers. Drives
+/// key-pool rotation: the request must succeed on the second key.
+class _KeyRotationFake extends http.BaseClient {
+  _KeyRotationFake(this.triageJson);
+
+  final String triageJson;
+
+  static const _badKey = 'gemini-key-00000000000000001';
+
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) async {
+    final host = request.url.host;
+    final path = request.url.path;
+    final key = request.url.queryParameters['key'] ?? '';
+    var bodyText = '';
+    if (request is http.Request) bodyText = request.body;
+    final isProbe = bodyText.contains('Reply with exactly this word: ok');
+
+    Object? body;
+    var code = 200;
+    if (host.contains('generativelanguage')) {
+      if (path.endsWith('/models')) {
+        body = {
+          'models': [
+            {
+              'name': 'models/gemini-flash-test',
+              'displayName': 'Flash (test)',
+              'supportedGenerationMethods': ['generateContent'],
+            },
+          ],
+        };
+      } else if (isProbe) {
+        // Probes succeed for both keys so bootstrap goes live on key one;
+        // the real request is what rejects it.
+        body = {
+          'candidates': [
+            {
+              'content': {
+                'parts': [
+                  {'text': 'ok'},
+                ],
+              },
+            },
+          ],
+        };
+      } else if (key == _badKey) {
+        code = 401;
+        body = {'error': 'API key not valid'};
+      } else {
+        body = {
+          'candidates': [
+            {
+              'content': {
+                'parts': [
+                  {'text': triageJson},
+                ],
+              },
+            },
+          ],
+        };
+      }
+    } else {
+      body = {
+        'choices': [
+          {
+            'message': {'content': isProbe ? 'ok' : triageJson},
+          },
+        ],
+      };
+    }
+    final bytes = utf8.encode(jsonEncode(body));
+    return http.StreamedResponse(
+      Stream.value(bytes),
+      code,
+      request: request,
+      headers: {'content-type': 'application/json'},
+    );
+  }
+}
+
+/// The first Gemini model 404s; the second answers. Drives model fallback.
+class _ModelFallbackFake extends http.BaseClient {
+  _ModelFallbackFake(this.triageJson);
+
+  final String triageJson;
+
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) async {
+    final host = request.url.host;
+    final path = request.url.path;
+    var bodyText = '';
+    if (request is http.Request) bodyText = request.body;
+    final isProbe = bodyText.contains('Reply with exactly this word: ok');
+
+    Object? body;
+    var code = 200;
+    if (host.contains('generativelanguage')) {
+      if (path.endsWith('/models')) {
+        body = {
+          'models': [
+            {
+              'name': 'models/gemini-flash-test',
+              'displayName': 'Flash (test)',
+              'supportedGenerationMethods': ['generateContent'],
+            },
+            {
+              'name': 'models/gemini-flash-test-2',
+              'displayName': 'Flash 2 (test)',
+              'supportedGenerationMethods': ['generateContent'],
+            },
+          ],
+        };
+      } else if (isProbe) {
+        body = {
+          'candidates': [
+            {
+              'content': {
+                'parts': [
+                  {'text': 'ok'},
+                ],
+              },
+            },
+          ],
+        };
+      } else if (path.contains('gemini-flash-test:generateContent')) {
+        // The primary model is gone; the fallback must answer instead.
+        code = 404;
+        body = {'error': 'model not found'};
+      } else {
+        body = {
+          'candidates': [
+            {
+              'content': {
+                'parts': [
+                  {'text': triageJson},
+                ],
+              },
+            },
+          ],
+        };
+      }
+    } else {
+      body = {
+        'choices': [
+          {
+            'message': {'content': isProbe ? 'ok' : triageJson},
+          },
+        ],
+      };
     }
     final bytes = utf8.encode(jsonEncode(body));
     return http.StreamedResponse(

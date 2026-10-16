@@ -78,7 +78,11 @@ extension AiProviderInfo on AiProvider {
   };
 
   /// Where an on-device key is kept between launches.
+  /// Legacy single-key location — migrated into [keysPref] on first read.
   String get keyPref => 'carepaws.ai_key.$name';
+
+  /// Where the on-device key pool (JSON string array) is kept.
+  String get keysPref => 'carepaws.ai_keys.$name';
 
   /// Where the provider's on/off switch is kept between launches.
   String get enabledPref => 'carepaws.ai_enabled.$name';
@@ -207,7 +211,7 @@ managed at home.''';
       'Ask me about feeding, health, vaccines or a health check and I will take it from there.';
 }
 
-/// One AI provider's key, switch and live model, as shown in Settings.
+/// One AI provider's keys, switch and live model, as shown in Settings.
 /// A snapshot — read fresh via [AiService.statusFor] after any change.
 class AiProviderStatus {
   const AiProviderStatus({
@@ -218,6 +222,8 @@ class AiProviderStatus {
     required this.isLive,
     this.modelLabel,
     this.failure,
+    this.keyPool = const [],
+    this.activeKeyLabel,
   });
 
   final AiProvider provider;
@@ -227,6 +233,12 @@ class AiProviderStatus {
   final bool isLive;
   final String? modelLabel;
   final AiFailure? failure;
+
+  /// On-device keys, masked for display (e.g. `AIza…x7f3`), best-first.
+  final List<String> keyPool;
+
+  /// Which key is currently answering, masked. Null when none.
+  final String? activeKeyLabel;
 }
 
 /// The transport contract every provider implements. Bootstrapping validates
@@ -278,6 +290,10 @@ class GeminiBackend implements AiBackend {
   bool _live = false;
   String? _modelId;
   String? _modelLabel;
+
+  /// Ordered model fallback list, cached from bootstrap. Requests try the
+  /// live model first, then walk this list when a model fails mid-request.
+  List<String> _candidateModels = const [];
   AiFailure? _failure;
 
   @override
@@ -316,8 +332,12 @@ class GeminiBackend implements AiBackend {
     _modelId = null;
     _modelLabel = null;
     _failure = null;
+    _candidateModels = const [];
     try {
       final candidates = await _candidates();
+      // Cache the full ordered list so requests can fall back to the next
+      // model when the primary one fails mid-request.
+      _candidateModels = candidates.map((c) => c.name).toList();
       for (final c in candidates) {
         if (await _probe(c.name)) {
           _modelId = c.name;
@@ -472,20 +492,36 @@ class GeminiBackend implements AiBackend {
     return a.name.compareTo(b.name);
   }
 
-  Uri _generateUri() {
-    final id = _modelId;
-    if (id == null) throw AiException(_failure ?? AiFailure.noKey);
-    return Uri.https(_base, '/$_v1beta/models/$id:generateContent', {
+  Uri _generateUri(String modelId) {
+    return Uri.https(_base, '/$_v1beta/models/$modelId:generateContent', {
       'key': key,
     });
   }
 
+  /// Models to try for a request, live model first, then the rest of the
+  /// cached candidates in bootstrap order. Duplicates removed.
+  List<String> get _requestModels {
+    final out = <String>[];
+    final seen = <String>{};
+    for (final id in [_modelId, ..._candidateModels]) {
+      if (id != null && seen.add(id)) out.add(id);
+    }
+    return out;
+  }
+
+  /// True when the failure means the KEY is dead (not just the model):
+  /// try the next key instead of the next model. 401/403 are unambiguous
+  /// auth rejections; 400 is model-specific (bad request for that model).
+  static bool _isKeyFailure(AiException e) =>
+      e.failure == AiFailure.unreachable ||
+      RegExp(r'HTTP 40[13](?!\d)').hasMatch(e.detail ?? '');
+
   /// POSTs to the selected model. Non-200 answers are service errors — the
   /// caller maps transport failures to [AiFailure.unreachable].
-  Future<http.Response> _post(Map<String, Object?> body) async {
+  Future<http.Response> _post(Map<String, Object?> body, String modelId) async {
     final res = await _client
         .post(
-          _generateUri(),
+          _generateUri(modelId),
           headers: {'Content-Type': 'application/json'},
           body: jsonEncode(body),
         )
@@ -500,9 +536,12 @@ class GeminiBackend implements AiBackend {
   /// generateContent but reject responseJsonSchema with a 400 — in that
   /// case the request is retried once as plain text, which [_parseChat]
   /// already handles gracefully.
-  Future<http.Response> _postChat(Map<String, Object?> withSchema) async {
+  Future<http.Response> _postChat(
+    Map<String, Object?> withSchema,
+    String modelId,
+  ) async {
     try {
-      return await _post(withSchema);
+      return await _post(withSchema, modelId);
     } on AiException catch (e) {
       final badRequest =
           e.failure == AiFailure.serviceError &&
@@ -517,8 +556,37 @@ class GeminiBackend implements AiBackend {
             ..remove('responseMimeType')
             ..remove('responseJsonSchema');
       plain['generationConfig'] = gc;
-      return await _post(plain);
+      return await _post(plain, modelId);
     }
+  }
+
+  /// Runs [send] against the request models in order. A model that fails
+  /// with a model-level error (404/429/5xx) yields to the next model; a
+  /// key-level failure (401/403/unreachable) rethrows immediately so the
+  /// caller rotates keys instead of burning through models with a dead key.
+  Future<T> _withModelFallback<T>(
+    Future<T> Function(String modelId) send,
+  ) async {
+    final models = _requestModels;
+    if (models.isEmpty) throw AiException(_failure ?? AiFailure.noKey);
+    AiException? lastError;
+    for (final modelId in models) {
+      try {
+        final out = await send(modelId);
+        if (modelId != _modelId) {
+          // A fallback model answered — promote it so the next request
+          // starts there instead of retrying the dead primary first.
+          debugPrint('[ai] model fallback: $modelId answered, promoting');
+          _modelId = modelId;
+        }
+        return out;
+      } on AiException catch (e) {
+        lastError = e;
+        if (_isKeyFailure(e)) rethrow;
+        debugPrint('[ai] model $modelId failed (${e.detail}), trying next');
+      }
+    }
+    throw lastError ?? AiException(_failure ?? AiFailure.serviceError);
   }
 
   @override
@@ -567,8 +635,10 @@ class GeminiBackend implements AiBackend {
           },
         ],
       };
-      final res = await _post(body);
-      return _content(res.body);
+      return await _withModelFallback((modelId) async {
+        final res = await _post(body, modelId);
+        return _content(res.body);
+      });
     } on AiException {
       rethrow;
     } on TimeoutException {
@@ -616,8 +686,10 @@ class GeminiBackend implements AiBackend {
           },
         },
       };
-      final res = await _postChat(body);
-      return _content(res.body).trim();
+      return await _withModelFallback((modelId) async {
+        final res = await _postChat(body, modelId);
+        return _content(res.body).trim();
+      });
     } on AiException {
       rethrow;
     } on TimeoutException {
@@ -678,6 +750,10 @@ class OpenAiBackend implements AiBackend {
   String? _modelId;
   AiFailure? _failure;
 
+  /// Ordered model fallback list, cached from bootstrap. Requests try the
+  /// live model first, then walk this list when a model fails mid-request.
+  List<String> _candidateModels = const [];
+
   @override
   bool get isLive => _live;
   @override
@@ -706,6 +782,7 @@ class OpenAiBackend implements AiBackend {
     _live = false;
     _modelId = null;
     _failure = null;
+    _candidateModels = const [];
     List<String> ids;
     try {
       ids = await _listModels();
@@ -716,6 +793,14 @@ class OpenAiBackend implements AiBackend {
     final pick = ids.contains(_preferredModel)
         ? _preferredModel
         : _firstChatty(ids) ?? (ids.isNotEmpty ? ids.first : _preferredModel);
+    // Candidate fallback order: the probe winner first, then the preferred
+    // model, then the rest of the list in discovery order.
+    final ordered = <String>[];
+    final seen = <String>{};
+    for (final id in [pick, _preferredModel, ...ids]) {
+      if (seen.add(id)) ordered.add(id);
+    }
+    _candidateModels = ordered;
     if (await _probe(pick)) {
       _modelId = pick;
       _live = true;
@@ -845,6 +930,8 @@ class OpenAiBackend implements AiBackend {
 
   /// Sends one chat-completions request, asking for a JSON object when
   /// [jsonMode] and retrying once as plain text when the model rejects it.
+  /// Walks the candidate models on model-level failures; a dead key (401/403)
+  /// rethrows immediately so the caller rotates keys instead.
   Future<String> _complete({
     required String system,
     required String text,
@@ -854,8 +941,61 @@ class OpenAiBackend implements AiBackend {
     required int maxTokens,
     required bool jsonMode,
   }) async {
-    final model = _modelId;
-    if (model == null) throw AiException(_failure ?? AiFailure.noKey);
+    final models = _requestModels;
+    if (models.isEmpty) throw AiException(_failure ?? AiFailure.noKey);
+    AiException? lastError;
+    for (final model in models) {
+      try {
+        final out = await _attemptComplete(
+          model: model,
+          system: system,
+          text: text,
+          photo: photo,
+          photoMime: photoMime,
+          temperature: temperature,
+          maxTokens: maxTokens,
+          jsonMode: jsonMode,
+        );
+        if (model != _modelId) {
+          debugPrint('[ai] model fallback: $model answered, promoting');
+          _modelId = model;
+        }
+        return out;
+      } on AiException catch (e) {
+        lastError = e;
+        if (_isKeyFailure(e)) rethrow;
+        debugPrint('[ai] model $model failed (${e.detail}), trying next');
+      }
+    }
+    throw lastError ?? AiException(_failure ?? AiFailure.serviceError);
+  }
+
+  /// Models to try for a request, live model first, then cached candidates.
+  List<String> get _requestModels {
+    final out = <String>[];
+    final seen = <String>{};
+    for (final id in [_modelId, ..._candidateModels]) {
+      if (id != null && seen.add(id)) out.add(id);
+    }
+    return out;
+  }
+
+  /// True when the failure means the KEY is dead: 401/403 auth rejections
+  /// and transport failures. Anything else is model-level — try the next one.
+  static bool _isKeyFailure(AiException e) =>
+      e.failure == AiFailure.unreachable ||
+      RegExp(r'HTTP 40[13](?!\d)').hasMatch(e.detail ?? '');
+
+  Future<String> _attemptComplete({
+    required String model,
+    required String system,
+    required String text,
+    Uint8List? photo,
+    String? photoMime,
+    required double temperature,
+    required int maxTokens,
+    required bool jsonMode,
+  }) async {
     Map<String, Object?> body({required bool structured}) => {
       'model': model,
       'messages': [
@@ -950,17 +1090,39 @@ class _ProviderSlot {
   _ProviderSlot(this.provider);
 
   final AiProvider provider;
-  String? deviceKey;
-  bool enabled = true;
-  AiBackend? backend;
 
-  String get effectiveKey {
-    final d = deviceKey?.trim() ?? '';
-    return d.isNotEmpty ? d : provider.buildKey;
+  /// On-device key pool, best-first. A provider routes while at least one
+  /// key in the pool (or the build-time key) looks real; requests try the
+  /// keys in order and move on when one is rejected or exhausted.
+  final List<String> deviceKeys = [];
+  bool enabled = true;
+
+  /// Backends cached per key, so failover keys are bootstrapped once, not
+  /// per request. The primary (first-key) backend doubles as the slot's
+  /// status backend.
+  final Map<String, AiBackend> backendByKey = {};
+
+  /// The slot's status backend: the primary key's backend, if any.
+  AiBackend? get backend {
+    final keys = effectiveKeys;
+    return keys.isEmpty ? null : backendByKey[keys.first];
   }
 
-  bool get keyConfigured => AiService.looksLikeKey(effectiveKey, provider);
-  bool get keyFromDevice => AiService.looksLikeKey(deviceKey, provider);
+  /// Keys actually tried per request, best-first: the device pool, or the
+  /// build-time key when the pool is empty.
+  List<String> get effectiveKeys {
+    final pool = deviceKeys
+        .map((k) => k.trim())
+        .where((k) => AiService.looksLikeKey(k, provider))
+        .toList();
+    if (pool.isNotEmpty) return pool;
+    final b = provider.buildKey.trim();
+    return AiService.looksLikeKey(b, provider) ? [b] : const [];
+  }
+
+  bool get keyConfigured => effectiveKeys.isNotEmpty;
+  bool get keyFromDevice =>
+      deviceKeys.any((k) => AiService.looksLikeKey(k, provider));
 
   /// A slot only routes when it is switched on and holds a real key.
   bool get configured => enabled && keyConfigured;
@@ -1033,25 +1195,28 @@ class AiService {
       isLive: backend?.isLive ?? false,
       modelLabel: backend?.modelLabel,
       failure: backend?.failure,
+      keyPool: slot.deviceKeys.map(maskKey).toList(),
+      activeKeyLabel: slot == _active ? activeKeyLabel : null,
     );
   }
 
   _ProviderSlot _slot(AiProvider provider) =>
       _slots.firstWhere((s) => s.provider == provider);
 
-  AiBackend _buildBackend(_ProviderSlot slot) => switch (slot.provider) {
-    AiProvider.gemini => GeminiBackend(
-      client: _client,
-      timeout: timeout,
-      key: slot.effectiveKey,
-    ),
-    AiProvider.openai || AiProvider.openrouter => OpenAiBackend(
-      provider: slot.provider,
-      client: _client,
-      timeout: timeout,
-      key: slot.effectiveKey,
-    ),
-  };
+  AiBackend _buildBackend(_ProviderSlot slot, String key) =>
+      switch (slot.provider) {
+        AiProvider.gemini => GeminiBackend(
+          client: _client,
+          timeout: timeout,
+          key: key,
+        ),
+        AiProvider.openai || AiProvider.openrouter => OpenAiBackend(
+          provider: slot.provider,
+          client: _client,
+          timeout: timeout,
+          key: key,
+        ),
+      };
 
   /// Runs at startup and after every key or switch change. Restores on-device
   /// keys, then bootstraps every configured provider in priority order — the
@@ -1060,18 +1225,22 @@ class AiService {
   Future<void> bootstrap() async {
     await _restore();
     _active = null;
+    _activeKey = null;
     status = AiStatus.checking;
     failure = null;
     var anyConfigured = false;
     AiFailure? lastFailure;
     for (final slot in _slots) {
       if (!slot.configured) {
-        slot.backend = null;
+        slot.backendByKey.clear();
         continue;
       }
       anyConfigured = true;
-      final backend = _buildBackend(slot);
-      slot.backend = backend;
+      // Bootstrap the primary key; failover keys are bootstrapped lazily
+      // on their first use inside _withFailover.
+      final key = slot.effectiveKeys.first;
+      final backend = _buildBackend(slot, key);
+      slot.backendByKey[key] = backend;
       try {
         await backend.bootstrap();
       } catch (_) {
@@ -1079,6 +1248,7 @@ class AiService {
       }
       if (backend.isLive) {
         _active ??= slot;
+        _activeKey ??= key;
       } else {
         lastFailure = backend.failure ?? lastFailure;
       }
@@ -1100,14 +1270,23 @@ class AiService {
   /// "Test connection".
   Future<void> recheck() => bootstrap();
 
-  void _setActive(_ProviderSlot slot) {
+  /// The key currently answering, masked for display. Null when none.
+  String? _activeKey;
+
+  /// Which of the provider's keys is live, e.g. `AIza…x7f3`. For Settings.
+  String? get activeKeyLabel =>
+      _active == null || _activeKey == null ? null : maskKey(_activeKey!);
+
+  void _setActive(_ProviderSlot slot, String key) {
     _active = slot;
+    _activeKey = key;
     status = AiStatus.live;
     failure = null;
   }
 
   void _enterUnavailable(AiFailure why) {
     _active = null;
+    _activeKey = null;
     status = AiStatus.unavailable;
     failure = why;
     debugPrint('[ai] unavailable: ${why.name}');
@@ -1119,23 +1298,67 @@ class AiService {
   Future<void> _restore() async {
     final prefs = await _openPrefs();
     for (final slot in _slots) {
-      slot.deviceKey ??= prefs?.getString(slot.provider.keyPref);
+      slot.deviceKeys
+        ..clear()
+        ..addAll(_readPool(prefs, slot.provider));
       final enabled = prefs?.getBool(slot.provider.enabledPref);
       if (enabled != null) slot.enabled = enabled;
     }
-    // Pre-multi-provider installs stored the Gemini key under the old name.
-    // Migrate it so existing users do not silently lose their key. A key
-    // already saved under the new name wins; the legacy entry is removed
-    // either way so the migration runs once.
-    const legacyKey = 'carepaws.gemini_api_key';
-    final legacy = prefs?.getString(legacyKey);
-    if (legacy != null && legacy.isNotEmpty) {
-      final gemini = _slot(AiProvider.gemini);
-      if (gemini.deviceKey == null) {
-        gemini.deviceKey = legacy;
-        await prefs?.setString(AiProvider.gemini.keyPref, legacy);
+    // Pre-pool installs stored one key per provider under the old name.
+    // Migrate it into a one-element pool so existing users do not silently
+    // lose their key. The legacy entry is removed either way so the
+    // migration runs once.
+    for (final p in AiProvider.values) {
+      final legacy = prefs?.getString(p.keyPref);
+      if (legacy != null && legacy.isNotEmpty) {
+        final slot = _slot(p);
+        if (slot.deviceKeys.isEmpty && looksLikeKey(legacy, p)) {
+          slot.deviceKeys.add(legacy.trim());
+          await _persistPool(prefs, p, slot.deviceKeys);
+        }
+        await prefs?.remove(p.keyPref);
       }
-      await prefs?.remove(legacyKey);
+    }
+    // Pre-multi-provider installs stored the Gemini key under the oldest name.
+    const ancientKey = 'carepaws.gemini_api_key';
+    final ancient = prefs?.getString(ancientKey);
+    if (ancient != null && ancient.isNotEmpty) {
+      final gemini = _slot(AiProvider.gemini);
+      if (gemini.deviceKeys.isEmpty &&
+          looksLikeKey(ancient, AiProvider.gemini)) {
+        gemini.deviceKeys.add(ancient.trim());
+        await _persistPool(prefs, AiProvider.gemini, gemini.deviceKeys);
+      }
+      await prefs?.remove(ancientKey);
+    }
+  }
+
+  /// Reads the stored key pool; tolerates a missing or corrupt entry.
+  static List<String> _readPool(SharedPreferences? prefs, AiProvider p) {
+    final raw = prefs?.getString(p.keysPref);
+    if (raw == null || raw.isEmpty) return [];
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! List) return [];
+      return decoded
+          .whereType<String>()
+          .map((k) => k.trim())
+          .where((k) => looksLikeKey(k, p))
+          .toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  static Future<void> _persistPool(
+    SharedPreferences? prefs,
+    AiProvider p,
+    List<String> keys,
+  ) async {
+    if (keys.isEmpty) {
+      await prefs?.remove(p.keysPref);
+    } else {
+      await prefs?.setString(p.keysPref, jsonEncode(keys));
     }
   }
 
@@ -1147,24 +1370,54 @@ class AiService {
     }
   }
 
-  /// Saves a key entered on the device for one provider and re-probes
+  /// Replaces one provider's key pool with a single key and re-probes
   /// straight away, so the Settings status flips without a restart.
-  /// A blank value clears the key. Returns whether that provider is actually
+  /// A blank value clears the pool. Returns whether that provider is actually
   /// answering now — not just whether a plausible-looking key was saved.
-  Future<bool> useKeyFor(AiProvider provider, String key) async {
+  Future<bool> useKeyFor(AiProvider provider, String key) =>
+      setKeysFor(provider, [key]);
+
+  /// Replaces one provider's whole key pool and re-probes. Blank or
+  /// invalid entries are dropped; an empty result clears the pool.
+  /// Returns whether the provider is actually answering now.
+  Future<bool> setKeysFor(AiProvider provider, List<String> keys) async {
     final slot = _slot(provider);
-    final trimmed = key.trim();
     final prefs = await _openPrefs();
-    if (looksLikeKey(trimmed, provider)) {
-      slot.deviceKey = trimmed;
-      await prefs?.setString(provider.keyPref, trimmed);
-    } else {
-      slot.deviceKey = null;
-      await prefs?.remove(provider.keyPref);
-    }
+    slot.deviceKeys
+      ..clear()
+      ..addAll(
+        keys.map((k) => k.trim()).where((k) => looksLikeKey(k, provider)),
+      );
+    await _persistPool(prefs, provider, slot.deviceKeys);
     await bootstrap();
     return slot.backend?.isLive ?? false;
   }
+
+  /// Appends one key to the provider's pool (no-op for blanks or dupes) and
+  /// re-probes. Returns whether the provider is actually answering now.
+  Future<bool> addKeyFor(AiProvider provider, String key) async {
+    final slot = _slot(provider);
+    final trimmed = key.trim();
+    if (!looksLikeKey(trimmed, provider) ||
+        slot.deviceKeys.any((k) => k.trim() == trimmed)) {
+      return slot.backend?.isLive ?? false;
+    }
+    return setKeysFor(provider, [...slot.deviceKeys, trimmed]);
+  }
+
+  /// Drops one key from the provider's pool and re-probes.
+  Future<void> removeKeyFor(AiProvider provider, String key) async {
+    final slot = _slot(provider);
+    final trimmed = key.trim();
+    await setKeysFor(
+      provider,
+      slot.deviceKeys.where((k) => k.trim() != trimmed).toList(),
+    );
+  }
+
+  /// The provider's on-device key pool, best-first, for Settings.
+  List<String> keysFor(AiProvider provider) =>
+      List.unmodifiable(_slot(provider).deviceKeys);
 
   /// Forgets one provider's on-device key, leaving any build-time key behind it.
   Future<bool> clearKeyFor(AiProvider provider) => useKeyFor(provider, '');
@@ -1193,43 +1446,60 @@ class AiService {
     return configured;
   }
 
-  /// Runs [attempt] against the routing table, moving to the next provider
-  /// whenever one fails. Throws the last [AiException] when every provider
-  /// is exhausted — and marks the service unavailable with its reason.
+  /// Runs [attempt] against the routing table: for each provider in priority
+  /// order, each key in its pool in order. A backend tries its models in
+  /// order internally; when a key is rejected or exhausted the loop moves to
+  /// the next key, then the next provider. Throws the last [AiException]
+  /// when everything is exhausted — and marks the service unavailable with
+  /// its reason.
   Future<T> _withFailover<T>(Future<T> Function(AiBackend) attempt) async {
     final order = _routingOrder();
     if (order.isEmpty) throw const AiException(AiFailure.noKey);
     AiException? lastError;
     for (final slot in order) {
-      var backend = slot.backend;
-      if (backend == null || !backend.isLive) {
-        backend = _buildBackend(slot);
-        slot.backend = backend;
-        try {
-          await backend.bootstrap();
-        } catch (_) {
-          // Recorded on the backend itself.
+      for (final key in slot.effectiveKeys) {
+        var backend = slot.backendByKey[key];
+        if (backend == null || !backend.isLive) {
+          backend = _buildBackend(slot, key);
+          slot.backendByKey[key] = backend;
+          try {
+            await backend.bootstrap();
+          } catch (_) {
+            // Recorded on the backend itself.
+          }
         }
-      }
-      if (!backend.isLive) {
-        lastError = AiException(backend.failure ?? AiFailure.serviceError);
-        continue;
-      }
-      try {
-        final out = await attempt(backend);
-        _setActive(slot);
-        return out;
-      } on AiException catch (e) {
-        lastError = e;
-        backend.markDown(e.failure);
-        debugPrint(
-          '[ai] ${slot.provider.label} failed (${e.failure.name}), failing over',
-        );
+        if (!backend.isLive) {
+          lastError = AiException(backend.failure ?? AiFailure.serviceError);
+          debugPrint(
+            '[ai] ${slot.provider.label} key ${maskKey(key)} not live '
+            '(${backend.failure?.name}), trying next key',
+          );
+          continue;
+        }
+        try {
+          final out = await attempt(backend);
+          _setActive(slot, key);
+          return out;
+        } on AiException catch (e) {
+          lastError = e;
+          backend.markDown(e.failure);
+          debugPrint(
+            '[ai] ${slot.provider.label} key ${maskKey(key)} failed '
+            '(${e.failure.name}), failing over',
+          );
+        }
       }
     }
     final why = lastError?.failure ?? AiFailure.noKey;
     _enterUnavailable(why);
     throw lastError ?? const AiException(AiFailure.noKey);
+  }
+
+  /// Masks a key for logs: first 4 + last 3 chars, e.g. `AIza…x7f3`.
+  static String maskKey(String key) {
+    final k = key.trim();
+    if (k.length <= 7) return '…';
+    return '${k.substring(0, 4)}…${k.substring(k.length - 3)}';
   }
 
   /// Health check for the selected pet. Throws [AiException] when no provider

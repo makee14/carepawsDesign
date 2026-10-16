@@ -14,7 +14,7 @@ import '../onboarding_screen.dart';
 import '../photo_crop_screen.dart';
 import 'privacy_screen.dart';
 import '../../services/ai_service.dart'
-    show AiFailure, AiProvider, AiProviderInfo, AiStatus;
+    show AiFailure, AiProvider, AiProviderInfo, AiService, AiStatus;
 
 /// Consolidated settings surface reachable from the Profile nav bar.
 class SettingsScreen extends StatelessWidget {
@@ -285,7 +285,7 @@ class _ProviderCardState extends State<_ProviderCard> {
   Future<void> _save() async {
     setState(() => _busy = true);
     final store = AppScope.read(context);
-    final ok = await store.setAiKeyFor(widget.provider, _controller.text);
+    final ok = await store.addAiKeyFor(widget.provider, _controller.text);
     if (!mounted) return;
     setState(() => _busy = false);
     if (ok) {
@@ -340,14 +340,18 @@ class _ProviderCardState extends State<_ProviderCard> {
     );
   }
 
-  Future<void> _clear() async {
+  Future<void> _removeKey(String masked) async {
+    // The status pool is masked; match by asking the service for the real
+    // keys and removing the one with the same mask.
+    final store = AppScope.read(context);
+    final keys = store.ai.keysFor(widget.provider);
+    final match = keys.where((k) => AiService.maskKey(k) == masked).firstOrNull;
     setState(() => _busy = true);
-    await AppScope.read(context).clearAiKeyFor(widget.provider);
+    if (match != null) {
+      await store.removeAiKeyFor(widget.provider, match);
+    }
     if (!mounted) return;
-    setState(() {
-      _busy = false;
-      _controller.clear();
-    });
+    setState(() => _busy = false);
   }
 
   Future<void> _test() async {
@@ -373,7 +377,9 @@ class _ProviderCardState extends State<_ProviderCard> {
       chipFg = p.textSecondary;
       chipBg = p.fieldBg;
     } else if (status.isLive) {
-      subtitle = status.modelLabel ?? 'Connected';
+      final keys = status.keyPool.length;
+      subtitle =
+          '${status.modelLabel ?? 'Connected'}${keys > 1 ? ' · $keys keys' : ''}';
       chipLabel = 'Live';
       chipFg = p.success;
       // The chip bg must follow the theme: the bright dark-mode success
@@ -383,8 +389,10 @@ class _ProviderCardState extends State<_ProviderCard> {
           ? p.success.withValues(alpha: 0.12)
           : const Color(0xFFDDF2E3);
     } else if (status.keyConfigured) {
-      subtitle = status.failure?.label ?? 'Key saved';
-      chipLabel = 'Key saved';
+      final keys = status.keyPool.length;
+      subtitle =
+          '${status.failure?.label ?? 'Key saved'}${keys > 1 ? ' · $keys keys' : ''}';
+      chipLabel = keys > 1 ? '$keys keys' : 'Key saved';
       chipFg = p.warning;
       chipBg = T.amber.withValues(alpha: 0.28);
     } else {
@@ -452,12 +460,80 @@ class _ProviderCardState extends State<_ProviderCard> {
           ),
           if (_expanded) ...[
             const SizedBox(height: T.s16),
+            // Key pool: requests try keys in order, so a rejected or
+            // exhausted key falls over to the next one automatically.
+            if (status.keyPool.isNotEmpty) ...[
+              Row(
+                children: [
+                  Text(
+                    'Keys (${status.keyPool.length})',
+                    style: Type.footnoteEmph(p),
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      'tried in order',
+                      style: Type.footnote(p).copyWith(color: p.textSecondary),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              for (final masked in status.keyPool)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 10,
+                          ),
+                          decoration: BoxDecoration(
+                            color: p.fieldBg,
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: p.divider),
+                          ),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  masked,
+                                  style: Type.body(p)
+                                      .copyWith(fontFamily: 'monospace'),
+                                ),
+                              ),
+                              if (status.activeKeyLabel == masked)
+                                StatusChip(
+                                  label: 'Active',
+                                  compact: true,
+                                  fg: p.success,
+                                  bg: p.success.withValues(alpha: 0.12),
+                                ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      IconTap(
+                        path: Ic.trash,
+                        label: 'Remove key $masked',
+                        onPressed: _busy ? null : () => _removeKey(masked),
+                      ),
+                    ],
+                  ),
+                ),
+              const SizedBox(height: 4),
+            ],
             CupertinoTextField(
               controller: _controller,
               obscureText: _hidden,
               autocorrect: false,
               enableSuggestions: false,
-              placeholder: widget.provider.keyHint,
+              placeholder: status.keyPool.isEmpty
+                  ? widget.provider.keyHint
+                  : 'Add another key…',
               placeholderStyle: Type.body(p).copyWith(color: p.textSecondary),
               style: Type.body(p),
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
@@ -473,7 +549,7 @@ class _ProviderCardState extends State<_ProviderCard> {
               children: [
                 Expanded(
                   child: PrimaryButton(
-                    label: status.keyFromDevice ? 'Replace key' : 'Save key',
+                    label: status.keyPool.isEmpty ? 'Save key' : 'Add key',
                     icon: Ic.check,
                     busy: _busy,
                     onPressed: _busy ? null : _save,
@@ -493,28 +569,18 @@ class _ProviderCardState extends State<_ProviderCard> {
                 ),
               ],
             ),
-            if (status.keyFromDevice) ...[
-              const SizedBox(height: 10),
-              Row(
-                children: [
-                  Expanded(
-                    child: SecondaryButton(
-                      label: 'Remove key',
-                      icon: Ic.trash,
-                      onPressed: _busy ? null : _clear,
-                    ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: SecondaryButton(
+                    label: 'Test connection',
+                    icon: Ic.refresh,
+                    onPressed: _busy ? null : _test,
                   ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: SecondaryButton(
-                      label: 'Test connection',
-                      icon: Ic.refresh,
-                      onPressed: _busy ? null : _test,
-                    ),
-                  ),
-                ],
-              ),
-            ],
+                ),
+              ],
+            ),
           ],
         ],
       ),

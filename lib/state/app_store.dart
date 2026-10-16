@@ -698,6 +698,24 @@ class AppStore extends ChangeNotifier {
     return ok;
   }
 
+  /// Appends a key to one provider's failover pool and re-probes. Returns
+  /// whether the provider is actually answering now.
+  Future<bool> addAiKeyFor(AiProvider provider, String key) async {
+    final ok = await ai.addKeyFor(provider, key);
+    notifyListeners();
+    return ok;
+  }
+
+  /// Removes one key from a provider's failover pool and re-probes.
+  Future<void> removeAiKeyFor(AiProvider provider, String key) async {
+    await ai.removeKeyFor(provider, key);
+    notifyListeners();
+  }
+
+  /// The provider's on-device keys, masked for display, best-first.
+  List<String> aiKeyPoolFor(AiProvider provider) =>
+      ai.statusFor(provider).keyPool;
+
   /// Forgets one provider's on-device key; the app falls back to a
   /// build-time key or to the next ready provider, whichever is in play.
   Future<void> clearAiKeyFor(AiProvider provider) => setAiKeyFor(provider, '');
