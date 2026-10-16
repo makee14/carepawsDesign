@@ -296,7 +296,7 @@ class _RootShellState extends State<RootShell> {
   List<NavigatorObserver> _observersFor(int i) {
     if (_observers.isEmpty) {
       for (var t = 0; t < _bodies.length; t++) {
-        _observers.add(_TabDepthObserver(_onDepthChanged, _depths, t));
+        _observers.add(TabDepthObserver(_onDepthChanged, _depths, t));
       }
     }
     return [_observers[i]];
@@ -385,44 +385,6 @@ class _RootShellState extends State<RootShell> {
     ShopsScreen(),
     ProfileScreen(),
   ];
-}
-
-/// Tracks how deep one tab's Navigator is, so the shell can hide the floating
-/// bar while a detail screen is pushed.
-class _TabDepthObserver extends NavigatorObserver {
-  _TabDepthObserver(this._onChange, this._depths, this._tab);
-
-  final VoidCallback _onChange;
-  final List<int> _depths;
-  final int _tab;
-
-  /// The Navigator reports a push for the route it starts on. That is the tab's
-  /// own root, not a detail screen, so it must not count.
-  bool _sawInitialRoute = false;
-
-  int get _depth => _depths[_tab];
-
-  @override
-  void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) {
-    if (!_sawInitialRoute) {
-      _sawInitialRoute = true;
-      return;
-    }
-    _depths[_tab] = _depth + 1;
-    _onChange();
-  }
-
-  @override
-  void didPop(Route<dynamic> route, Route<dynamic>? previousRoute) {
-    _depths[_tab] = math.max(0, _depth - 1);
-    _onChange();
-  }
-
-  @override
-  void didRemove(Route<dynamic> route, Route<dynamic>? previousRoute) {
-    _depths[_tab] = math.max(0, _depth - 1);
-    _onChange();
-  }
 }
 
 /// Large-title sliver header with no dead row above the title.

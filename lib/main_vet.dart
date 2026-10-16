@@ -1,6 +1,8 @@
 import 'package:flutter/cupertino.dart';
 
+import 'app.dart';
 import 'design/theme.dart';
+import 'screens/login_screen.dart';
 import 'screens/vet/vet_shell.dart';
 import 'state/app_store.dart';
 
@@ -16,12 +18,25 @@ import 'state/app_store.dart';
 /// This file is the ONLY place outside lib/screens/vet/ that references vet
 /// screens. lib/main.dart and lib/app.dart must stay vet-free so the
 /// customer build tree-shakes the portal out.
+///
+/// Auth decides the shell: launch → login → [postAuthShell]. Registering
+/// [vetShellFactory] here is what lets the shared router resolve a staff
+/// sign-in to [VetShell]. A customer credential in this binary still signs
+/// in but lands on the customer [RootShell] — vet UI simply does not render
+/// for it (pinned by test/vet_entry_test.dart). The factory never grants
+/// access; the role does.
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final store = AppStore();
   // Awaited before the first frame so the app never flashes the warm light
   // palette at someone whose saved choice is dark.
   await store.loadSettings();
+  // What makes this binary the vet flavor. Registered before the first
+  // frame so a restored vet session boots straight into the portal.
+  vetShellFactory = () => const VetShell();
+  // Drives the queue/schedule time partitions — and the customer shell's
+  // live countdowns, for a customer credential in this binary.
+  store.startClock();
   runApp(_VetApp(store: store));
 }
 
@@ -94,8 +109,37 @@ class _VetAppState extends State<_VetApp> {
             child: child ?? const SizedBox.shrink(),
           );
         },
-        home: const VetShell(),
+        home: VetLaunch(store: widget.store),
       ),
+    );
+  }
+}
+
+/// Launch routing for the vet flavor.
+///
+/// A restored session skips login and lands straight on the post-auth shell;
+/// signed out, the shared login screen shows. On sign-in the router picks
+/// the shell by role ([postAuthShell]): staff → [VetShell], customer → the
+/// customer [RootShell].
+///
+/// Staff accounts are provisioned, so the customer onboarding tour (pet
+/// setup) is skipped in this binary — staff get the login screen, not a
+/// tour of customer features.
+class VetLaunch extends StatelessWidget {
+  const VetLaunch({super.key, required this.store});
+
+  final AppStore store;
+
+  @override
+  Widget build(BuildContext context) {
+    if (store.signedIn) return postAuthShell(store);
+    return LoginScreen(
+      onSignedIn: () {
+        // Unwind the login screen: Back from the shell must exit the app,
+        // not land back on a signed-in login form.
+        Navigator.of(context)
+            .pushAndRemoveUntil(appRoute(postAuthShell(store)), (_) => false);
+      },
     );
   }
 }

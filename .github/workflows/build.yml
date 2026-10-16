@@ -1,9 +1,12 @@
-# Builds an installable release APK and an unsigned IPA on every push to main.
-# The Android APK is a release build signed with the debug key when no release
-# keystore is configured (installable for testing; see build.gradle.kts).
-# The APK is committed back to releases/ so it lives in the repo.
-# The iOS IPA is unsigned — sideload it with Sideloadly (see IOS_TESTING.md);
-# Sideloadly signs it with the installer's Apple ID at install time.
+# Builds installable release APKs and unsigned IPAs on every push to main.
+# Two flavors: `customer` (the pet-owner app; releases/carepaws-release.apk is
+# the APK mirrored to Drive) and `vet` (the vet portal, entered through
+# lib/main_vet.dart; releases/carepaws-vet-release.apk). The Android APKs are
+# release builds signed with the debug key when no release keystore is
+# configured (installable for testing; see build.gradle.kts).
+# The APKs are committed back to releases/ so they live in the repo.
+# The iOS IPAs are unsigned — sideload them with Sideloadly (see IOS_TESTING.md);
+# Sideloadly signs them with the installer's Apple ID at install time.
 
 name: build
 
@@ -17,7 +20,7 @@ permissions:
 
 jobs:
   android-apk:
-    name: Android APK (release)
+    name: Android APKs (release, both flavors)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -43,27 +46,34 @@ jobs:
       - name: Test
         run: flutter test
 
-      - name: Build release APK
-        run: flutter build apk --release --no-tree-shake-icons
+      - name: Build customer APK
+        run: flutter build apk --release --flavor customer --no-tree-shake-icons
 
-      - name: Upload APK artifact
+      - name: Build vet APK
+        run: >
+          flutter build apk --release --flavor vet
+          --target lib/main_vet.dart --dart-define=APP_FLAVOR=vet
+          --no-tree-shake-icons
+
+      - name: Upload APK artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: carepaws-release-apk
-          path: build/app/outputs/flutter-apk/app-release.apk
+          name: carepaws-release-apks
+          path: build/app/outputs/flutter-apk/*.apk
 
-      - name: Commit APK to releases/
+      - name: Commit APKs to releases/
         run: |
           mkdir -p releases
-          cp build/app/outputs/flutter-apk/app-release.apk releases/carepaws-release.apk
+          cp build/app/outputs/flutter-apk/app-customer-release.apk releases/carepaws-release.apk
+          cp build/app/outputs/flutter-apk/app-vet-release.apk releases/carepaws-vet-release.apk
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add releases/carepaws-release.apk
-          git diff --staged --quiet || git commit -m "CI: release APK build [skip ci]"
+          git add releases/carepaws-release.apk releases/carepaws-vet-release.apk
+          git diff --staged --quiet || git commit -m "CI: release APK builds [skip ci]"
           git push
 
   ios-ipa:
-    name: iOS IPA (unsigned)
+    name: iOS IPAs (unsigned, both flavors)
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
@@ -77,11 +87,28 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Build unsigned IPA
-        run: flutter build ipa --no-codesign
+      - name: Build customer IPA
+        run: flutter build ipa --flavor customer --no-codesign
 
-      - name: Upload unsigned IPA
+      - name: Stash customer IPA
+        run: |
+          mkdir -p build/ios/ipa-customer
+          mv build/ios/ipa/*.ipa build/ios/ipa-customer/carepaws-customer.ipa
+
+      - name: Build vet IPA
+        run: >
+          flutter build ipa --flavor vet --dart-define=APP_FLAVOR=vet
+          --no-codesign
+
+      - name: Stash vet IPA
+        run: |
+          mkdir -p build/ios/ipa-vet
+          mv build/ios/ipa/*.ipa build/ios/ipa-vet/carepaws-vet.ipa
+
+      - name: Upload unsigned IPAs
         uses: actions/upload-artifact@v4
         with:
-          name: carepaws-unsigned-ipa
-          path: build/ios/ipa/*.ipa
+          name: carepaws-unsigned-ipas
+          path: |
+            build/ios/ipa-customer/*.ipa
+            build/ios/ipa-vet/*.ipa

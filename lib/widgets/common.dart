@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:flutter/cupertino.dart';
@@ -444,6 +445,49 @@ class TabBarClearance extends InheritedWidget {
   @override
   bool updateShouldNotify(TabBarClearance oldWidget) =>
       oldWidget.height != height;
+}
+
+/// Tracks how deep one tab's Navigator is, so a tab shell ([RootShell],
+/// [VetShell]) can hide the floating bar while a detail screen is pushed.
+///
+/// One canonical implementation, shared by both shells — not a copy per
+/// shell. Each tab's [CupertinoTabView] gets one of these as a
+/// [NavigatorObserver]; the shell reads its per-tab depths to decide
+/// whether the bar is visible.
+class TabDepthObserver extends NavigatorObserver {
+  TabDepthObserver(this._onChange, this._depths, this._tab);
+
+  final VoidCallback _onChange;
+  final List<int> _depths;
+  final int _tab;
+
+  /// The Navigator reports a push for the route it starts on. That is the tab's
+  /// own root, not a detail screen, so it must not count.
+  bool _sawInitialRoute = false;
+
+  int get _depth => _depths[_tab];
+
+  @override
+  void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    if (!_sawInitialRoute) {
+      _sawInitialRoute = true;
+      return;
+    }
+    _depths[_tab] = _depth + 1;
+    _onChange();
+  }
+
+  @override
+  void didPop(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    _depths[_tab] = math.max(0, _depth - 1);
+    _onChange();
+  }
+
+  @override
+  void didRemove(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    _depths[_tab] = math.max(0, _depth - 1);
+    _onChange();
+  }
 }
 
 /// Floating pill tab bar.
