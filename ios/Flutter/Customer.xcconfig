@@ -1,0 +1,6 @@
+#include "Generated.xcconfig"
+
+// Customer (pet-owner) flavor. The bundle ID lives here — not in the
+// target's buildSettings — so the flavor is what decides the identity.
+PRODUCT_BUNDLE_IDENTIFIER = com.carepaws.carepaws
+FLUTTER_TARGET = lib/main.dart

@@ -1,0 +1,7 @@
+#include "Generated.xcconfig"
+
+// Vet portal flavor. Distinct bundle ID so both flavors install side by
+// side; boots the vet Dart entry point (lib/main_vet.dart) so the customer
+// build never compiles vet screens in.
+PRODUCT_BUNDLE_IDENTIFIER = com.carepaws.carepaws.vet
+FLUTTER_TARGET = lib/main_vet.dart

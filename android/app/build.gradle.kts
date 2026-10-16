@@ -29,6 +29,24 @@ android {
         versionName = flutter.versionName
     }
 
+    flavorDimensions += "role"
+    productFlavors {
+        // One codebase, two downloads. `customer` is the pet-owner app;
+        // `vet` adds the vet portal (lib/screens/vet/, entered through
+        // lib/main_vet.dart). Build with:
+        //   flutter build apk --flavor customer
+        //   flutter build apk --flavor vet --target lib/main_vet.dart \
+        //       --dart-define=APP_FLAVOR=vet
+        create("customer") {
+            dimension = "role"
+        }
+        create("vet") {
+            dimension = "role"
+            // Distinct applicationId so both flavors install side by side.
+            applicationIdSuffix = ".vet"
+        }
+    }
+
     signingConfigs {
         // Release signing is driven entirely by environment variables so no
         // secrets ever live in the repo. Set CAREPAWS_KEYSTORE to the absolute
