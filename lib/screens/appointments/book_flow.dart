@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import '../../app.dart';
 import '../../data/clinic.dart';
 import '../../data/models.dart';
+import '../../data/scheduling.dart';
 import '../../data/seed.dart';
 import '../../design/icons.dart';
 import '../../design/theme.dart';
@@ -199,53 +200,21 @@ class _BookFlowState extends State<BookFlow> {
   }
 
   /// Every theoretical slot on [day] for [service] with [staff], flagged by
-  /// real availability. Clinic hours come from [Clinic] (Mon–Sat 9–18,
-  /// closed Sundays); a slot is unavailable when it overlaps one of the
-  /// staff member's active appointments that day. Past days and Sundays
-  /// return no slots at all.
+  /// real availability. Delegates to the shared [daySlots] so the clinic-hours
+  /// and availability rule is identical everywhere (the vet reschedule sheet
+  /// builds on the same function).
   List<_DaySlot> _daySlots(
     DateTime day,
     Service service,
     Staff staff,
     DateTime now,
-  ) {
-    final d = DateTime(day.year, day.month, day.day);
-    final today = DateTime(now.year, now.month, now.day);
-    if (d.weekday == DateTime.sunday || d.isBefore(today)) return const [];
-    // Slot spacing follows the service duration: grooming 1–2h, assistant
-    // 15–20m, vet consults 30m.
-    final floor = switch (service.role) {
-      StaffRole.groomer => const Duration(minutes: 60),
-      StaffRole.vet => const Duration(minutes: 30),
-      StaffRole.vetAssistant => const Duration(minutes: 15),
-    };
-    final len = Duration(minutes: service.durationMinutes);
-    final step = len > floor ? len : floor;
-    final open = DateTime(d.year, d.month, d.day, Clinic.openHour);
-    final close = DateTime(d.year, d.month, d.day, Clinic.closeHour);
-    final booked = _store.appointments
-        .where(
-          (a) =>
-              a.staffId == staff.id &&
-              a.status.isActive &&
-              a.start.year == d.year &&
-              a.start.month == d.month &&
-              a.start.day == d.day,
-        )
-        .toList();
-    final lead = now.add(const Duration(minutes: 30));
-    final out = <_DaySlot>[];
-    // A slot must END by closing time, and start at least 30 minutes out.
-    for (var t = open; !t.add(len).isAfter(close); t = t.add(step)) {
-      if (t.isBefore(lead)) continue;
-      final end = t.add(len);
-      final clash = booked.any(
-        (a) => t.isBefore(a.end) && a.start.isBefore(end),
-      );
-      out.add(_DaySlot(start: t, available: !clash));
-    }
-    return out;
-  }
+  ) => daySlots(
+    day,
+    service,
+    staff,
+    _store.appointments,
+    now,
+  ).map((s) => _DaySlot(start: s.start, available: s.available)).toList();
 
   /// The first day from [from] (inclusive) with at least one available slot,
   /// or null when the whole booking window is full.

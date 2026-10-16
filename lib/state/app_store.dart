@@ -397,8 +397,86 @@ class AppStore extends ChangeNotifier {
     notifyListeners();
   }
 
-  void cancelAppointment(String id) =>
-      updateAppointment(id, (a) => _copy(a, status: ApptStatus.cancelled));
+  // ------------------------------------------------- vet schedule actions
+  //
+  // The allowed status chain, enforced here — not just in the UI — so no
+  // caller can put an appointment in an impossible state:
+  //   requestPending -> confirmed | cancelled
+  //   confirmed/booked -> beingGroomed (grooming) | completed | cancelled
+  //   beingGroomed -> readyForPickup | cancelled
+  //   readyForPickup -> completed | cancelled
+  //   completed/cancelled -> terminal; nothing leads back out.
+  // Every method returns false and changes nothing when the transition is
+  // illegal (unknown id, wrong state, or out-of-hours reschedule).
+
+  /// requestPending -> confirmed. One-shot: any other state is rejected.
+  bool confirmAppointment(String id) {
+    final a = appt(id);
+    if (a == null || a.status != ApptStatus.requestPending) return false;
+    updateAppointment(id, (x) => _copy(x, status: ApptStatus.confirmed));
+    return true;
+  }
+
+  /// One step along the chain. Grooming visits move through the grooming
+  /// states; every other service goes straight to completed.
+  bool advanceAppointment(String id) {
+    final a = appt(id);
+    if (a == null) return false;
+    final next = switch (a.status) {
+      ApptStatus.confirmed || ApptStatus.booked =>
+        serviceOf(a.serviceId).grooming
+            ? ApptStatus.beingGroomed
+            : ApptStatus.completed,
+      ApptStatus.beingGroomed => ApptStatus.readyForPickup,
+      ApptStatus.readyForPickup => ApptStatus.completed,
+      _ => null,
+    };
+    if (next == null) return false;
+    updateAppointment(id, (x) => _copy(x, status: next));
+    return true;
+  }
+
+  /// Marks an active appointment cancelled. Terminal and one-way: there is no
+  /// restore path, so cancelling a completed/cancelled appointment is
+  /// rejected rather than silently re-applied.
+  bool cancelAppointment(String id) {
+    final a = appt(id);
+    if (a == null || !a.status.isActive) return false;
+    updateAppointment(id, (x) => _copy(x, status: ApptStatus.cancelled));
+    return true;
+  }
+
+  /// Moves an active appointment to [start]. The slot must sit inside clinic
+  /// hours ([Clinic]: Mon–Sat, opening hour to closing hour, the visit ending
+  /// by close) and must not be in the past.
+  bool rescheduleAppointment(String id, DateTime start) {
+    final a = appt(id);
+    if (a == null || !a.status.isActive) return false;
+    if (start.weekday == DateTime.sunday) return false;
+    final open = DateTime(start.year, start.month, start.day, Clinic.openHour);
+    final close = DateTime(
+      start.year,
+      start.month,
+      start.day,
+      Clinic.closeHour,
+    );
+    if (start.isBefore(open)) return false;
+    if (start.add(Duration(minutes: a.durationMinutes)).isAfter(close)) {
+      return false;
+    }
+    if (start.isBefore(now)) return false;
+    updateAppointment(id, (x) => _copy(x, start: start));
+    return true;
+  }
+
+  /// Reassigns an active appointment to another staff member.
+  bool assignStaff(String appointmentId, String staffId) {
+    final a = appt(appointmentId);
+    if (a == null || !a.status.isActive) return false;
+    if (!Seed.staff.any((s) => s.id == staffId)) return false;
+    updateAppointment(appointmentId, (x) => _copy(x, staffId: staffId));
+    return true;
+  }
 
   static Appointment _copy(
     Appointment a, {
