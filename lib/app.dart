@@ -959,7 +959,7 @@ bool isToday(DateTime a, DateTime b) =>
 bool clinicOpenAt(DateTime t) => Clinic.isOpenNow(t);
 
 String clinicStatusLine(DateTime t) {
-  if (Clinic.isOpenNow(t)) return 'Open now · until 6:00 PM today';
+  if (Clinic.isOpenNow(t)) return 'Open now · until ${Clinic.closeTimeLabel} today';
   final o = Clinic.nextOpening(t);
   final today = DateTime(t.year, t.month, t.day);
   final sameDay =

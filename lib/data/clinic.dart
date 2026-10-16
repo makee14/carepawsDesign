@@ -20,7 +20,11 @@ abstract final class Clinic {
   /// Short forms derived from [openHour]/[closeHour] — use these instead of
   /// hardcoding times in UI strings.
   static String get openTimeLabel => '$openHour:00 AM';
+  static String get closeTimeLabel => '${closeHour - 12}:00 PM';
   static String get hoursRangeLabel => '$openHour:00 AM – ${closeHour - 12}:00 PM';
+
+  /// Walk-in cutoff, one hour before close.
+  static String get walkInCutoffLabel => '${closeHour - 13}:00 PM';
 
   static const weekdayNames = [
     'Monday',

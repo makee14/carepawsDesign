@@ -111,12 +111,12 @@ String composeStaffReply({
     'holiday',
   ])) {
     final hours = clinicOpen
-        ? 'We\u2019re open now until 6:00 PM — message here or walk in and '
+        ? 'We\u2019re open now until ${Clinic.closeTimeLabel} — message here or walk in and '
               'we\u2019ll fit $petName in.'
         : 'We\u2019re closed right now — back at ${Clinic.openTimeLabel}, Monday to Saturday.';
     return switch (role) {
       StaffRole.groomer =>
-        '$hours Grooming walk-ins are welcome any time before 5 PM.',
+        '$hours Grooming walk-ins are welcome any time before ${Clinic.walkInCutoffLabel}.',
       StaffRole.vet => '$hours$urgentNote',
       StaffRole.vetAssistant => '$hours Anything else I can sort?$urgentNote',
     };
@@ -154,7 +154,7 @@ String composeStaffReply({
 
 String _groomerGrooming(String text, String petName, String closedNote) {
   if (text.contains('nail')) {
-    return 'No appointment needed for nails — walk in any time before 5 PM '
+    return 'No appointment needed for nails — walk in any time before ${Clinic.walkInCutoffLabel} '
         'and we\u2019ll fit $petName in. Takes about 15 minutes!$closedNote';
   }
   if (_hasAny(text, const ['price', 'cost', 'how much', 'rate'])) {

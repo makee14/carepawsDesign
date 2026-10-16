@@ -56,14 +56,13 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
                 ),
               ),
               SliverPadding(
-                padding: EdgeInsets.fromLTRB(
+                padding: const EdgeInsets.fromLTRB(
                   T.s16,
                   8,
                   T.s16,
-                  // FAB clearance: the 56pt button sits tab-bar height + s16
-                  // above the bottom, so the list needs 56 + s32 below the
-                  // tab bar to never slide under it.
-                  56 + T.s32 + TabBarClearance.of(context),
+                  // Content spacing only — FAB clearance is owned by the
+                  // viewport Padding above.
+                  T.s16,
                 ),
                 sliver: _seg == 0
                     ? _UpcomingList(

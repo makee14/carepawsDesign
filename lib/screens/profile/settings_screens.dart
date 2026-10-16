@@ -482,9 +482,7 @@ class _ProviderCardState extends State<_ProviderCard> {
               for (var i = 0; i < status.keyPool.length; i++)
                 Padding(
                   padding: const EdgeInsets.only(bottom: 8),
-                  child: Builder(builder: (context) {
-                    final masked = status.keyPool[i];
-                    return Row(
+                  child: Row(
                     children: [
                       Expanded(
                         child: Container(
@@ -501,12 +499,12 @@ class _ProviderCardState extends State<_ProviderCard> {
                             children: [
                               Expanded(
                                 child: Text(
-                                  masked,
+                                  status.keyPool[i],
                                   style: Type.body(p)
                                       .copyWith(fontFamily: 'monospace'),
                                 ),
                               ),
-                              if (status.activeKeyLabel == masked)
+                              if (status.activeKeyLabel == status.keyPool[i])
                                 StatusChip(
                                   label: 'Active',
                                   compact: true,
@@ -520,12 +518,11 @@ class _ProviderCardState extends State<_ProviderCard> {
                       const SizedBox(width: 8),
                       IconTap(
                         path: Ic.trash,
-                        label: 'Remove key $masked',
+                        label: 'Remove key ${status.keyPool[i]}',
                         onPressed: _busy ? null : () => _removeKey(i),
                       ),
                     ],
-                    );
-                  }),
+                  ),
                 ),
               const SizedBox(height: 4),
             ],
