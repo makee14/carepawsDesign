@@ -45,7 +45,7 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
                 SliverToBoxAdapter(
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(T.s16, 4, T.s16, 8),
-                    child: _Segmented(
+                    child: SegmentedControl(
                       index: _seg,
                       labels: const ['Upcoming', 'Past'],
                       onChanged: (i) {
@@ -126,78 +126,6 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
   void _book(BuildContext context, AppStore store) {
     Navigator.of(context)
         .push(appRoute(BookFlow(initialPetId: store.pets.firstOrNull?.id)));
-  }
-}
-
-class _Segmented extends StatelessWidget {
-  const _Segmented({
-    required this.index,
-    required this.labels,
-    required this.onChanged,
-  });
-
-  final int index;
-  final List<String> labels;
-  final ValueChanged<int> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    final p = context.p;
-    return Semantics(
-      label: 'Segmented control. ${labels[index]} selected',
-      child: ExcludeSemantics(
-        child: Container(
-          padding: const EdgeInsets.all(3),
-          decoration: BoxDecoration(
-            color: p.fieldBg,
-            borderRadius: BorderRadius.circular(11),
-          ),
-          child: Row(
-            children: [
-              for (var i = 0; i < labels.length; i++)
-                Expanded(
-                  child: GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onTap: () => onChanged(i),
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: T.pressMs),
-                      // HIG 44pt minimum tap target; grows with Dynamic
-                      // Type at AX5 instead of clipping the label.
-                      height:
-                          44 *
-                          MediaQuery.textScalerOf(context)
-                              .scale(1)
-                              .clamp(1.0, 1.6),
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color: i == index ? p.surface : const Color(0x00000000),
-                        borderRadius: BorderRadius.circular(9),
-                        boxShadow: i == index
-                            ? const [
-                                BoxShadow(
-                                  color: Color(0x142A1A0E),
-                                  blurRadius: 6,
-                                  offset: Offset(0, 2),
-                                ),
-                              ]
-                            : null,
-                      ),
-                      child: Text(
-                        labels[i],
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: Type.footnoteEmph(p).copyWith(
-                          color: i == index ? p.text : p.textSecondary,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-            ],
-          ),
-        ),
-      ),
-    );
   }
 }
 

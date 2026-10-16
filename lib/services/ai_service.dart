@@ -1570,6 +1570,70 @@ class AiService {
     });
   }
 
+  /// Drafts one clinic-to-customer message (announcement or reminder) for the
+  /// vet's comms composer. The vet reviews, edits and approves the text —
+  /// this only ever *drafts*. Rides the same provider failover as chat, and
+  /// throws [AiException] when nothing can answer: no fake draft, ever.
+  ///
+  /// Tone rule (Mark's standing rule): intuitive and friendly, never
+  /// alarming. The draft goes out under the clinic's name, so the model is
+  /// told to write like the clinic speaking to a customer — warm, plain,
+  /// short — and to avoid urgency language that would worry a pet owner.
+  Future<String> draftComms({
+    required String kind,
+    required String topic,
+    String? details,
+  }) {
+    final userText =
+        'Draft a clinic $kind for CarePaws Veterinary Clinic customers.\n'
+        'Topic: $topic\n'
+        '${details == null || details.isEmpty ? '' : 'Details to include: $details\n'}'
+        'Write it ready to send: short, warm, specific. Plain words, no '
+        'jargon. Never use alarming language — no "emergency", "critical", '
+        '"danger", "immediately", "as soon as possible". If it is a health '
+        'reminder, say what to do kindly, like a calm vet nurse talking to a '
+        'worried owner.\n'
+        'Reply with ONLY a JSON object, no markdown, exactly:\n'
+        '{"inScope":true,"reply":"the message text"}\n'
+        'The reply is the full message, subject line first when one fits, '
+        'then the body. Keep it under 120 words.';
+    final system = _commsSystem();
+    return _withFailover((b) async {
+      final raw = await b.chat(system: system, userText: userText);
+      if (raw.isEmpty) {
+        throw const AiException(AiFailure.serviceError, 'empty reply');
+      }
+      // The backend asks for the inScope/reply envelope; take the reply when
+      // it parses, and show a sensible non-empty model answer as-is.
+      final text = (_parseChat(raw)?.reply ?? raw).trim();
+      if (text.isEmpty) {
+        throw const AiException(AiFailure.serviceError, 'empty reply');
+      }
+      return text;
+    });
+  }
+
+  /// Voice for the comms composer: the clinic speaking to its customers.
+  /// Friendly and calm by construction — a drafted announcement is never the
+  /// place for urgency language.
+  static String _commsSystem() =>
+      '''
+You write messages for CarePaws Veterinary Clinic to its customers — the vet
+drafts, reviews and approves everything you write before it goes out, and the
+vet can edit it freely.
+
+Voice: the clinic itself, warm and plain-spoken. Short sentences. One clear
+thing the customer should know or do. Plain words, no jargon, no exclamation
+marks. Never alarming: never write "emergency", "critical", "danger",
+"urgent", "immediately" or "as soon as possible" — a reminder about a
+vaccine is not a crisis. If the topic involves a health concern, suggest
+booking a visit kindly, like a calm vet nurse talking to a worried owner.
+
+Never invent clinic facts: hours are ${Clinic.hoursLabel}, the clinic is at
+${Clinic.address}, phone ${Clinic.phone}. If you do not know a date, time or
+price, write it as a bracketed placeholder like [date] for the vet to fill in.
+''';
+
   /// Reads the `{"inScope":…,"reply":…}` envelope. Returns null when the model
   /// did not produce usable JSON, so the caller can fall back gracefully.
   static ({bool inScope, String reply})? _parseChat(String raw) {
