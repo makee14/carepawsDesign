@@ -3,12 +3,10 @@ import 'dart:math' as math;
 
 import 'package:flutter/cupertino.dart';
 
-import 'data/models.dart';
 import 'data/clinic.dart';
 import 'design/icons.dart';
 import 'design/motion.dart';
 import 'design/theme.dart';
-import 'design/tokens.dart';
 import 'screens/appointments_screen.dart';
 import 'screens/chats_screen.dart';
 import 'screens/home_screen.dart';
@@ -972,84 +970,3 @@ String clinicStatusLine(DateTime t) {
   return 'Closed now · opens $label';
 }
 
-/// Shared pet picker row.
-class PetChip extends StatelessWidget {
-  const PetChip({
-    super.key,
-    required this.pet,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final Pet pet;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final p = context.p;
-    return Semantics(
-      button: true,
-      selected: selected,
-      label: '${pet.name}, ${pet.breed}',
-      child: ExcludeSemantics(
-        child: PressScale(
-          onTap: onTap,
-          scale: 0.96,
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: T.pressMs),
-            width: 132,
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: selected ? T.amber.withValues(alpha: 0.20) : p.surface,
-              borderRadius: BorderRadius.circular(T.rCard),
-              border: Border.all(
-                color: selected ? p.accent : p.divider,
-                width: selected ? 2 : 1,
-              ),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Row(
-                  children: [
-                    PetArt(
-                      seed: pet.id.hashCode.abs() % 4,
-                      species: pet.species,
-                      radius: 12,
-                      iconSize: 34,
-                      label: '${pet.name} portrait',
-                    ),
-                    const Spacer(),
-                    if (selected)
-                      Ic.svg(
-                        Ic.checkCircle,
-                        color: p.accent,
-                        size: 20,
-                        stroke: 2.1,
-                      ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  pet.name,
-                  style: Type.headline(p),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  pet.breed,
-                  style: Type.caption(p),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
