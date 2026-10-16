@@ -92,10 +92,16 @@ class ProductCard extends StatelessWidget {
                         ),
                       ),
                       if (!product.inStock)
-                        const _CardBadge(
-                          label: 'Out of stock',
-                          background: null, // taupe 20%
-                          foreground: null, // taupe
+                        const Flexible(
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.centerRight,
+                            child: _CardBadge(
+                              label: 'Out of stock',
+                              background: null, // taupe 20%
+                              foreground: null, // taupe
+                            ),
+                          ),
                         )
                       else if (product.restricted)
                         Flexible(
