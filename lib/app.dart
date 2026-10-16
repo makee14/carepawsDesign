@@ -416,8 +416,7 @@ class LargeTitleBar extends StatelessWidget {
     // AX5: the 34pt large title renders ~131pt tall at 3.2x — the fixed
     // 64pt header would clip it. The delegate's extents grow with Dynamic
     // Type so the title always fits; at 1x this is pixel-identical.
-    final textScale =
-        MediaQuery.textScalerOf(context).scale(1).clamp(1.0, 3.2);
+    final textScale = MediaQuery.textScalerOf(context).scale(1).clamp(1.0, 3.2);
     return SliverPersistentHeader(
       pinned: true,
       delegate: _LargeTitleDelegate(
@@ -480,8 +479,12 @@ class _LargeTitleDelegate extends SliverPersistentHeaderDelegate {
   /// Expanded header fits the large title (2 lines above 1x), never smaller
   /// than the 1x 64pt header (pixel-identical at 1x).
   @override
-  double get maxExtent => topPadding + math.max(64.0,
-      _titlePadTop + _largeH * (textScale > 1.0 ? 2 : 1) + _titlePadBottom);
+  double get maxExtent =>
+      topPadding +
+      math.max(
+        64.0,
+        _titlePadTop + _largeH * (textScale > 1.0 ? 2 : 1) + _titlePadBottom,
+      );
 
   @override
   Widget build(

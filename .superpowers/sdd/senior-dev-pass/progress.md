@@ -60,3 +60,16 @@ Frontend verified with Playwright always — real rendered output, not goldens a
 - F0 reduced-motion AnimatedSize crash; F1 segmented 44pt; F2 FilterPill 44pt; F3 greeting AX5; F4 LargeTitleBar AX5; F5 monogram noScaling.
 - 6 new tests RED→GREEN; goldens 04_appointments + 05_shop regen'd, maskedDiffs eyeballed per commit msg.
 - NOT merged yet — text judge merges first, UI last (owns final golden regen).
+
+## Text merged (build lead verified)
+- 2 commits (2c7b4e8, b2bfe91): F1-F11 text fixes, scale-gated so 1x is pixel-identical. File set clean (screens/widgets only).
+- Gates per worker: analyze 0, test 438/1/1 (1 intentional AX5 golden).
+- 2 layout concerns flagged (not fixed): L1 product grid 1-col at AX5, L2 profile avatar alignment — for Review Lead.
+- [x] text: DONE_WITH_CONCERNS, merged (50fcda8)
+
+## UI merged (build lead verified + merge conflicts resolved)
+- Commit 42d1336: F0-F5 Playwright-verified. Worker report was empty; recovered from branch + direct gate run (analyze 0, 448 passed).
+- Conflicts in 4 files (both streams fixed same AX5 issues): LargeTitleBar → kept UI structure + text's 2-line maxExtent; segmented/filter rows → 44pt × Dynamic Type scale.
+- Ruling (build lead): my LargeTitleBar merge initially double-applied textScale (took text judge's pre-multiplied size); caught by large_title_ax5_test, fixed in 5df5089 (revert to UI's ambient-scaler version). Cost if wrong: AX5 header clip — now covered by test.
+- Goldens regen'd on merged tree: only 23_home_ax5.png changed (intentional reflow, eyeballed). Full suite: 450 passed / 1 skipped.
+- [x] ui: DONE, merged (0a42d9d)

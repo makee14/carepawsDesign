@@ -163,7 +163,8 @@ class _Segmented extends StatelessWidget {
                       duration: const Duration(milliseconds: T.pressMs),
                       // HIG 44pt minimum tap target; grows with Dynamic
                       // Type at AX5 instead of clipping the label.
-                      height: 44 *
+                      height:
+                          44 *
                           MediaQuery.textScalerOf(context)
                               .scale(1)
                               .clamp(1.0, 1.6),

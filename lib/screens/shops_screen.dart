@@ -97,7 +97,8 @@ class _ShopsScreenState extends State<ShopsScreen> {
                   // labels never paint outside their pills. 1x is untouched.
                   SizedBox(
                     // HIG 44pt minimum; grows with Dynamic Type at AX5.
-                    height: 44 *
+                    height:
+                        44 *
                         MediaQuery.textScalerOf(context)
                             .scale(1)
                             .clamp(1.0, 1.6),

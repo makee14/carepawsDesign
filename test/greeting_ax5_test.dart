@@ -38,8 +38,11 @@ void main() {
     final para = tester.renderObject<RenderParagraph>(text);
     // Intrinsic height of the scaled line, ignoring the row's clamp.
     final intrinsic = para.getMaxIntrinsicHeight(double.infinity);
-    expect(intrinsic, greaterThan(48),
-        reason: 'sanity: at 3.2x the line must exceed the 48pt row');
+    expect(
+      intrinsic,
+      greaterThan(48),
+      reason: 'sanity: at 3.2x the line must exceed the 48pt row',
+    );
 
     final row = find.ancestor(
       of: text,

@@ -13,24 +13,22 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// reduced-motion path must skip AnimatedSize entirely, the way Home's
 /// clinic-info card does.
 Widget _stillness(Widget child) => Builder(
-      builder: (context) => MediaQuery(
-        data: MediaQuery.of(context).copyWith(disableAnimations: true),
-        child: child,
-      ),
-    );
+  builder: (context) => MediaQuery(
+    data: MediaQuery.of(context).copyWith(disableAnimations: true),
+    child: child,
+  ),
+);
 
 HealthCheckResult _fakeResult() => HealthCheckResult(
-      id: 'r1',
-      petId: 'p1',
-      summary: 'Looks fine',
-      urgency: Urgency.low,
-      recommendation: 'Keep an eye on it.',
-      route: TriageRoute.homeCare,
-      sections: const [
-        HealthSection(title: 'Feeding', body: 'Feed twice a day.'),
-      ],
-      createdAt: DateTime(2026, 10, 13, 10, 0),
-    );
+  id: 'r1',
+  petId: 'p1',
+  summary: 'Looks fine',
+  urgency: Urgency.low,
+  recommendation: 'Keep an eye on it.',
+  route: TriageRoute.homeCare,
+  sections: const [HealthSection(title: 'Feeding', body: 'Feed twice a day.')],
+  createdAt: DateTime(2026, 10, 13, 10, 0),
+);
 
 void main() {
   group('reduced motion expand/collapse', () {

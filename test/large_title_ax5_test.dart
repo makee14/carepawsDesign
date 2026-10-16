@@ -35,8 +35,11 @@ void main() {
     expect(title, findsOneWidget);
     final para = tester.renderObject<RenderParagraph>(title);
     final intrinsic = para.getMaxIntrinsicHeight(double.infinity);
-    expect(intrinsic, greaterThan(64),
-        reason: 'sanity: at 3.2x the title must exceed the 64pt header');
+    expect(
+      intrinsic,
+      greaterThan(64),
+      reason: 'sanity: at 3.2x the title must exceed the 64pt header',
+    );
 
     // The sliver header at offset 0 renders at maxExtent. The delegate's
     // root is a Container (a RenderBox); the sliver itself is a RenderSliver.
