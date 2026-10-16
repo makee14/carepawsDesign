@@ -139,6 +139,13 @@ void main() {
       for (var i = 0; i < 3; i++) {
         expect(layerScale(i), 1.0);
       }
+      // Heartbeat wrapper (first Transform) must settle at exactly 1.0.
+      final heartbeatScale = tester
+          .widgetList<Transform>(find.byType(Transform))
+          .elementAt(0)
+          .transform
+          .entry(0, 0);
+      expect(heartbeatScale, 1.0);
     });
   });
 

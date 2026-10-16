@@ -43,9 +43,11 @@ class SplashMorph extends AnimatedWidget {
     final emblemT = Curves.easeOutCubic.transform(_slice(t, 0.25, 0.60));
     const pop = _Pop();
     final eyesT = pop.transform(_slice(t, 0.55, 0.75));
-    // Heartbeat: one gentle pulse over the final quarter.
+    // Heartbeat: one gentle pulse over the final quarter. The (1 - beatT)
+    // decay applies to the whole pulse amplitude so it settles at 1.0.
     final beatT = _slice(t, 0.75, 1.00);
-    final beat = 1.0 + 0.03 * (0.5 - 0.5 * math.cos(3.14159 * beatT) * (1 - beatT));
+    final beat =
+        1.0 + 0.03 * (0.5 - 0.5 * math.cos(3.14159 * beatT)) * (1 - beatT);
     return SizedBox.square(
       dimension: size,
       child: Transform.scale(
