@@ -15,7 +15,7 @@ import '../onboarding_screen.dart';
 import '../photo_crop_screen.dart';
 import 'privacy_screen.dart';
 import '../../services/ai_service.dart'
-    show AiFailure, AiProvider, AiProviderInfo, AiService, AiStatus;
+    show AiFailure, AiProvider, AiProviderInfo, AiStatus;
 
 /// Consolidated settings surface reachable from the Profile nav bar.
 class SettingsScreen extends StatelessWidget {
@@ -341,15 +341,14 @@ class _ProviderCardState extends State<_ProviderCard> {
     );
   }
 
-  Future<void> _removeKey(String masked) async {
-    // The status pool is masked; match by asking the service for the real
-    // keys and removing the one with the same mask.
+  Future<void> _removeKey(int index) async {
+    // The status pool is masked; remove by index so colliding masks
+    // (same first-4/last-3) can't delete the wrong key.
     final store = AppScope.read(context);
     final keys = store.ai.keysFor(widget.provider);
-    final match = keys.where((k) => AiService.maskKey(k) == masked).firstOrNull;
     setState(() => _busy = true);
-    if (match != null) {
-      await store.removeAiKeyFor(widget.provider, match);
+    if (index < keys.length) {
+      await store.removeAiKeyFor(widget.provider, keys[index]);
     }
     if (!mounted) return;
     setState(() => _busy = false);
@@ -480,10 +479,12 @@ class _ProviderCardState extends State<_ProviderCard> {
                 ],
               ),
               const SizedBox(height: 8),
-              for (final masked in status.keyPool)
+              for (var i = 0; i < status.keyPool.length; i++)
                 Padding(
                   padding: const EdgeInsets.only(bottom: 8),
-                  child: Row(
+                  child: Builder(builder: (context) {
+                    final masked = status.keyPool[i];
+                    return Row(
                     children: [
                       Expanded(
                         child: Container(
@@ -520,10 +521,11 @@ class _ProviderCardState extends State<_ProviderCard> {
                       IconTap(
                         path: Ic.trash,
                         label: 'Remove key $masked',
-                        onPressed: _busy ? null : () => _removeKey(masked),
+                        onPressed: _busy ? null : () => _removeKey(i),
                       ),
                     ],
-                  ),
+                    );
+                  }),
                 ),
               const SizedBox(height: 4),
             ],
