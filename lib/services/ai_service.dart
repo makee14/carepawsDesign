@@ -5,6 +5,8 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'prefs.dart';
+
 import '../data/clinic.dart';
 import '../data/models.dart';
 
@@ -1296,7 +1298,7 @@ class AiService {
   /// (unit tests, desktop) is not an error: it just means nothing is stored.
   /// Never overwrites values set in-memory via [useKeyFor] before a bootstrap.
   Future<void> _restore() async {
-    final prefs = await _openPrefs();
+    final prefs = await openPrefs();
     for (final slot in _slots) {
       slot.deviceKeys
         ..clear()
@@ -1362,14 +1364,6 @@ class AiService {
     }
   }
 
-  Future<SharedPreferences?> _openPrefs() async {
-    try {
-      return await SharedPreferences.getInstance();
-    } catch (_) {
-      return null;
-    }
-  }
-
   /// Replaces one provider's key pool with a single key and re-probes
   /// straight away, so the Settings status flips without a restart.
   /// A blank value clears the pool. Returns whether that provider is actually
@@ -1382,7 +1376,7 @@ class AiService {
   /// Returns whether the provider is actually answering now.
   Future<bool> setKeysFor(AiProvider provider, List<String> keys) async {
     final slot = _slot(provider);
-    final prefs = await _openPrefs();
+    final prefs = await openPrefs();
     slot.deviceKeys
       ..clear()
       ..addAll(
@@ -1426,7 +1420,7 @@ class AiService {
   Future<void> setProviderEnabled(AiProvider provider, bool enabled) async {
     final slot = _slot(provider);
     slot.enabled = enabled;
-    final prefs = await _openPrefs();
+    final prefs = await openPrefs();
     await prefs?.setBool(provider.enabledPref, enabled);
     await bootstrap();
   }

@@ -3,7 +3,8 @@ import 'dart:typed_data';
 
 import 'package:flutter/widgets.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+
+import 'prefs.dart';
 
 /// Stores owner-chosen photos on the device.
 ///
@@ -86,27 +87,18 @@ class PhotoStore {
 
   static String petKey(String petId) => 'carepaws.photo.pet.$petId';
 
-  static Future<SharedPreferences?> _prefs() async {
-    try {
-      return await SharedPreferences.getInstance();
-    } catch (_) {
-      // Unit tests and desktop without the plugin: treat as "nothing stored".
-      return null;
-    }
-  }
-
   static Future<void> save(String key, Uint8List bytes) async {
-    final p = await _prefs();
+    final p = await openPrefs();
     await p?.setString(key, base64Encode(bytes));
   }
 
   static Future<void> remove(String key) async {
-    final p = await _prefs();
+    final p = await openPrefs();
     await p?.remove(key);
   }
 
   static Future<Uint8List?> load(String key) async {
-    final p = await _prefs();
+    final p = await openPrefs();
     final raw = p?.getString(key);
     if (raw == null || raw.isEmpty) return null;
     try {

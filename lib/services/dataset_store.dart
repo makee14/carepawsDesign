@@ -2,7 +2,8 @@ import 'dart:convert';
 import 'dart:typed_data';
 import 'dart:ui' show Color;
 
-import 'package:shared_preferences/shared_preferences.dart';
+
+import 'prefs.dart';
 
 import '../data/models.dart';
 
@@ -34,24 +35,13 @@ class DatasetStore {
   static String _key(String account, String dataset) =>
       '$_prefix.$account.$dataset';
 
-  /// SharedPreferences throws in unit tests and on desktop without the
-  /// plugin. A failure here must never stop the app, so every call is
-  /// wrapped and simply reports "nothing stored".
-  static Future<SharedPreferences?> _prefs() async {
-    try {
-      return await SharedPreferences.getInstance();
-    } catch (_) {
-      return null;
-    }
-  }
-
   static Future<String?> read(String account, String dataset) async {
-    final p = await _prefs();
+    final p = await openPrefs();
     return p?.getString(_key(account, dataset));
   }
 
   static Future<void> write(String account, String dataset, String json) async {
-    final p = await _prefs();
+    final p = await openPrefs();
     await p?.setString(_key(account, dataset), json);
   }
 
