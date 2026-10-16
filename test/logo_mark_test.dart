@@ -4,48 +4,42 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:carepaws/app.dart';
 import 'package:carepaws/design/icons.dart';
 
-/// Guards the embrace-paw logo: the in-app mark is the paw alone — no tile,
-/// no wordmark. One mark everywhere: launcher icon, splash, and in-app logo
-/// all share the paw.
+/// Guards the embrace logo: the in-app mark is the dog-and-cat embrace alone
+/// — no tile, no wordmark. One mark everywhere: launcher icon, splash, and
+/// in-app logo all share the embrace.
 void main() {
-  group('CarePaws paw mark artwork', () {
-    test('badgeArtwork is the paw alone, orange on transparent', () {
-      expect(Ic.badgeArtwork, contains('<ellipse'));
-      expect(Ic.badgeArtwork, contains('<path'));
+  group('CarePaws embrace mark artwork', () {
+    test('badgeArtwork is the embrace alone, orange on transparent', () {
       expect(Ic.badgeArtwork, contains('<circle'));
+      expect(Ic.badgeArtwork, contains('<path'));
       expect(Ic.badgeArtwork, contains('#E4843E'));
       expect(Ic.badgeArtwork, isNot(contains('<rect')));
       expect(Ic.badgeArtwork, isNot(contains('linearGradient')));
       expect(Ic.badgeArtwork, isNot(contains('var(')));
-      expect(Ic.badgeArtwork, isNot(contains('cp-dog')));
-      expect(Ic.badgeArtwork, isNot(contains('cp-cat')));
-      expect(Ic.badgeArtwork, isNot(contains('cp-heart')));
     });
 
-    test('launcherArtwork is the orange tile + cream paw', () {
+    test('launcherArtwork is the orange tile + embrace emblem', () {
       expect(Ic.launcherArtwork, contains('<rect'));
       expect(Ic.launcherArtwork, contains('linearGradient'));
       expect(Ic.launcherArtwork, contains('#FEFBF4'));
     });
 
-    test('splash layers compose the paw: pad plus four toes', () {
-      expect(Ic.splashLayerPad, contains('<path'));
-      expect(Ic.splashLayerPad, contains('<circle'));
-      for (final toe in [
-        Ic.splashLayerToe1,
-        Ic.splashLayerToe2,
-        Ic.splashLayerToe3,
-        Ic.splashLayerToe4,
+    test('splash layers compose the embrace: disc, emblem, eyes', () {
+      expect(Ic.splashLayerCircle, contains('<circle'));
+      expect(Ic.splashLayerEmblem, contains('<path'));
+      expect(Ic.splashLayerEyes, contains('<path'));
+      for (final layer in [
+        Ic.splashLayerCircle,
+        Ic.splashLayerEmblem,
+        Ic.splashLayerEyes,
       ]) {
-        expect(toe, contains('<ellipse'));
-        expect(toe, contains('viewBox="0 0 1024 1024"'));
-        expect(toe, isNot(contains('var(')));
+        expect(layer, contains('viewBox="0 0 1024 1024"'));
+        expect(layer, isNot(contains('var(')));
       }
-      expect(Ic.splashLayerPad, contains('viewBox="0 0 1024 1024"'));
     });
   });
 
-  testWidgets('LogoMark renders the paw artwork, not the tile', (tester) async {
+  testWidgets('LogoMark renders the embrace artwork, not the tile', (tester) async {
     await tester.pumpWidget(
       const CupertinoApp(home: Center(child: LogoMark(size: 120))),
     );
@@ -53,7 +47,7 @@ void main() {
     final pic = tester.widget<SvgPicture>(find.byType(SvgPicture));
     final loader = pic.bytesLoader;
     // SvgStringLoader hides its string, but == compares it: the mark must
-    // be the paw, not the full launcher tile.
+    // be the embrace, not the full launcher tile.
     expect(loader, SvgStringLoader(Ic.badgeArtwork));
     expect(loader, isNot(SvgStringLoader(Ic.launcherArtwork)));
     expect(

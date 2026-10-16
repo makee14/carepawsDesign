@@ -103,26 +103,32 @@ void main() {
 
       List<Opacity> opacities() =>
           tester.widgetList<Opacity>(find.byType(Opacity)).toList();
-      double toeScale(int i) => tester
+      double layerScale(int i) => tester
           .widgetList<Transform>(find.byType(Transform))
-          .elementAt(i + 1) // [0] is the pad
+          .elementAt(i + 1) // [0] is the heartbeat wrapper
           .transform
           .entry(0, 0);
 
-      // 200ms: pad mid-fade (0–0.5s); toes not started.
+      // 200ms: disc mid-fade (0–0.6s); emblem and eyes not started.
       controller.value = 0.1;
       await tester.pump();
-      expect(opacities()[0].opacity, greaterThan(0.5)); // pad
-      for (var i = 1; i <= 4; i++) {
-        expect(opacities()[i].opacity, 0.0); // toes
-      }
+      expect(opacities()[0].opacity, greaterThan(0.5)); // disc
+      expect(opacities()[1].opacity, 0.0); // emblem
+      expect(opacities()[2].opacity, 0.0); // eyes
 
-      // 600ms: pad done; toe1 mid-pop overshooting, toe4 not started.
+      // 600ms: disc done; emblem mid-fade; eyes not started.
       controller.value = 0.3;
       await tester.pump();
       expect(opacities()[0].opacity, 1.0);
-      expect(toeScale(0), greaterThan(1.0)); // toe1 spring overshoot
-      expect(opacities()[4].opacity, 0.0); // toe4
+      expect(opacities()[1].opacity, greaterThan(0.0));
+      expect(opacities()[1].opacity, lessThan(1.0));
+      expect(opacities()[2].opacity, 0.0); // eyes
+
+      // 1300ms: eyes mid-pop overshooting.
+      controller.value = 0.65;
+      await tester.pump();
+      expect(opacities()[2].opacity, greaterThan(0.0));
+      expect(layerScale(2), greaterThan(1.0)); // eyes spring overshoot
 
       // End of timeline: everything at rest.
       controller.value = 1.0;
@@ -130,8 +136,8 @@ void main() {
       for (final o in opacities()) {
         expect(o.opacity, 1.0);
       }
-      for (var i = 0; i < 4; i++) {
-        expect(toeScale(i), 1.0);
+      for (var i = 0; i < 3; i++) {
+        expect(layerScale(i), 1.0);
       }
     });
   });
