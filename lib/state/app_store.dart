@@ -506,6 +506,179 @@ class AppStore extends ChangeNotifier {
       ? Seed.vet.id
       : Seed.assistant.id;
 
+  // ---------------------------------------------- vet medical writes
+  //
+  // The audit trail is enforced HERE, not in the UI: every write stamps
+  // staff_id (the signed-in vet's account email — the only stable staff
+  // identity before the backend) and a timestamp, so no caller can produce
+  // an unaudited record. The UI never touches these fields.
+
+  /// The staff id written into every medical record's audit trail. The
+  /// signed-in account's email is the only stable staff identity in the
+  /// local prototype; a signed-out dev session still stamps a fallback, so
+  /// an unaudited write is impossible by construction.
+  String get auditStaffId => accountEmail ?? 'clinic-staff';
+
+  /// Display name for the audit trail: the account's registered name, falling
+  /// back to the email when there is none.
+  String get auditStaffName => accountName ?? accountEmail ?? 'Clinic staff';
+
+  /// Appends a medical timeline entry to the pet's history. The audit fields
+  /// (staffId + recordedAt) are stamped here — callers only supply the
+  /// clinical content. Newest first, like the rest of the timeline. Returns
+  /// false for an unknown petId and changes nothing.
+  bool addTimelineEntry({
+    required String petId,
+    required String title,
+    required String detail,
+    StaffRole role = StaffRole.vet,
+    DateTime? date,
+  }) {
+    final p = pet(petId);
+    if (p == null) return false;
+    final entry = TimelineEntry(
+      id: 'te${now.microsecondsSinceEpoch}',
+      petId: petId,
+      date: date ?? now,
+      title: title,
+      detail: detail,
+      role: role,
+      staffName: auditStaffName,
+      staffId: auditStaffId,
+      recordedAt: now,
+    );
+    pets = pets
+        .map(
+          (x) => x.id == petId
+              ? _withRecords(x, timeline: [entry, ...x.timeline])
+              : x,
+        )
+        .toList();
+    _savePets();
+    notifyListeners();
+    return true;
+  }
+
+  /// Records one or more vital readings for a pet. A reading whose label
+  /// matches an existing one replaces it (a re-weigh updates the weight
+  /// tile); new labels are appended. Every written reading carries the audit
+  /// trail. Returns false for an unknown petId and changes nothing.
+  bool recordVitals({required String petId, required List<Vital> vitals}) {
+    final p = pet(petId);
+    if (p == null) return false;
+    final stamped = [
+      for (final v in vitals)
+        Vital(
+          label: v.label,
+          value: v.value,
+          unit: v.unit,
+          icon: v.icon,
+          note: v.note,
+          staffId: auditStaffId,
+          recordedAt: now,
+        ),
+    ];
+    final labels = {for (final v in stamped) v.label};
+    final merged = [
+      ...stamped,
+      for (final v in p.vitals)
+        if (!labels.contains(v.label)) v,
+    ];
+    pets = pets
+        .map((x) => x.id == petId ? _withRecords(x, vitals: merged) : x)
+        .toList();
+    _savePets();
+    notifyListeners();
+    return true;
+  }
+
+  /// Issues a prescription. It lands in [prescriptions] — the same list the
+  /// customer reads at Profile → Prescriptions and the shop's Rx validation
+  /// checks — so the new script flows straight into the customer's record.
+  /// The vet's staff_id is stamped; [issued] is the audit timestamp.
+  /// [vetName] defaults to the signed-in vet's name. Returns false for an
+  /// unknown product.
+  bool issuePrescription({
+    required String productId,
+    required int refills,
+    required Duration validFor,
+    String? vetName,
+  }) {
+    if (!Seed.products.any((pr) => pr.id == productId)) return false;
+    final rx = Prescription(
+      id: 'rx${now.microsecondsSinceEpoch}',
+      productId: productId,
+      vetName: vetName ?? auditStaffName,
+      issued: now,
+      expires: now.add(validFor),
+      refills: refills,
+      staffId: auditStaffId,
+    );
+    prescriptions = [...prescriptions, rx];
+    _savePrescriptions();
+    notifyListeners();
+    return true;
+  }
+
+  /// Attaches a document reference to a pet's record. On-device file picking
+  /// is out of scope for this prototype, so the write records the document
+  /// reference (name, kind, size) with the audit trail. Returns false for an
+  /// unknown petId and changes nothing.
+  bool addDocument({
+    required String petId,
+    required String name,
+    required String kind,
+    int size = 0,
+  }) {
+    final p = pet(petId);
+    if (p == null) return false;
+    final doc = PetDoc(
+      name: name,
+      kind: kind,
+      date: now,
+      size: size,
+      staffId: auditStaffId,
+      recordedAt: now,
+    );
+    pets = pets
+        .map((x) => x.id == petId ? _withRecords(x, docs: [doc, ...x.docs]) : x)
+        .toList();
+    _savePets();
+    notifyListeners();
+    return true;
+  }
+
+  void _savePrescriptions() {
+    final acct = _dataAccount;
+    if (acct == null) return;
+    final snapshot = prescriptions;
+    _queueWrite(DatasetStore.writePrescriptions(acct, snapshot));
+  }
+
+  static Pet _withRecords(
+    Pet p, {
+    List<TimelineEntry>? timeline,
+    List<Vital>? vitals,
+    List<PetDoc>? docs,
+  }) => Pet(
+    id: p.id,
+    name: p.name,
+    species: p.species,
+    breed: p.breed,
+    sex: p.sex,
+    birthDate: p.birthDate,
+    weightKg: p.weightKg,
+    heightCm: p.heightCm,
+    lengthCm: p.lengthCm,
+    color: p.color,
+    microchip: p.microchip,
+    allergies: p.allergies,
+    vitals: vitals ?? p.vitals,
+    timeline: timeline ?? p.timeline,
+    docs: docs ?? p.docs,
+    photo: p.photo,
+  );
+
   // ------------------------------------------------------------------ cart
   int qtyOf(String productId) =>
       cart.where((c) => c.productId == productId).fold(0, (a, b) => a + b.qty);

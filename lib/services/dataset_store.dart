@@ -86,6 +86,11 @@ class DatasetStore {
             DateTime.fromMillisecondsSinceEpoch(0)
       : DateTime.fromMillisecondsSinceEpoch(0);
 
+  /// Optional variant of [_date]: null when the key is absent — used for the
+  /// audit-trail timestamps, which historic entries never had.
+  static DateTime? _dateOpt(Map<String, dynamic> m, String k) =>
+      m[k] is String ? DateTime.tryParse(m[k] as String) : null;
+
   static List<String> _strList(Map<String, dynamic> m, String k) => [
     for (final v in (m[k] as List? ?? const []))
       if (v is String) v,
@@ -144,6 +149,8 @@ class DatasetStore {
           'unit': v.unit,
           'icon': v.icon,
           'note': v.note,
+          'staffId': v.staffId,
+          'recordedAt': v.recordedAt?.toIso8601String(),
         },
     ],
     'timeline': [
@@ -156,6 +163,8 @@ class DatasetStore {
           'detail': t.detail,
           'role': t.role.name,
           'staffName': t.staffName,
+          'staffId': t.staffId,
+          'recordedAt': t.recordedAt?.toIso8601String(),
         },
     ],
     'docs': [
@@ -166,6 +175,8 @@ class DatasetStore {
           'date': d.date.toIso8601String(),
           'size': d.size,
           'previewAsset': d.previewAsset,
+          'staffId': d.staffId,
+          'recordedAt': d.recordedAt?.toIso8601String(),
         },
     ],
   };
@@ -190,6 +201,8 @@ class DatasetStore {
             unit: _str(v, 'unit'),
             icon: _str(v, 'icon'),
             note: _strOpt(v, 'note'),
+            staffId: _strOpt(v, 'staffId'),
+            recordedAt: _dateOpt(v, 'recordedAt'),
           ),
     ],
     timeline: [
@@ -207,6 +220,8 @@ class DatasetStore {
               StaffRole.vetAssistant,
             ),
             staffName: _str(t, 'staffName'),
+            staffId: _strOpt(t, 'staffId'),
+            recordedAt: _dateOpt(t, 'recordedAt'),
           ),
     ],
     docs: [
@@ -218,6 +233,8 @@ class DatasetStore {
             date: _date(d, 'date'),
             size: _int(d, 'size'),
             previewAsset: _strOpt(d, 'previewAsset'),
+            staffId: _strOpt(d, 'staffId'),
+            recordedAt: _dateOpt(d, 'recordedAt'),
           ),
     ],
   );
@@ -469,6 +486,7 @@ class DatasetStore {
     'issued': p.issued.toIso8601String(),
     'expires': p.expires.toIso8601String(),
     'refills': p.refills,
+    'staffId': p.staffId,
   };
 
   static Prescription _prescriptionFromJson(Map<String, dynamic> m) =>
@@ -479,6 +497,7 @@ class DatasetStore {
         issued: _date(m, 'issued'),
         expires: _date(m, 'expires'),
         refills: _int(m, 'refills'),
+        staffId: _strOpt(m, 'staffId'),
       );
 
   static String encodePrescriptions(List<Prescription> items) =>

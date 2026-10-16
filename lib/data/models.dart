@@ -12,12 +12,21 @@ class Vital {
     required this.unit,
     required this.icon,
     this.note,
+    this.staffId,
+    this.recordedAt,
   });
   final String label;
   final String value;
   final String unit;
   final String icon;
   final String? note;
+
+  /// Audit trail for vet-recorded readings: the writing staff member's id
+  /// and the moment the reading was recorded. Null on seed/historic readings
+  /// that predate the vet portal's write path — the stamp is applied by the
+  /// store's write methods ([AppStore.recordVitals]), never by callers.
+  final String? staffId;
+  final DateTime? recordedAt;
 }
 
 @immutable
@@ -30,6 +39,8 @@ class TimelineEntry {
     required this.detail,
     required this.role,
     required this.staffName,
+    this.staffId,
+    this.recordedAt,
   });
   final String id;
   final String petId;
@@ -38,6 +49,13 @@ class TimelineEntry {
   final String detail;
   final StaffRole role;
   final String staffName;
+
+  /// Audit trail: the writing staff member's id and the moment the entry was
+  /// recorded. Distinct from [date] (the clinical event date). Stamped by the
+  /// store's write methods ([AppStore.addTimelineEntry]), never by callers;
+  /// null on seed/historic entries that predate the vet portal's write path.
+  final String? staffId;
+  final DateTime? recordedAt;
 }
 
 @immutable
@@ -48,6 +66,8 @@ class PetDoc {
     required this.date,
     required this.size,
     this.previewAsset,
+    this.staffId,
+    this.recordedAt,
   });
   final String name;
   final String kind;
@@ -57,6 +77,11 @@ class PetDoc {
   /// Bundled image asset shown as the real document preview (B18). Null for
   /// documents with no scanned copy — those keep the placeholder tile.
   final String? previewAsset;
+
+  /// Audit trail: the staff member who attached the document and the moment
+  /// it was recorded. Stamped by [AppStore.addDocument], never by callers.
+  final String? staffId;
+  final DateTime? recordedAt;
 }
 
 @immutable
@@ -309,6 +334,7 @@ class Prescription {
     required this.issued,
     required this.expires,
     required this.refills,
+    this.staffId,
   });
   final String id;
   final String productId;
@@ -316,6 +342,12 @@ class Prescription {
   final DateTime issued;
   final DateTime expires;
   final int refills;
+
+  /// Audit trail: the issuing staff member's id. [issued] doubles as the
+  /// audit timestamp — prescriptions are issued and recorded in one act.
+  /// Stamped by [AppStore.issuePrescription], never by callers.
+  final String? staffId;
+
   bool activeAt(DateTime now) => now.isBefore(expires) && refills > 0;
 }
 
