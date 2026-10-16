@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../app.dart';
+import '../../data/clinic.dart';
 import '../../design/icons.dart';
 import '../../design/theme.dart';
 import '../../design/tokens.dart';
@@ -1379,7 +1380,7 @@ class FaqScreen extends StatelessWidget {
       ),
       (
         'Is the clinic open on Sundays?',
-        'No — the clinic is closed on Sundays. Hours are Mon–Sat 9:00 AM to 6:00 PM. After hours, the nearest 24-hour animal '
+        'No — ${Clinic.hoursLabel}. After hours, the nearest 24-hour animal '
             'hospital is listed on the Home screen.',
       ),
       (

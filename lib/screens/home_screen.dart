@@ -558,7 +558,7 @@ class _HoursRow extends StatelessWidget {
         children: [
           Expanded(child: Text(Clinic.weekdayName(weekday), style: style)),
           Text(
-            weekday == DateTime.sunday ? 'Closed' : '9:00 AM – 6:00 PM',
+            weekday == DateTime.sunday ? 'Closed' : Clinic.hoursRangeLabel,
             style: style,
           ),
         ],

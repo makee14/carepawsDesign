@@ -17,6 +17,11 @@ abstract final class Clinic {
   static const closeHour = 18;
   static const hoursLabel = 'Mon–Sat 9:00 AM – 6:00 PM · Closed Sundays';
 
+  /// Short forms derived from [openHour]/[closeHour] — use these instead of
+  /// hardcoding times in UI strings.
+  static String get openTimeLabel => '$openHour:00 AM';
+  static String get hoursRangeLabel => '$openHour:00 AM – ${closeHour - 12}:00 PM';
+
   static const weekdayNames = [
     'Monday',
     'Tuesday',

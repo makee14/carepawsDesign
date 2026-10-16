@@ -23,7 +23,7 @@ String composeStaffReply({
   final text = userText.toLowerCase();
   final closedNote = clinicOpen
       ? ''
-      : " We're closed right now — back at 9:00 AM, and I'll pick this up "
+      : " We're closed right now — back at ${Clinic.openTimeLabel}, and I'll pick this up "
             'first thing.';
   final urgentNote = clinicOpen
       ? ''
@@ -113,7 +113,7 @@ String composeStaffReply({
     final hours = clinicOpen
         ? 'We\u2019re open now until 6:00 PM — message here or walk in and '
               'we\u2019ll fit $petName in.'
-        : 'We\u2019re closed right now — back at 9:00 AM, Monday to Saturday.';
+        : 'We\u2019re closed right now — back at ${Clinic.openTimeLabel}, Monday to Saturday.';
     return switch (role) {
       StaffRole.groomer =>
         '$hours Grooming walk-ins are welcome any time before 5 PM.',

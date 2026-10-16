@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 
 import '../app.dart';
+import '../data/clinic.dart';
 import '../data/models.dart';
 import '../data/seed.dart';
 import '../design/icons.dart';
@@ -106,7 +107,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
                           child: Text(
                             'Message the clinic team directly. A vet, vet '
                             'assistant, or groomer replies during clinic hours '
-                            '(Mon–Sat 9–6). For emergencies after hours, call '
+                            '(${Clinic.hoursRangeLabel}). For emergencies after hours, call '
                             'the clinic number.',
                             style: Type.footnote(p)
                                 .copyWith(color: p.textSecondary),

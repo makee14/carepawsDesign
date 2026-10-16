@@ -246,7 +246,7 @@ class AppStore extends ChangeNotifier {
     final sameDay =
         o.year == today.year && o.month == today.month && o.day == today.day;
     final when = sameDay ? 'today' : Clinic.weekdayName(o.weekday);
-    return 'The clinic team is offline until 9:00 AM $when.';
+    return 'The clinic team is offline until ${Clinic.openTimeLabel} $when.';
   }
 
   // ----------------------------------------------------------------- pets

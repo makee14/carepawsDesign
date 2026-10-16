@@ -967,8 +967,8 @@ String clinicStatusLine(DateTime t) {
   final sameDay =
       o.year == today.year && o.month == today.month && o.day == today.day;
   final label = sameDay
-      ? 'at 9:00 AM today'
-      : 'at 9:00 AM ${Clinic.weekdayName(o.weekday)}';
+      ? 'at ${Clinic.openTimeLabel} today'
+      : 'at ${Clinic.openTimeLabel} ${Clinic.weekdayName(o.weekday)}';
   return 'Closed now · opens $label';
 }
 
