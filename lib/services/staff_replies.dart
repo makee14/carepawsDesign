@@ -216,109 +216,102 @@ class _Symptom {
 }
 
 /// Keywords that trigger each symptom entry, in the same order as above.
-bool _symptomHit(String label, String text) => switch (label) {
-  'bleeding' => _hasAny(text, const ['bleed', 'blood']),
-  'breathing changes' => _hasAny(text, const [
-    'breath',
-    'pant',
-    'wheez',
-    'gasp',
-  ]),
-  'vomiting' => _hasAny(text, const ['vomit', 'throw up', 'throwing up']),
-  'diarrhea' => _hasAny(text, const ['diarrhea', 'diarrhoea', 'loose stool']),
-  'limping' => _hasAny(text, const ['limp', 'leg', 'paw']),
-  'scratching' => _hasAny(text, const ['scratch', 'itch']),
-  'appetite change' => _hasAny(text, const [
-    'not eat',
-    'eating less',
-    'appetite',
-    'won\u2019t eat',
-    "won't eat",
-    'refuse food',
-  ]),
-  'low energy' => _hasAny(text, const [
-    'letharg',
-    'tired',
-    'sleepy',
-    'sleeping a lot',
-    'sleep',
+/// One table: each symptom's label, the keywords that trigger it, the
+/// one clarifying question to ask, and when to nudge toward the clinic.
+/// First matching row wins — most specific rows stay first.
+const _symptoms = [
+  (
+    'bleeding',
+    ['bleed', 'blood'],
+    'where it\u2019s coming from and roughly how much',
+    'If it\u2019s more than a few drops or won\u2019t stop, call the clinic now.',
+  ),
+  (
+    'breathing changes',
+    ['breath', 'pant', 'wheez', 'gasp'],
+    'whether {p}\u2019s gums look their normal colour',
+    'If {p} is struggling to breathe, call the clinic right away.',
+  ),
+  (
+    'vomiting',
+    ['vomit', 'throw up', 'throwing up'],
+    'how often it\u2019s happening and whether water stays down',
+    'If {p} can\u2019t keep water down, let\u2019s see them today.',
+  ),
+  (
+    'diarrhea',
+    ['diarrhea', 'diarrhoea', 'loose stool'],
+    'how long it\u2019s been going on and whether {p} is still drinking',
+    'If there\u2019s blood in it or {p} goes limp, call the clinic now.',
+  ),
+  (
+    'limping',
+    ['limp', 'leg', 'paw'],
+    'which leg it is and whether {p} will put weight on it',
+    'If {p} won\u2019t bear weight at all, we should see them soon.',
+  ),
+  (
+    'scratching',
+    ['scratch', 'itch'],
+    'if there\u2019s any redness or hair loss',
+    'If it spreads or {p} seems uncomfortable, let\u2019s have a look this week.',
+  ),
+  (
+    'appetite change',
+    [
+      'not eat',
+      'eating less',
+      'appetite',
+      'won\u2019t eat',
+      "won't eat",
+      'refuse food',
+    ],
+    'how long it\u2019s been going on and whether water intake is normal',
+    'If {p} skips more than two meals, we should check them over.',
+  ),
+  (
     'low energy',
-    'weak',
-  ]),
-  'coughing' => _hasAny(text, const ['cough', 'sneeze', 'hack']),
-  'eye irritation' => _hasAny(text, const ['eye', 'squint']),
-  'ear bother' => _hasAny(text, const ['ear', 'head shak']),
-  'swelling' => _hasAny(text, const ['swell', 'lump', 'bump']),
-  _ => false,
-};
-
-/// Matches the user's text against symptom keywords, then fills the pet's
-/// name into the follow-up and escalation copy.
-_Symptom? _matchSymptom(String text, String petName) {
-  const defs = [
-    (
-      'bleeding',
-      'where it\u2019s coming from and roughly how much',
-      'If it\u2019s more than a few drops or won\u2019t stop, call the clinic now.',
-    ),
-    (
-      'breathing changes',
-      'whether {p}\u2019s gums look their normal colour',
-      'If {p} is struggling to breathe, call the clinic right away.',
-    ),
-    (
-      'vomiting',
-      'how often it\u2019s happening and whether water stays down',
-      'If {p} can\u2019t keep water down, let\u2019s see them today.',
-    ),
-    (
-      'diarrhea',
-      'how long it\u2019s been going on and whether {p} is still drinking',
-      'If there\u2019s blood in it or {p} goes limp, call the clinic now.',
-    ),
-    (
-      'limping',
-      'which leg it is and whether {p} will put weight on it',
-      'If {p} won\u2019t bear weight at all, we should see them soon.',
-    ),
-    (
-      'scratching',
-      'if there\u2019s any redness or hair loss',
-      'If it spreads or {p} seems uncomfortable, let\u2019s have a look this week.',
-    ),
-    (
-      'appetite change',
-      'how long it\u2019s been going on and whether water intake is normal',
-      'If {p} skips more than two meals, we should check them over.',
-    ),
-    (
+    [
+      'letharg',
+      'tired',
+      'sleepy',
+      'sleeping a lot',
+      'sleep',
       'low energy',
-      'whether {p} is still eating and drinking normally',
-      'If {p} is limp or unresponsive, call the clinic right away.',
-    ),
-    (
-      'coughing',
-      'whether there\u2019s any nasal discharge',
-      'If the cough is harsh or {p} gags, let\u2019s have a listen soon.',
-    ),
-    (
-      'eye irritation',
-      'whether there\u2019s discharge or swelling',
-      'Eyes can turn quickly — if it worsens today, bring {p} in.',
-    ),
-    (
-      'ear bother',
-      'any odour or discharge from the ear',
-      'If {p} is shaking their head a lot, we should take a look.',
-    ),
-    (
-      'swelling',
-      'how quickly it appeared',
-      'If it\u2019s growing fast or {p} is in pain, don\u2019t wait on it.',
-    ),
-  ];
-  for (final (label, followUp, escalation) in defs) {
-    if (_symptomHit(label, text)) {
+      'weak',
+    ],
+    'whether {p} is still eating and drinking normally',
+    'If {p} is limp or unresponsive, call the clinic right away.',
+  ),
+  (
+    'coughing',
+    ['cough', 'sneeze', 'hack'],
+    'whether there\u2019s any nasal discharge',
+    'If the cough is harsh or {p} gags, let\u2019s have a listen soon.',
+  ),
+  (
+    'eye irritation',
+    ['eye', 'squint'],
+    'whether there\u2019s discharge or swelling',
+    'Eyes can turn quickly — if it worsens today, bring {p} in.',
+  ),
+  (
+    'ear bother',
+    ['ear', 'head shak'],
+    'any odour or discharge from the ear',
+    'If {p} is shaking their head a lot, we should take a look.',
+  ),
+  (
+    'swelling',
+    ['swell', 'lump', 'bump'],
+    'how quickly it appeared',
+    'If it\u2019s growing fast or {p} is in pain, don\u2019t wait on it.',
+  ),
+];
+
+_Symptom? _matchSymptom(String text, String petName) {
+  for (final (label, keywords, followUp, escalation) in _symptoms) {
+    if (_hasAny(text, keywords)) {
       return _Symptom(
         label,
         followUp.replaceAll('{p}', petName),
