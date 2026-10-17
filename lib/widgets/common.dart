@@ -369,6 +369,26 @@ class _SlotState extends State<_Slot> with SingleTickerProviderStateMixin {
   Widget build(BuildContext context) {
     final p = context.p;
     final fg = widget.selected ? p.primaryFill : (p.isDark ? T.sand : T.taupe);
+    // At AX5 the label would truncate to "Que…": above 1× text scale it
+    // shrink-to-fits the slot width instead of clipping. 1× is
+    // byte-identical — the FittedBox only exists above 1×.
+    Widget label = Text(
+      widget.label,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      // Tab labels are fixed chrome in a 64pt slot: cap the
+      // scale so AX5 (3.2) still fits instead of overflowing
+      // the slot by 4px. 1× rendering is untouched.
+      textScaler: MediaQuery.textScalerOf(context).clamp(maxScaleFactor: 2.5),
+      style: Type.caption(p).copyWith(
+        color: fg,
+        fontWeight: widget.selected ? FontWeight.w700 : FontWeight.w600,
+        fontSize: 10,
+      ),
+    );
+    if (MediaQuery.textScalerOf(context).scale(1) > 1.0) {
+      label = FittedBox(fit: BoxFit.scaleDown, child: label);
+    }
     return Expanded(
       child: Semantics(
         button: true,
@@ -395,23 +415,7 @@ class _SlotState extends State<_Slot> with SingleTickerProviderStateMixin {
                     ),
                   ),
                   const SizedBox(height: 3),
-                  Text(
-                    widget.label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    // Tab labels are fixed chrome in a 64pt slot: cap the
-                    // scale so AX5 (3.2) still fits instead of overflowing
-                    // the slot by 4px. 1× rendering is untouched.
-                    textScaler: MediaQuery.textScalerOf(context)
-                        .clamp(maxScaleFactor: 2.5),
-                    style: Type.caption(p).copyWith(
-                      color: fg,
-                      fontWeight: widget.selected
-                          ? FontWeight.w700
-                          : FontWeight.w600,
-                      fontSize: 10,
-                    ),
-                  ),
+                  label,
                 ],
               ),
             ),

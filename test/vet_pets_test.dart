@@ -200,6 +200,41 @@ void main() {
       },
     );
 
+    test(
+      'issuing a prescription for a non-restricted product fails and changes nothing',
+      () async {
+        final s = _store();
+        await _signInVet(s);
+        final before = s.prescriptions.length;
+        expect(
+          s.issuePrescription(
+            productId: 'pr1', // Grass-fed Lamb — not a restricted product.
+            refills: 1,
+            validFor: const Duration(days: 90),
+          ),
+          isFalse,
+        );
+        expect(s.prescriptions.length, before);
+      },
+    );
+
+    test(
+      'issuing a prescription for an unknown product fails and changes nothing',
+      () {
+        final s = _store();
+        final before = s.prescriptions.length;
+        expect(
+          s.issuePrescription(
+            productId: 'nope',
+            refills: 1,
+            validFor: const Duration(days: 90),
+          ),
+          isFalse,
+        );
+        expect(s.prescriptions.length, before);
+      },
+    );
+
     test('vet can attach a document reference', () async {
       final s = _store();
       await _signInVet(s);
@@ -537,6 +572,27 @@ void main() {
       final rx = s.prescriptions.last;
       expect(rx.staffId, 'vet@carepaws.test');
       expect(rx.vetName, 'Dr. Rafael Alvarez');
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('prescription picker lists only restricted products', (
+      tester,
+    ) async {
+      final s = _store();
+      await signInVet(tester, s);
+      await pumpEntry(tester, s, MedicalEntryKind.prescription);
+      expect(
+        find.text('Flea & Tick Spot-On (3 doses)', skipOffstage: false),
+        findsOneWidget,
+      );
+      expect(
+        find.text('Grass-fed Lamb & Oat Adult Dog Food', skipOffstage: false),
+        findsNothing,
+      );
+      expect(
+        find.text('Salmon & Sweet Potato Kitten Food', skipOffstage: false),
+        findsNothing,
+      );
       expect(tester.takeException(), isNull);
     });
 

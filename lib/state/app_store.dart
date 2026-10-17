@@ -660,14 +660,16 @@ class AppStore extends ChangeNotifier {
   /// checks — so the new script flows straight into the customer's record.
   /// The vet's staff_id is stamped; [issued] is the audit timestamp.
   /// [vetName] defaults to the signed-in vet's name. Returns false for an
-  /// unknown product.
+  /// unknown product, or one that isn't prescription-restricted — a script
+  /// for ordinary stock would pollute the clinical record.
   bool issuePrescription({
     required String productId,
     required int refills,
     required Duration validFor,
     String? vetName,
   }) {
-    if (!Seed.products.any((pr) => pr.id == productId)) return false;
+    final product = Seed.products.where((pr) => pr.id == productId).firstOrNull;
+    if (product == null || !product.restricted) return false;
     final rx = Prescription(
       id: 'rx${now.microsecondsSinceEpoch}',
       productId: productId,

@@ -330,7 +330,9 @@ class _MedicalEntryScreenState extends State<MedicalEntryScreen> {
     final store = AppScope.of(context);
     return [
       const _FieldLabel('Product'),
-      for (final product in Seed.products)
+      // Only prescription-restricted products can be scripted — ordinary
+      // stock here would pollute the clinical record (see F1).
+      for (final product in Seed.products.where((p) => p.restricted))
         Padding(
           padding: const EdgeInsets.only(bottom: 8),
           child: SoftCard(
