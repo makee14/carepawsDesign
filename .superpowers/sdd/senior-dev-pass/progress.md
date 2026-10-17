@@ -73,3 +73,12 @@ Frontend verified with Playwright always — real rendered output, not goldens a
 - Ruling (build lead): my LargeTitleBar merge initially double-applied textScale (took text judge's pre-multiplied size); caught by large_title_ax5_test, fixed in 5df5089 (revert to UI's ambient-scaler version). Cost if wrong: AX5 header clip — now covered by test.
 - Goldens regen'd on merged tree: only 23_home_ax5.png changed (intentional reflow, eyeballed). Full suite: 450 passed / 1 skipped.
 - [x] ui: DONE, merged (0a42d9d)
+
+## Review Lead: APPROVE_WITH_NOTES (independent, read-only)
+- Re-ran gates: analyze 0, test 450 passed / 1 skipped. All 4 streams CLEAN.
+- Merge resolutions verified correct and complete (5df5089 double-scale fix confirmed; no other double-scaling; text's 2-line title + scaled-44pt rows correctly kept over UI's versions).
+- 1 Minor: 7 files failed dart format (line-wrapping only) → fixed in aa6a18e, gates re-run green.
+- L1 (product grid 1-col at AX5) + L2 (profile avatar alignment): DEFERRED as Mark aesthetic calls, file:line captured.
+- Vet-app boundary: sound, nothing entangled. Locked specs all hold.
+- Worktrees + stream branches removed. Integration branch senior-dev-pass at aa6a18e ready for Mark's tap.
+- [x] Review Lead: DONE
